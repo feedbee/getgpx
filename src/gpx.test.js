@@ -1,0 +1,55 @@
+import { describe, expect, it } from 'vitest';
+import { analyzeTrack, parseGpx } from './gpx.js';
+
+const SAMPLE = `<?xml version="1.0"?>
+<gpx version="1.1" creator="test">
+  <metadata><name>Morning Ridge</name></metadata>
+  <trk><name>Morning Ridge</name><trkseg>
+    <trkpt lat="50.0000" lon="19.0000"><ele>100</ele><time>2026-09-13T08:00:00Z</time></trkpt>
+    <trkpt lat="50.0010" lon="19.0000"><ele>118</ele><time>2026-09-13T08:01:00Z</time></trkpt>
+    <trkpt lat="50.0020" lon="19.0000"><ele>110</ele><time>2026-09-13T08:02:00Z</time></trkpt>
+  </trkseg></trk>
+</gpx>`;
+
+describe('parseGpx', () => {
+  it('extracts track metadata, coordinates, elevation and timestamps', () => {
+    const track = parseGpx(SAMPLE);
+
+    expect(track.name).toBe('Morning Ridge');
+    expect(track.points).toHaveLength(3);
+    expect(track.points[1]).toMatchObject({ lat: 50.001, lon: 19, ele: 118 });
+    expect(track.points[1].time).toBeInstanceOf(Date);
+  });
+
+  it('rejects files without a usable track', () => {
+    expect(() => parseGpx('<gpx><trk /></gpx>')).toThrow(/точек маршрута/i);
+  });
+});
+
+describe('analyzeTrack', () => {
+  it('calculates cumulative distance and elevation metrics', () => {
+    const analyzed = analyzeTrack(parseGpx(SAMPLE));
+
+    expect(analyzed.distanceKm).toBeCloseTo(0.222, 2);
+    expect(analyzed.ascentM).toBe(18);
+    expect(analyzed.descentM).toBe(8);
+    expect(analyzed.minElevationM).toBe(100);
+    expect(analyzed.maxElevationM).toBe(118);
+    expect(analyzed.durationMs).toBe(120_000);
+    expect(analyzed.movingTimeMs).toBe(120_000);
+    expect(analyzed.movingSpeedThresholdKmh).toBe(1);
+    expect(analyzed.points[2].distanceKm).toBeCloseTo(0.222, 2);
+  });
+
+  it('counts moving time only for segments faster than 1 km/h', () => {
+    const analyzed = analyzeTrack({ name: 'Stop test', points: [
+      { lat: 50, lon: 19, ele: 100, time: new Date('2026-09-13T08:00:00Z') },
+      { lat: 50.001, lon: 19, ele: 101, time: new Date('2026-09-13T08:01:00Z') },
+      { lat: 50.002, lon: 19, ele: 102, time: new Date('2026-09-13T08:21:00Z') },
+    ] });
+
+    expect(analyzed.durationMs).toBe(21 * 60_000);
+    expect(analyzed.movingTimeMs).toBe(60_000);
+    expect(analyzed.movingAverageSpeedKmh).toBeCloseTo(6.67, 1);
+  });
+});
