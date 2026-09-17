@@ -22,6 +22,10 @@ export function createDatabase({
 
   return {
     connect,
+    async collection(name) {
+      const db = await connect();
+      return db.collection(name);
+    },
     async ping() {
       const db = await connect();
       await db.command({ ping: 1 });

@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest';
+import { createUserRepository } from '../../../src/backend/user-repository.js';
+
+function createUsersCollection() {
+  const documents = new Map();
+  return {
+    async findOne(query) {
+      return [...documents.values()].find((document) => document.googleSubject === query.googleSubject) || null;
+    },
+    async findOneAndUpdate(query, update) {
+      const existing = await this.findOne(query);
+      const next = existing
+        ? { ...existing, ...update.$set }
+        : { _id: 'user-1', ...update.$setOnInsert, ...update.$set };
+      documents.set(next.googleSubject, next);
+      return next;
+    },
+  };
+}
+
+describe('user repository', () => {
+  it('registers a Google user with all lifecycle timestamps', async () => {
+    const repository = createUserRepository(createUsersCollection());
+    const now = new Date('2026-09-17T10:00:00.000Z');
+
+    const user = await repository.loginWithGoogle({
+      googleSubject: 'google-123', email: 'rider@example.com', displayName: 'Rider', avatarUrl: 'https://example.com/avatar.jpg',
+    }, now);
+
+    expect(user).toMatchObject({
+      googleSubject: 'google-123', email: 'rider@example.com', registeredAt: now, lastLoginAt: now, profileUpdatedAt: now,
+    });
+  });
+
+  it('preserves registration and profile dates when only the login time changes', async () => {
+    const repository = createUserRepository(createUsersCollection());
+    const registeredAt = new Date('2026-09-17T10:00:00.000Z');
+    const nextLogin = new Date('2026-09-18T12:00:00.000Z');
+    const profile = { googleSubject: 'google-123', email: 'rider@example.com', displayName: 'Rider', avatarUrl: null };
+
+    await repository.loginWithGoogle(profile, registeredAt);
+    const user = await repository.loginWithGoogle(profile, nextLogin);
+
+    expect(user.registeredAt).toEqual(registeredAt);
+    expect(user.lastLoginAt).toEqual(nextLogin);
+    expect(user.profileUpdatedAt).toEqual(registeredAt);
+  });
+
+  it('records a profile update when Google profile fields change', async () => {
+    const repository = createUserRepository(createUsersCollection());
+    const registeredAt = new Date('2026-09-17T10:00:00.000Z');
+    const changedAt = new Date('2026-09-19T12:00:00.000Z');
+
+    await repository.loginWithGoogle({ googleSubject: 'google-123', email: 'old@example.com', displayName: 'Rider', avatarUrl: null }, registeredAt);
+    const user = await repository.loginWithGoogle({ googleSubject: 'google-123', email: 'new@example.com', displayName: 'Rider Two', avatarUrl: null }, changedAt);
+
+    expect(user.email).toBe('new@example.com');
+    expect(user.profileUpdatedAt).toEqual(changedAt);
+  });
+});

@@ -1,6 +1,7 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
+import { renderAuthControl } from './auth-ui.js';
 import { analyzeTrack, parseGpx } from './domain/gpx.js';
 import { createDemoTrack } from './domain/demo.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
@@ -35,7 +36,7 @@ let pinnedRange = null;
 app.innerHTML = `
   <header class="topbar">
     <div class="topbar-inner"><a class="brand" href="#" aria-label="Trace, главная"><span class="brand-mark">T</span><span>TRACE</span></a>
-    <label class="upload-button" for="gpx-file"><span aria-hidden="true">↗</span> Загрузить GPX</label></div>
+    <div class="topbar-actions"><label class="upload-button" for="gpx-file"><span aria-hidden="true">↗</span> Загрузить GPX</label><div id="auth-control">${renderAuthControl(null)}</div></div></div>
     <input id="gpx-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden />
   </header>
   <main class="page" id="route">
@@ -91,6 +92,53 @@ app.innerHTML = `
   <div class="drop-overlay" id="drop-overlay"><strong>Отпустите GPX здесь</strong><span>Маршрут откроется прямо в браузере</span></div>
   <div class="toast" id="toast" role="alert"></div>
 `;
+
+const authControl = document.querySelector('#auth-control');
+
+function closeUserMenu() {
+  const button = authControl.querySelector('.avatar-button');
+  const menu = authControl.querySelector('.user-menu-popover');
+  if (!button || !menu) return;
+  button.setAttribute('aria-expanded', 'false');
+  menu.hidden = true;
+}
+
+function setAuthUser(user) {
+  authControl.innerHTML = renderAuthControl(user);
+}
+
+async function restoreSession() {
+  try {
+    const response = await fetch('/api/auth/session', { headers: { accept: 'application/json' } });
+    if (!response.ok) throw new Error('Session request failed.');
+    const payload = await response.json();
+    setAuthUser(payload.user || null);
+  } catch {
+    setAuthUser(null);
+  }
+}
+
+authControl.addEventListener('click', async (event) => {
+  const avatarButton = event.target.closest('.avatar-button');
+  if (avatarButton) {
+    const menu = authControl.querySelector('.user-menu-popover');
+    const expanded = avatarButton.getAttribute('aria-expanded') === 'true';
+    avatarButton.setAttribute('aria-expanded', String(!expanded));
+    menu.hidden = expanded;
+    return;
+  }
+  if (!event.target.closest('.logout-button')) return;
+  try {
+    const response = await fetch('/api/auth/logout', { method: 'POST', headers: { accept: 'application/json' } });
+    if (response.ok) setAuthUser(null);
+  } catch {
+    closeUserMenu();
+  }
+});
+
+document.addEventListener('click', (event) => {
+  if (!authControl.contains(event.target)) closeUserMenu();
+});
 
 function formatDuration(ms) {
   if (!ms) return ['—', ''];
@@ -656,6 +704,7 @@ document.querySelectorAll('[data-terrain-tab]').forEach((button) => button.addEv
   document.querySelector('#descents-list').hidden = button.dataset.terrainTab !== 'descents';
 }));
 document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeUserMenu();
   if (event.key !== 'Escape' || (!pinnedSurfaceId && !pinnedWayTypeId && !pinnedQualityId && !pinnedRange)) return;
   pinnedSurfaceId = null;
   pinnedWayTypeId = null;
@@ -678,3 +727,4 @@ initMap();
 renderTrack(createDemoTrack());
 setColorMode('map', mapColorMode);
 setColorMode('profile', profileColorMode);
+restoreSession();

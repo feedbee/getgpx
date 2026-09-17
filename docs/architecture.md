@@ -12,14 +12,15 @@ Browser (Vite bundle)
               │
 Node.js / Express
   ├─ validates bounded coordinate input
+  ├─ completes Google OAuth and owns opaque user sessions
   ├─ calls Valhalla and enriches matches from Overpass
   ├─ serves the static production bundle
   └─ owns MongoDB lifecycle and readiness
               │
-MongoDB (future users and saved tracks)
+MongoDB (users and sessions; future saved tracks)
 ```
 
-GPX content currently remains in browser memory. The API receives only coordinates needed for road matching; it does not persist tracks yet. MongoDB is connected now to establish deployable infrastructure, health semantics, and a tested adapter before account and track schemas are designed.
+GPX content currently remains in browser memory. The API receives only coordinates needed for road matching; it does not persist tracks yet. MongoDB stores Google-linked users and hashed opaque sessions; Google OAuth tokens are discarded after profile lookup.
 
 The production process fails startup when MongoDB configuration or connectivity is absent. Liveness deliberately avoids dependencies; readiness performs a MongoDB ping so an orchestrator can stop routing traffic to an unhealthy instance.
 

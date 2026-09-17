@@ -1,4 +1,5 @@
 import { createApp } from './app.js';
+import { createAuthentication } from './authentication.js';
 import { createDatabase } from './database.js';
 
 const host = process.env.HOST || '0.0.0.0';
@@ -6,7 +7,8 @@ const port = Number(process.env.PORT || 3000);
 const database = createDatabase();
 
 await database.connect();
-const server = createApp({ database }).listen(port, host, () => {
+const { middleware: authRouter } = await createAuthentication(database);
+const server = createApp({ database, authRouter }).listen(port, host, () => {
   console.log(`Track Hub listening on http://${host}:${port}`);
 });
 

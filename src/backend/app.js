@@ -6,7 +6,7 @@ import { valhallaMiddleware } from './middleware.js';
 
 const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-export function createApp({ database, staticDirectory = path.join(rootDirectory, 'dist') }) {
+export function createApp({ database, authRouter, staticDirectory = path.join(rootDirectory, 'dist') }) {
   if (!database) throw new Error('A database adapter is required.');
 
   const app = express();
@@ -18,7 +18,7 @@ export function createApp({ database, staticDirectory = path.join(rootDirectory,
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc: ["'self'", 'data:', 'https://*.tile.openstreetmap.org'],
+        imgSrc: ["'self'", 'data:', 'https://*.tile.openstreetmap.org', 'https://lh3.googleusercontent.com'],
         connectSrc: ["'self'"],
       },
     },
@@ -27,6 +27,7 @@ export function createApp({ database, staticDirectory = path.join(rootDirectory,
   const health = createHealthHandlers(database);
   app.get('/health/live', health.live);
   app.get('/health/ready', health.ready);
+  if (authRouter) app.use(authRouter);
   app.use(valhallaMiddleware());
   app.use(express.static(staticDirectory, { index: false, maxAge: '1h' }));
   app.get('*splat', (_request, response) => response.sendFile(path.join(staticDirectory, 'index.html')));

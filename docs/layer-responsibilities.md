@@ -6,6 +6,8 @@
 - `src/backend/middleware.js`: HTTP boundary for road matching, including request size and status mapping.
 - `src/backend/valhalla.js`: external road-service adapters and response normalization.
 - `src/backend/database.js`: MongoDB client lifecycle. Future repositories should receive a database/collection rather than importing a global client.
+- `src/backend/auth*.js`: Google OAuth boundary, validated public user contract, cookies, and HTTP routes.
+- `src/backend/*-repository.js`: persistence for users and hashed server-side sessions.
 - `tests/unit/`: fast tests mirroring client/backend source boundaries.
 - `tests/integration/`: tests that require MongoDB or other real infrastructure.
 - `docs/changes/`: historical design context, not living architecture.
