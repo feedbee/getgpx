@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeTrack, parseGpx } from './gpx.js';
+import { analyzeTrack, parseGpx } from '../../../src/client/domain/gpx.js';
 
 const SAMPLE = `<?xml version="1.0"?>
 <gpx version="1.1" creator="test">

@@ -11,14 +11,16 @@ function sendJson(response, status, body) {
 
 async function readJson(request) {
   let body = '';
+  let bytes = 0;
   for await (const chunk of request) {
+    bytes += Buffer.byteLength(chunk);
+    if (bytes > MAX_BODY_BYTES) throw new Error('Запрос слишком большой.');
     body += chunk;
-    if (body.length > MAX_BODY_BYTES) throw new Error('Запрос слишком большой.');
   }
   try { return JSON.parse(body); } catch { throw new Error('Некорректный JSON.'); }
 }
 
-export function valhallaMiddleware() {
+export function valhallaMiddleware({ valhallaEndpoint, overpassEndpoint } = {}) {
   return async (request, response, next) => {
     if (request.url !== '/api/surface-match') return next();
     if (request.method !== 'POST') return sendJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'Используйте POST.' } });
@@ -26,11 +28,11 @@ export function valhallaMiddleware() {
     const timeout = setTimeout(() => controller.abort(), 30_000);
     try {
       const points = validateMatchRequest(await readJson(request));
-      const valhallaMatches = await matchTrackWithValhalla(points, { signal: controller.signal });
+      const valhallaMatches = await matchTrackWithValhalla(points, { endpoint: valhallaEndpoint, signal: controller.signal });
       let matches = valhallaMatches;
       let source = 'valhalla';
       try {
-        matches = await fetchOsmWayTags(valhallaMatches, { signal: controller.signal });
+        matches = await fetchOsmWayTags(valhallaMatches, { endpoint: overpassEndpoint, signal: controller.signal });
         source = 'valhalla+osm';
       } catch {
         // Valhalla data remains a useful fallback when Overpass is unavailable.

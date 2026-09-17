@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { elevationGainLoss, pointIndexAtRatio, pointerRatioInPlot } from './profile-math.js';
+import { elevationGainLoss, pointIndexAtRatio, pointerRatioInPlot } from '../../../src/client/domain/profile-math.js';
 
 describe('pointerRatioInPlot', () => {
   it('maps the actual chart edges to zero and one instead of the container edges', () => {

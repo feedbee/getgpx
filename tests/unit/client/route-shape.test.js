@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { endpointDistanceM, isClosedRoute } from './route-shape.js';
+import { endpointDistanceM, isClosedRoute } from '../../../src/client/domain/route-shape.js';
 
 describe('isClosedRoute', () => {
   it('treats endpoints less than 10 metres apart as one start/finish point', () => {

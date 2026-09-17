@@ -1,0 +1,19 @@
+services:
+  workspace:
+    image: mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm
+    command: sleep infinity
+    volumes:
+      - ..:/workspaces/track-hub:cached
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DATABASE: track_hub
+    depends_on:
+      mongodb:
+        condition: service_healthy
+  mongodb:
+    image: mongo:7.0.43-jammy
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 12

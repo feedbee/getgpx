@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyClimb, detectClimbs, detectDescents } from './climbs.js';
+import { classifyClimb, detectClimbs, detectDescents } from '../../../src/client/domain/climbs.js';
 
 function point(distanceM, ele) {
   return { distanceKm: distanceM / 1000, ele, lat: 50 + distanceM / 100_000, lon: 19 };

@@ -1,13 +1,13 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
-import { analyzeTrack, parseGpx } from './gpx.js';
-import { createDemoTrack } from './demo.js';
-import { detectClimbs, detectDescents } from './climbs.js';
-import { calculateSegmentGrades, gradientColor, groupGradientRuns } from './gradient.js';
-import { elevationGainLoss, pointIndexAtRatio, pointerRatioInPlot } from './profile-math.js';
-import { isClosedRoute } from './route-shape.js';
-import { applyOsmSurfaces, applyValhallaMatches, classifySurface, classifyWayType, fetchOsmWays, fetchValhallaMatches, groupQualityRuns, groupSurfaceRuns, groupWayTypeRuns, roadQualityCategories, roadTypeLabel, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './surface.js';
+import { analyzeTrack, parseGpx } from './domain/gpx.js';
+import { createDemoTrack } from './domain/demo.js';
+import { detectClimbs, detectDescents } from './domain/climbs.js';
+import { calculateSegmentGrades, gradientColor, groupGradientRuns } from './domain/gradient.js';
+import { elevationGainLoss, pointIndexAtRatio, pointerRatioInPlot } from './domain/profile-math.js';
+import { isClosedRoute } from './domain/route-shape.js';
+import { applyValhallaMatches, classifySurface, classifyWayType, fetchValhallaMatches, groupQualityRuns, groupSurfaceRuns, groupWayTypeRuns, roadTypeLabel, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
 
 const app = document.querySelector('#app');
 let map;
@@ -418,18 +418,7 @@ async function enrichTrackSurfaces(track, runId) {
     if (runId !== enrichmentRun) return;
   } finally { clearTimeout(valhallaTimeout); }
 
-  const osmController = new AbortController();
-  const osmTimeout = setTimeout(() => osmController.abort(), 25_000);
-  try {
-    const ways = await fetchOsmWays(track.points, { signal: osmController.signal });
-    if (runId !== enrichmentRun) return;
-    track.points = applyOsmSurfaces(track.points, ways);
-    const known = summarizeSurfaces(track.points).filter((item) => item.id !== 'unknown').reduce((sum, item) => sum + item.percent, 0);
-    refresh(`OpenStreetMap fallback · распознано ${Math.round(known)}% маршрута`);
-  } catch (error) {
-    if (runId !== enrichmentRun) return;
-    renderSurfaces(track, error.name === 'AbortError' ? 'Сервисы дорог не ответили вовремя' : 'Не удалось получить данные дорог · маршрут доступен без покрытия');
-  } finally { clearTimeout(osmTimeout); }
+  renderSurfaces(track, 'Не удалось получить данные дорог · маршрут доступен без покрытия');
 }
 
 function setPointContext(point) {

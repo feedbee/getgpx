@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyOsmSurfaces, applyValhallaMatches, classifyRoadQuality, classifySurface, classifyWayType, groupQualityRuns, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceEmphasis } from './surface.js';
+import { applyOsmSurfaces, applyValhallaMatches, classifyRoadQuality, classifySurface, classifyWayType, groupQualityRuns, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceEmphasis } from '../../../src/client/domain/surface.js';
 
 describe('surfaceEmphasis', () => {
   it('highlights the selected surface and dims every other surface', () => {

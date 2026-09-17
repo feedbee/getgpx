@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createValhallaPayload, normalizeValhallaMatch, validateMatchRequest } from './valhalla.js';
+import { createValhallaPayload, normalizeValhallaMatch, validateMatchRequest } from '../../../src/backend/valhalla.js';
 
 describe('validateMatchRequest', () => {
   it('accepts a bounded coordinate list and rejects malformed or oversized input', () => {

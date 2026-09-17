@@ -1,0 +1,13 @@
+.git
+.github
+.devcontainer
+.env
+.env.*
+!.env.example
+node_modules
+dist
+coverage
+docs
+**/*.test.js
+*.log
+.DS_Store

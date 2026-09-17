@@ -1,10 +1,17 @@
-import { defineConfig } from 'vite';
-import { valhallaMiddleware } from './server/middleware.js';
+import { defineConfig, loadEnv } from 'vite';
+import { valhallaMiddleware } from './src/backend/middleware.js';
 
-const surfaceMatchingPlugin = {
-  name: 'surface-matching-api',
-  configureServer(server) { server.middlewares.use(valhallaMiddleware()); },
-  configurePreviewServer(server) { server.middlewares.use(valhallaMiddleware()); },
-};
+export default defineConfig(({ mode }) => {
+  const environment = loadEnv(mode, process.cwd(), '');
+  const middleware = () => valhallaMiddleware({
+    valhallaEndpoint: environment.VALHALLA_URL,
+    overpassEndpoint: environment.OVERPASS_URL,
+  });
+  const surfaceMatchingPlugin = {
+    name: 'surface-matching-api',
+    configureServer(server) { server.middlewares.use(middleware()); },
+    configurePreviewServer(server) { server.middlewares.use(middleware()); },
+  };
 
-export default defineConfig({ plugins: [surfaceMatchingPlugin] });
+  return { plugins: [surfaceMatchingPlugin] };
+});

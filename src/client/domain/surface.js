@@ -253,17 +253,3 @@ export function groupQualityRuns(points) {
   runs.push({ startIndex, endIndex: points.length - 1, quality });
   return runs;
 }
-
-export async function fetchOsmWays(points, { signal } = {}) {
-  const lats = points.map((point) => point.lat);
-  const lons = points.map((point) => point.lon);
-  const padding = 0.0007;
-  const bbox = [Math.min(...lats) - padding, Math.min(...lons) - padding, Math.max(...lats) + padding, Math.max(...lons) + padding];
-  const query = `[out:json][timeout:25];way[highway](${bbox.join(',')});out tags geom;`;
-  const response = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST', body: new URLSearchParams({ data: query }), signal,
-  });
-  if (!response.ok) throw new Error(`OSM Overpass: ${response.status}`);
-  const data = await response.json();
-  return data.elements.filter((element) => element.type === 'way' && element.geometry?.length > 1);
-}

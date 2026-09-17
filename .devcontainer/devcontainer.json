@@ -1,0 +1,10 @@
+{
+  "name": "Track Hub",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspaces/track-hub",
+  "shutdownAction": "stopCompose",
+  "postCreateCommand": "npm ci",
+  "forwardPorts": [5173, 3000],
+  "remoteUser": "node"
+}

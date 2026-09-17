@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateSegmentGrades, gradientColor, groupGradientRuns } from './gradient.js';
+import { calculateSegmentGrades, gradientColor, groupGradientRuns } from '../../../src/client/domain/gradient.js';
 
 describe('calculateSegmentGrades', () => {
   it('calculates a distance-smoothed grade for every route point', () => {
