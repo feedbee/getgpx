@@ -43,19 +43,20 @@ app.innerHTML = `
       <p class="route-kicker">GPX ROUTE ANALYSIS</p>
       <h1 id="track-name">Загрузка маршрута…</h1>
       <div class="route-metrics" aria-label="Показатели маршрута">
-        <span><b id="distance">—</b> км</span><span>↗ <b id="ascent">—</b> м</span>
-        <span>↕ <b id="elevation-range">—</b> м</span>
-        <span class="moving-metric">◷ <b id="duration">—</b> <i id="duration-unit"></i> при скорости <abbr id="average-speed-badge" title="Средняя скорость движения по данным GPX">— км/ч</abbr></span>
+        <span aria-label="Расстояние маршрута"><span aria-hidden="true">↔</span> <b id="distance">—</b> км</span>
+        <span aria-label="Набор высоты"><span aria-hidden="true">↗</span> <b id="ascent">—</b> м <small>набор</small></span>
+        <span aria-label="Спуск по высоте"><span aria-hidden="true">↘</span> <b id="descent">—</b> м <small>спуск</small></span>
+        <span class="moving-metric">◷ <b id="duration">—</b> <i id="duration-unit"></i> <small>при скорости</small> <abbr id="average-speed-badge" title="Средняя скорость движения по данным GPX">— км/ч</abbr></span>
       </div>
       <div class="route-actions"><button type="button">♡ Сохранить</button><button type="button">↗ Поделиться</button><label for="gpx-file">Заменить GPX</label></div>
     </header>
     <div class="route-workspace">
       <div class="route-content">
         <nav class="section-nav" aria-label="Разделы маршрута">
-          <a href="#way-types">Типы и покрытия</a><a href="#details">Профиль высот</a><a href="#climbs">Подъёмы и спуски</a>
+          <a href="#way-types">Информация о трассе</a><a href="#details">Профиль высот</a><a href="#climbs">Подъёмы и спуски</a>
         </nav>
         <section class="content-section surface-section" id="way-types" aria-labelledby="surface-title">
-          <div class="compact-heading"><h2 id="surface-title">Типы дорог и покрытия</h2><p id="surface-status" role="status">Определяем типы дорог…</p></div>
+          <div class="compact-heading"><h2 id="surface-title">Информация о трассе</h2><p id="surface-status" role="status">Определяем типы дорог…</p></div>
           <div class="analysis-card">
             <section class="distribution-group"><h3>Типы дорог</h3><div class="distribution-bar" id="way-type-bar" aria-label="Распределение типов дорог"></div><div class="distribution-list" id="way-type-stats"></div></section>
             <section class="distribution-group"><h3>Покрытия</h3><div class="distribution-bar surface-bar" id="surface-bar" aria-label="Распределение покрытия"></div><div class="distribution-list surface-stats" id="surface-stats"></div></section>
@@ -78,8 +79,10 @@ app.innerHTML = `
         </section>
         <section class="content-section climbs-section" id="climbs" aria-labelledby="climbs-title">
           <div class="compact-heading"><h2 id="climbs-title">Подъёмы и спуски</h2><p>Автоматическое определение</p></div>
-          <div class="terrain-tabs" role="tablist"><button class="active" type="button" data-terrain-tab="climbs">Подъёмы <b id="climbs-count">0</b></button><button type="button" data-terrain-tab="descents">Спуски <b id="descents-count">0</b></button></div>
-          <div class="climbs-list terrain-list" id="climbs-list"></div><div class="descents-list terrain-list" id="descents-list" hidden></div>
+          <div class="analysis-card terrain-card">
+            <div class="terrain-tabs" role="tablist"><button class="active" type="button" data-terrain-tab="climbs">Подъёмы <b id="climbs-count">0</b></button><button type="button" data-terrain-tab="descents">Спуски <b id="descents-count">0</b></button></div>
+            <div class="climbs-list terrain-list" id="climbs-list"></div><div class="descents-list terrain-list" id="descents-list" hidden></div>
+          </div>
         </section>
       </div>
       <aside class="map-column"><section class="map-shell" aria-label="Карта маршрута"><div id="map"></div><div class="map-mode segmented-control" aria-label="Цвет маршрута на карте"><button class="active" type="button" data-color-scope="map" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="map" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="map" data-color-mode="waytype">Тип дороги</button></div><div class="map-note" id="map-note"></div><div class="hover-readout" id="hover-readout" aria-live="polite"><b>Наведите на маршрут</b></div></section></aside>
@@ -484,8 +487,7 @@ function renderTrack(rawTrack) {
   document.querySelector('#track-name').textContent = currentTrack.name;
   document.querySelector('#distance').textContent = currentTrack.distanceKm.toFixed(1);
   document.querySelector('#ascent').textContent = currentTrack.hasElevation ? currentTrack.ascentM.toLocaleString('ru-RU') : '—';
-  document.querySelector('#elevation-range').textContent = currentTrack.hasElevation
-    ? `${currentTrack.minElevationM.toLocaleString('ru-RU')}–${currentTrack.maxElevationM.toLocaleString('ru-RU')}` : '—';
+  document.querySelector('#descent').textContent = currentTrack.hasElevation ? currentTrack.descentM.toLocaleString('ru-RU') : '—';
   const [duration, unit] = formatDuration(currentTrack.movingTimeMs);
   document.querySelector('#duration').textContent = duration;
   document.querySelector('#duration-unit').textContent = unit;
