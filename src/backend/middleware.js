@@ -25,7 +25,7 @@ export function valhallaMiddleware({ valhallaEndpoint, overpassEndpoint } = {}) 
     if (request.url !== '/api/surface-match') return next();
     if (request.method !== 'POST') return sendJson(response, 405, { error: { code: 'METHOD_NOT_ALLOWED', message: 'Используйте POST.' } });
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000);
+    const timeout = setTimeout(() => controller.abort(), 50_000);
     try {
       const points = validateMatchRequest(await readJson(request));
       const valhallaMatches = await matchTrackWithValhalla(points, { endpoint: valhallaEndpoint, signal: controller.signal });

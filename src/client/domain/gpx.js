@@ -19,7 +19,10 @@ function haversine(a, b) {
   return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
 }
 
-export function parseGpx(xml) {
+export function parseGpx(xml, { fallbackName = 'Маршрут без названия', maxPoints = 500_000 } = {}) {
+  if (/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(xml)) {
+    throw new Error('GPX содержит неподдерживаемую XML-конструкцию.');
+  }
   const document = new XmlParser().parseFromString(xml, 'application/xml');
   const parserError = document.getElementsByTagName('parsererror')[0];
   if (parserError) throw new Error('Не удалось прочитать GPX: файл содержит ошибку XML.');
@@ -30,6 +33,7 @@ export function parseGpx(xml) {
   const rawPoints = track
     ? Array.from(track.getElementsByTagName('trkpt'))
     : Array.from(source.getElementsByTagName('rtept'));
+  if (rawPoints.length > maxPoints) throw new Error(`GPX должен содержать не более ${maxPoints.toLocaleString('ru-RU')} точек.`);
 
   const points = rawPoints.map((node) => {
     const timeText = textOf(node, 'time');
@@ -45,7 +49,7 @@ export function parseGpx(xml) {
 
   return {
     name: textOf(track, 'name') || textOf(route, 'name')
-      || textOf(document.getElementsByTagName('metadata')[0], 'name') || 'Маршрут без названия',
+      || textOf(document.getElementsByTagName('metadata')[0], 'name') || fallbackName,
     points,
   };
 }
@@ -56,6 +60,11 @@ export function analyzeTrack(track) {
   let descentM = 0;
   let movingTimeMs = 0;
   let movingDistanceM = 0;
+  let minElevationM = Infinity;
+  let maxElevationM = -Infinity;
+  let elevationCount = 0;
+  let firstTime = null;
+  let lastTime = null;
   const points = track.points.map((point, index, all) => {
     if (index) {
       const segmentDistanceM = haversine(all[index - 1], point);
@@ -76,13 +85,20 @@ export function analyzeTrack(track) {
         else descentM += Math.abs(delta);
       }
     }
+    if (Number.isFinite(point.ele)) {
+      minElevationM = Math.min(minElevationM, point.ele);
+      maxElevationM = Math.max(maxElevationM, point.ele);
+      elevationCount += 1;
+    }
+    if (point.time instanceof Date && !Number.isNaN(point.time.getTime())) {
+      firstTime ??= point.time;
+      lastTime = point.time;
+    }
     return { ...point, distanceKm: distanceM / 1000 };
   });
 
-  const elevations = points.map((point) => point.ele).filter(Number.isFinite);
-  const timedPoints = points.filter((point) => point.time instanceof Date && !Number.isNaN(point.time));
-  const durationMs = timedPoints.length > 1
-    ? timedPoints.at(-1).time.getTime() - timedPoints[0].time.getTime()
+  const durationMs = firstTime && lastTime && firstTime !== lastTime
+    ? lastTime.getTime() - firstTime.getTime()
     : null;
 
   return {
@@ -91,13 +107,13 @@ export function analyzeTrack(track) {
     distanceKm: distanceM / 1000,
     ascentM: Math.round(ascentM),
     descentM: Math.round(descentM),
-    minElevationM: elevations.length ? Math.round(Math.min(...elevations)) : null,
-    maxElevationM: elevations.length ? Math.round(Math.max(...elevations)) : null,
+    minElevationM: elevationCount ? Math.round(minElevationM) : null,
+    maxElevationM: elevationCount ? Math.round(maxElevationM) : null,
     durationMs: durationMs > 0 ? durationMs : null,
     movingTimeMs: movingTimeMs > 0 ? Math.min(movingTimeMs, durationMs || movingTimeMs) : null,
     movingSpeedThresholdKmh: MOVING_SPEED_THRESHOLD_KMH,
     movingAverageSpeedKmh: movingTimeMs > 0 ? (movingDistanceM / 1000) / (movingTimeMs / 3_600_000) : null,
     averageSpeedKmh: durationMs > 0 ? (distanceM / 1000) / (durationMs / 3_600_000) : null,
-    hasElevation: elevations.length > 1,
+    hasElevation: elevationCount > 1,
   };
 }

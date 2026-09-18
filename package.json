@@ -11,6 +11,7 @@
     "test": "npm run test:fast",
     "test:fast": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration/database.test.js",
+    "test:performance": "vitest run tests/performance/gpx-load.test.js",
     "test:all": "npm run test:fast && npm run test:integration",
     "lint": "eslint .",
     "check": "npm run lint && npm run test:fast && npm run build"

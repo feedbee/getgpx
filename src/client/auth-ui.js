@@ -13,6 +13,7 @@ export function renderAuthControl(user) {
       <button class="avatar-button" type="button" aria-label="Меню пользователя ${name}" aria-expanded="false" aria-controls="user-menu-popover">${avatar}</button>
       <div class="user-menu-popover" id="user-menu-popover" hidden>
         <div class="user-summary"><strong>${name}</strong><small>${escapeHtml(user.email)}</small></div>
+        <a class="user-menu-link" href="/my-tracks">Мои треки</a>
         <button class="logout-button" type="button">Выйти</button>
       </div>
     </div>`;

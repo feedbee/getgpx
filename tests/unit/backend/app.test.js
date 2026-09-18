@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createHealthHandlers } from '../../../src/backend/app.js';
+import { createHealthHandlers, defaultStaticDirectory } from '../../../src/backend/app.js';
+
+describe('production static files', () => {
+  it('serves the root Vite dist directory rather than src/dist', () => {
+    expect(defaultStaticDirectory).toMatch(/\/track-hub\/dist$/);
+    expect(defaultStaticDirectory).not.toMatch(/\/src\/dist$/);
+  });
+});
 
 function createResponse() {
   return {

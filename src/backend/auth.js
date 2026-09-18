@@ -146,6 +146,10 @@ function readCookie(request, name) {
   return null;
 }
 
+export function sessionTokenFromRequest(request) {
+  return readCookie(request, SESSION_COOKIE);
+}
+
 function serializeCookie(name, value, { maxAge, secureCookies }) {
   const parts = [`${name}=${encodeURIComponent(value)}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAge}`];
   if (secureCookies) parts.push('Secure');
@@ -180,13 +184,13 @@ export function createAuthHandlers(authService, { secureCookies = process.env.NO
     },
 
     async session(request, response) {
-      const user = await authService.getUser(readCookie(request, SESSION_COOKIE));
+      const user = await authService.getUser(sessionTokenFromRequest(request));
       response.setHeader?.('Cache-Control', 'no-store');
       response.json({ user });
     },
 
     async logout(request, response) {
-      await authService.logout(readCookie(request, SESSION_COOKIE));
+      await authService.logout(sessionTokenFromRequest(request));
       response.setHeader('Set-Cookie', serializeCookie(SESSION_COOKIE, '', { maxAge: 0, secureCookies }));
       response.status(204).end();
     },

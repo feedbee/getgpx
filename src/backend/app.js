@@ -4,9 +4,10 @@ import express from 'express';
 import helmet from 'helmet';
 import { valhallaMiddleware } from './middleware.js';
 
-const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+export const defaultStaticDirectory = path.join(rootDirectory, 'dist');
 
-export function createApp({ database, authRouter, staticDirectory = path.join(rootDirectory, 'dist') }) {
+export function createApp({ database, authRouter, trackRouter, staticDirectory = defaultStaticDirectory }) {
   if (!database) throw new Error('A database adapter is required.');
 
   const app = express();
@@ -28,6 +29,7 @@ export function createApp({ database, authRouter, staticDirectory = path.join(ro
   app.get('/health/live', health.live);
   app.get('/health/ready', health.ready);
   if (authRouter) app.use(authRouter);
+  if (trackRouter) app.use(trackRouter);
   app.use(valhallaMiddleware());
   app.use(express.static(staticDirectory, { index: false, maxAge: '1h' }));
   app.get('*splat', (_request, response) => response.sendFile(path.join(staticDirectory, 'index.html')));

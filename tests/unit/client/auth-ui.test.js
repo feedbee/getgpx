@@ -11,6 +11,8 @@ describe('authentication header control', () => {
     const markup = renderAuthControl({ displayName: 'Rider & Friend', email: 'rider@example.com', avatarUrl: 'https://example.com/avatar.jpg' });
     expect(markup).toContain('Rider &amp; Friend');
     expect(markup).toContain('https://example.com/avatar.jpg');
+    expect(markup).toContain('/my-tracks');
+    expect(markup).toContain('Мои треки');
     expect(markup).toContain('Выйти');
   });
 });

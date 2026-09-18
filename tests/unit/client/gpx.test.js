@@ -52,4 +52,27 @@ describe('analyzeTrack', () => {
     expect(analyzed.movingTimeMs).toBe(60_000);
     expect(analyzed.movingAverageSpeedKmh).toBeCloseTo(6.67, 1);
   });
+
+  it('uses the filename fallback when the GPX has no embedded name', () => {
+    const track = parseGpx(`
+      <gpx><trk><trkseg>
+        <trkpt lat="50" lon="19"/><trkpt lat="50.1" lon="19.1"/>
+      </trkseg></trk></gpx>
+    `, { fallbackName: 'Weekend ride' });
+
+    expect(track.name).toBe('Weekend ride');
+  });
+
+  it('rejects a GPX over the configured point limit', () => {
+    expect(() => parseGpx(`
+      <gpx><trk><trkseg>
+        <trkpt lat="50" lon="19"/><trkpt lat="50.1" lon="19.1"/><trkpt lat="50.2" lon="19.2"/>
+      </trkseg></trk></gpx>
+    `, { maxPoints: 2 })).toThrow('не более 2 точек');
+  });
+
+  it('rejects XML document type and entity declarations', () => {
+    expect(() => parseGpx('<!DOCTYPE gpx [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><gpx>&xxe;</gpx>'))
+      .toThrow('неподдерживаемую XML-конструкцию');
+  });
 });

@@ -2,7 +2,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { renderAuthControl } from './auth-ui.js';
-import { analyzeTrack, parseGpx } from './domain/gpx.js';
+import { createTrackCard } from './my-tracks-ui.js';
+import { analyzeTrack } from './domain/gpx.js';
 import { createDemoTrack } from './domain/demo.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
 import { calculateSegmentGrades, gradientColor, groupGradientRuns } from './domain/gradient.js';
@@ -32,16 +33,33 @@ let hoveredQualityId = null;
 let pinnedQualityId = null;
 let hoveredRange = null;
 let pinnedRange = null;
+let currentUser = null;
+let activeUploadTrackId = null;
+const isMyTracksPage = window.location.pathname === '/my-tracks';
+let myTracksCursor = null;
+let myTracksLoading = false;
+let publicTrackId = null;
 
 app.innerHTML = `
   <header class="topbar">
-    <div class="topbar-inner"><a class="brand" href="#" aria-label="Trace, главная"><span class="brand-mark">T</span><span>TRACE</span></a>
-    <div class="topbar-actions"><label class="upload-button" for="gpx-file"><span aria-hidden="true">↗</span> Загрузить GPX</label><div id="auth-control">${renderAuthControl(null)}</div></div></div>
+    <div class="topbar-inner"><a class="brand" href="/" aria-label="Trace, главная"><span class="brand-mark">T</span><span>TRACE</span></a>
+    <div class="topbar-actions"><label class="upload-button" data-auth-upload for="gpx-file" hidden><span aria-hidden="true">↗</span> Загрузить GPX</label><div id="auth-control">${renderAuthControl(null)}</div></div></div>
     <input id="gpx-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden />
   </header>
-  <main class="page" id="route">
+  <main class="my-tracks-page" id="my-tracks" ${isMyTracksPage ? '' : 'hidden'}>
+    <header class="my-tracks-header">
+      <div><p class="route-kicker">ЛИЧНАЯ КОЛЛЕКЦИЯ</p><h1>Мои треки</h1><p>Ваши маршруты — от свежих загрузок к старым.</p></div>
+      <label class="my-tracks-upload" data-auth-upload for="gpx-file" hidden><span aria-hidden="true">＋</span> Загрузить GPX</label>
+    </header>
+    <form class="track-search" id="track-search" role="search"><label for="track-query">Поиск по названию</label><div><input id="track-query" name="query" type="search" maxlength="100" placeholder="Например, вечерний гравий" autocomplete="off" /><button type="submit">Найти</button></div></form>
+    <p class="my-tracks-message" id="my-tracks-message" role="status">Войдите, чтобы увидеть свои треки.</p>
+    <section class="track-list" id="track-list" aria-live="polite"></section>
+    <button class="load-more-tracks" id="load-more-tracks" type="button" hidden>Показать ещё</button>
+  </main>
+  <main class="page" id="route" ${isMyTracksPage ? 'hidden' : ''}>
     <header class="route-header">
       <p class="route-kicker">GPX ROUTE ANALYSIS</p>
+      <p class="route-state-note" id="route-state-note" hidden></p>
       <h1 id="track-name">Загрузка маршрута…</h1>
       <div class="route-metrics" aria-label="Показатели маршрута">
         <span aria-label="Расстояние маршрута"><span aria-hidden="true">↔</span> <b id="distance">—</b> км</span>
@@ -49,7 +67,7 @@ app.innerHTML = `
         <span aria-label="Спуск по высоте"><span aria-hidden="true">↘</span> <b id="descent">—</b> м <small>спуск</small></span>
         <span class="moving-metric">◷ <b id="duration">—</b> <i id="duration-unit"></i> <small>при скорости</small> <abbr id="average-speed-badge" title="Средняя скорость движения по данным GPX">— км/ч</abbr></span>
       </div>
-      <div class="route-actions"><button type="button">♡ Сохранить</button><button type="button">↗ Поделиться</button><label for="gpx-file">Заменить GPX</label></div>
+      <div class="route-actions"><button type="button">♡ Сохранить</button><button type="button">↗ Поделиться</button><a id="download-track" hidden>↓ Скачать трек</a><span class="owner-track-actions" id="owner-track-actions" hidden><button id="edit-track" type="button">Редактировать</button><button class="danger-button" id="delete-track" type="button">Удалить</button></span></div>
     </header>
     <div class="route-workspace">
       <div class="route-content">
@@ -57,13 +75,12 @@ app.innerHTML = `
           <a href="#way-types">Информация о трассе</a><a href="#details">Профиль высот</a><a href="#climbs">Подъёмы и спуски</a>
         </nav>
         <section class="content-section surface-section" id="way-types" aria-labelledby="surface-title">
-          <div class="compact-heading"><h2 id="surface-title">Информация о трассе</h2><p id="surface-status" role="status">Определяем типы дорог…</p></div>
+          <div class="compact-heading"><div class="surface-title-row"><h2 id="surface-title">Информация о трассе</h2><div class="source-help"><button class="source-help-trigger" type="button" aria-label="Источники данных" aria-haspopup="dialog" aria-controls="source-popover">?</button><div class="source-popover" id="source-popover" role="dialog" aria-label="Источники данных"><strong>Источники данных</strong><ul><li data-analysis-source="gpx"><span class="source-state" aria-hidden="true">…</span><span><b>GPX</b><small>Маршрут, высоты и время</small></span></li><li data-analysis-source="valhalla"><span class="source-state" aria-hidden="true">…</span><span><b>Valhalla</b><small>Сопоставление с дорогами и оценка покрытий</small></span><button class="source-retry" data-retry-source="valhalla" type="button" aria-label="Повторить получение данных Valhalla" title="Повторить" hidden>↻</button></li><li data-analysis-source="openStreetMap"><span class="source-state" aria-hidden="true">…</span><span><b>OpenStreetMap</b><small>Детальные теги покрытий и качества дорог</small></span><button class="source-retry" data-retry-source="openStreetMap" type="button" aria-label="Повторить получение данных OpenStreetMap" title="Повторить" hidden>↻</button></li></ul></div></div></div></div>
           <div class="analysis-card">
             <section class="distribution-group"><h3>Типы дорог</h3><div class="distribution-bar" id="way-type-bar" aria-label="Распределение типов дорог"></div><div class="distribution-list" id="way-type-stats"></div></section>
             <section class="distribution-group"><h3>Покрытия</h3><div class="distribution-bar surface-bar" id="surface-bar" aria-label="Распределение покрытия"></div><div class="distribution-list surface-stats" id="surface-stats"></div></section>
             <section class="distribution-group quality-compact"><h3>Качество проезда</h3><div class="distribution-bar" id="quality-bar" aria-label="Распределение качества проезда"></div><div class="distribution-list quality-stats" id="quality-stats"></div></section>
           </div>
-          <p class="surface-note">Материалы — из OpenStreetMap; отсутствующий surface оценивается по Valhalla.</p>
         </section>
         <section class="content-section profile-section" id="details">
           <div class="compact-heading"><h2>Профиль высот</h2></div>
@@ -89,7 +106,31 @@ app.innerHTML = `
       <aside class="map-column"><section class="map-shell" aria-label="Карта маршрута"><div id="map"></div><div class="map-mode segmented-control" aria-label="Цвет маршрута на карте"><button class="active" type="button" data-color-scope="map" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="map" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="map" data-color-mode="waytype">Тип дороги</button></div><div class="map-note" id="map-note"></div><div class="hover-readout" id="hover-readout" aria-live="polite"><b>Наведите на маршрут</b></div></section></aside>
     </div>
   </main>
-  <div class="drop-overlay" id="drop-overlay"><strong>Отпустите GPX здесь</strong><span>Маршрут откроется прямо в браузере</span></div>
+  <div class="drop-overlay" id="drop-overlay"><strong>Отпустите GPX здесь</strong><span>Маршрут будет загружен и обработан</span></div>
+  <div class="processing-overlay" id="processing-overlay" hidden>
+    <section class="processing-card" role="dialog" aria-modal="true" aria-labelledby="processing-title">
+      <p class="route-kicker">GPX PROCESSING</p><h2 id="processing-title">Создаём трек</h2>
+      <ol class="processing-steps" aria-live="polite">
+        <li data-processing-step="UPLOADING">Загружаем файл</li><li data-processing-step="QUEUED">Ставим в обработку</li>
+        <li data-processing-step="PARSING">Разбираем GPX и считаем маршрут</li><li data-processing-step="ENRICHING">Определяем дороги и покрытия</li>
+        <li data-processing-step="COMPLETE">Трек готов</li>
+      </ol>
+      <p class="processing-error" id="processing-error" hidden></p>
+      <details class="processing-details" id="processing-details" hidden><summary>Техническая информация</summary><code id="processing-code"></code></details>
+      <div class="processing-actions"><button id="retry-processing" type="button" hidden>Повторить анализ</button><button id="close-processing" type="button">Закрыть</button></div>
+    </section>
+  </div>
+  <input id="replacement-gpx" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden />
+  <dialog class="edit-track-dialog" id="edit-track-dialog">
+    <form id="edit-track-form">
+      <p class="route-kicker">РЕДАКТИРОВАНИЕ</p><h2>Параметры трека</h2>
+      <label>Название<input id="edit-track-title" name="title" required maxlength="200" /></label>
+      <label>Расчётная скорость, км/ч<input id="edit-track-speed" name="speedKmh" type="number" min="1" max="50" step="0.1" required /></label>
+      <label class="replace-gpx-control" for="replacement-gpx">Заменить исходный GPX…</label>
+      <p class="form-error" id="edit-track-error" hidden></p>
+      <div><button type="button" id="cancel-track-edit">Отмена</button><button type="submit">Сохранить</button></div>
+    </form>
+  </dialog>
   <div class="toast" id="toast" role="alert"></div>
 `;
 
@@ -104,7 +145,70 @@ function closeUserMenu() {
 }
 
 function setAuthUser(user) {
+  currentUser = user;
   authControl.innerHTML = renderAuthControl(user);
+  document.querySelectorAll('[data-auth-upload]').forEach((control) => { control.hidden = !user; });
+  if (isMyTracksPage) loadMyTracks({ reset: true });
+  if (publicTrackId && user) loadTrackManagement(publicTrackId);
+  if (!user) {
+    document.querySelector('#owner-track-actions').hidden = true;
+    document.querySelectorAll('.source-retry').forEach((button) => { button.hidden = true; });
+  }
+}
+
+async function loadTrackManagement(trackId) {
+  const response = await fetch(`/api/tracks/${trackId}/manage`, { headers: { accept: 'application/json' } });
+  if (!response.ok) return;
+  const { data } = await response.json();
+  document.querySelector('#owner-track-actions').hidden = false;
+  document.querySelector('#edit-track-title').value = data.title;
+  document.querySelector('#edit-track-speed').value = data.speedKmh || 20;
+  document.querySelectorAll('.source-retry').forEach((button) => {
+    button.hidden = !data.canRetry || button.dataset.retrySource !== data.retrySource;
+  });
+}
+
+async function loadMyTracks({ reset = false } = {}) {
+  if (!isMyTracksPage || myTracksLoading) return;
+  const list = document.querySelector('#track-list');
+  const message = document.querySelector('#my-tracks-message');
+  const more = document.querySelector('#load-more-tracks');
+  if (!currentUser) {
+    list.replaceChildren();
+    message.innerHTML = 'Войдите, чтобы увидеть свои треки. <a href="/api/auth/google">Войти</a>';
+    message.hidden = false;
+    more.hidden = true;
+    return;
+  }
+  if (reset) {
+    myTracksCursor = null;
+    list.replaceChildren();
+  }
+  myTracksLoading = true;
+  message.textContent = 'Загружаем треки…';
+  message.hidden = false;
+  more.disabled = true;
+  const query = document.querySelector('#track-query').value.trim();
+  const parameters = new URLSearchParams();
+  if (query) parameters.set('query', query);
+  if (myTracksCursor) parameters.set('cursor', myTracksCursor);
+  try {
+    const response = await fetch(`/api/tracks/mine?${parameters}`, { headers: { accept: 'application/json' } });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload?.error?.message || 'Не удалось загрузить список треков.');
+    payload.data.items.forEach((track) => list.append(createTrackCard(track)));
+    myTracksCursor = payload.data.nextCursor;
+    message.textContent = list.children.length ? '' : (query ? 'По вашему запросу ничего не найдено.' : 'Здесь пока нет треков. Загрузите первый GPX.');
+    message.hidden = Boolean(list.children.length);
+    more.hidden = !myTracksCursor;
+  } catch (listError) {
+    message.textContent = listError.message;
+    message.hidden = false;
+    more.hidden = true;
+  } finally {
+    myTracksLoading = false;
+    more.disabled = false;
+  }
 }
 
 async function restoreSession() {
@@ -396,11 +500,10 @@ function renderClimbs(track) {
   document.querySelector('#descents-list').innerHTML = rows(track.descents, 'descent');
 }
 
-function renderSurfaces(track, status = 'Данные покрытия загружены из OpenStreetMap') {
+function renderSurfaces(track) {
   const summary = summarizeSurfaces(track.points);
   const wayTypes = summarizeWayTypes(track.points);
   const quality = summarizeRoadQuality(track.points);
-  document.querySelector('#surface-status').textContent = status;
   document.querySelector('#surface-bar').innerHTML = summary.filter((item) => item.percent > 0).map((item) =>
     `<button type="button" data-surface-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${item.label}: ${item.percent.toFixed(1)}%" aria-label="${item.label}: ${item.percent.toFixed(1)}% маршрута" aria-pressed="false"></button>`).join('');
   document.querySelector('#surface-stats').innerHTML = summary.map((item) => `
@@ -442,15 +545,16 @@ function setColorMode(scope, mode) {
 }
 
 async function enrichTrackSurfaces(track, runId) {
-  const refresh = (status) => {
-    renderSurfaces(track, status);
+  const refresh = (sources) => {
+    renderSurfaces(track);
+    renderSourceInfo(sources);
     drawMap(track);
     if (track.hasElevation) drawProfile(track);
     setActivePoint(activePointIndex);
   };
   if (track.points.some((point) => point.surfaceTags)) {
     track.points = track.points.map((point) => ({ ...point, surface: classifySurface(point.surfaceTags) }));
-    refresh('Демонстрационные данные покрытия');
+    refresh({ gpx: 'SUCCESS', valhalla: 'SUCCESS', openStreetMap: 'SUCCESS' });
     return;
   }
   const valhallaController = new AbortController();
@@ -459,14 +563,25 @@ async function enrichTrackSurfaces(track, runId) {
     const matches = await fetchValhallaMatches(track.points, { signal: valhallaController.signal });
     if (runId !== enrichmentRun) return;
     track.points = applyValhallaMatches(track.points, matches);
-    const known = summarizeSurfaces(track.points).filter((item) => item.id !== 'unknown').reduce((sum, item) => sum + item.percent, 0);
-    refresh(`Valhalla · сопоставлено ${Math.round(known)}% маршрута · материал оценочный`);
+    refresh({ gpx: 'SUCCESS', valhalla: 'SUCCESS', openStreetMap: 'FAILED' });
     return;
   } catch {
     if (runId !== enrichmentRun) return;
   } finally { clearTimeout(valhallaTimeout); }
 
-  renderSurfaces(track, 'Не удалось получить данные дорог · маршрут доступен без покрытия');
+  renderSurfaces(track);
+  renderSourceInfo({ gpx: 'SUCCESS', valhalla: 'FAILED', openStreetMap: 'FAILED' });
+}
+
+function renderSourceInfo(sources = {}) {
+  const symbols = { SUCCESS: '✓', FAILED: '×', PENDING: '…' };
+  const labels = { SUCCESS: 'доступен', FAILED: 'недоступен', PENDING: 'обрабатывается' };
+  document.querySelectorAll('[data-analysis-source]').forEach((row) => {
+    const status = sources[row.dataset.analysisSource] || 'PENDING';
+    row.dataset.sourceStatus = status;
+    row.querySelector('.source-state').textContent = symbols[status];
+    row.querySelector('.source-state').setAttribute('aria-label', labels[status]);
+  });
 }
 
 function setPointContext(point) {
@@ -502,7 +617,7 @@ function setActivePoint(index, { showContext = false } = {}) {
   setPointContext(showContext ? point : null);
 }
 
-function renderTrack(rawTrack) {
+function renderTrack(rawTrack, { persisted = false, analysisSources } = {}) {
   enrichmentRun += 1;
   clearRangeFocus();
   hoveredSurfaceId = null;
@@ -513,11 +628,15 @@ function renderTrack(rawTrack) {
   pinnedQualityId = null;
   hoveredRange = null;
   pinnedRange = null;
-  currentTrack = analyzeTrack(rawTrack);
+  currentTrack = persisted ? rawTrack : analyzeTrack(rawTrack);
   const grades = calculateSegmentGrades(currentTrack.points);
-  currentTrack.points = currentTrack.points.map((point, index) => ({ ...point, grade: grades[index], surface: classifySurface(point.surfaceTags) }));
-  currentTrack.climbs = detectClimbs(currentTrack.points);
-  currentTrack.descents = detectDescents(currentTrack.points);
+  currentTrack.points = currentTrack.points.map((point, index) => ({
+    ...point,
+    grade: Number.isFinite(point.grade) ? point.grade : grades[index],
+    surface: point.surface || classifySurface(point.surfaceTags),
+  }));
+  currentTrack.climbs ??= detectClimbs(currentTrack.points);
+  currentTrack.descents ??= detectDescents(currentTrack.points);
   viewRange = [0, currentTrack.points.length - 1];
   zoomHistory = [];
   currentViewMetrics = null;
@@ -525,35 +644,164 @@ function renderTrack(rawTrack) {
   document.querySelector('#distance').textContent = currentTrack.distanceKm.toFixed(1);
   document.querySelector('#ascent').textContent = currentTrack.hasElevation ? currentTrack.ascentM.toLocaleString('ru-RU') : '—';
   document.querySelector('#descent').textContent = currentTrack.hasElevation ? currentTrack.descentM.toLocaleString('ru-RU') : '—';
-  const [duration, unit] = formatDuration(currentTrack.movingTimeMs);
+  const [duration, unit] = formatDuration(currentTrack.estimatedDurationMs || currentTrack.movingTimeMs);
   document.querySelector('#duration').textContent = duration;
   document.querySelector('#duration-unit').textContent = unit;
   document.querySelector('#profile-ascent').textContent = currentTrack.ascentM.toLocaleString('ru-RU');
   document.querySelector('#profile-descent').textContent = currentTrack.descentM.toLocaleString('ru-RU');
   const speedBadge = document.querySelector('#average-speed-badge');
-  speedBadge.textContent = currentTrack.movingAverageSpeedKmh
-    ? `${currentTrack.movingAverageSpeedKmh.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} км/ч` : '— км/ч';
+  const speed = currentTrack.effectiveSpeedKmh || currentTrack.movingAverageSpeedKmh;
+  speedBadge.textContent = speed
+    ? `${speed.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} км/ч` : '— км/ч';
   speedBadge.title = currentTrack.movingAverageSpeedKmh
-    ? `Средняя скорость движения по данным GPX: ${currentTrack.movingAverageSpeedKmh.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} км/ч`
-    : 'В GPX недостаточно timestamps для расчёта средней скорости';
+    ? `Средняя скорость движения по данным GPX: ${speed.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} км/ч`
+    : speed ? `Расчётная скорость: ${speed.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} км/ч`
+      : 'В GPX недостаточно данных для расчёта скорости';
   drawMap(currentTrack);
   if (currentTrack.hasElevation) drawProfile(currentTrack);
   renderClimbs(currentTrack);
-  renderSurfaces(currentTrack, 'Определяем типы дорог…');
+  renderSurfaces(currentTrack);
+  renderSourceInfo(analysisSources || (persisted
+    ? { gpx: 'SUCCESS', valhalla: 'PENDING', openStreetMap: 'PENDING' }
+    : { gpx: 'SUCCESS', valhalla: 'PENDING', openStreetMap: 'PENDING' }));
   document.querySelector('#zoom-back').disabled = true;
   document.querySelector('#zoom-reset').disabled = true;
   setActivePoint(0);
-  enrichTrackSurfaces(currentTrack, enrichmentRun);
+  if (!persisted) enrichTrackSurfaces(currentTrack, enrichmentRun);
 }
 
-async function loadFile(file) {
+function renderUnavailableTrack(track) {
+  document.querySelector('#track-name').textContent = track.title;
+  document.querySelector('#route-state-note').textContent = track.analysisNote;
+  document.querySelector('#route-state-note').hidden = false;
+  document.querySelector('.route-metrics').hidden = true;
+  document.querySelector('.route-workspace').hidden = true;
+}
+
+async function loadPublicTrack(trackId) {
+  publicTrackId = trackId;
+  const response = await fetch(`/api/tracks/${trackId}`, { headers: { accept: 'application/json' } });
+  if (!response.ok) {
+    renderUnavailableTrack({ title: 'Трек не найден', analysisNote: 'Проверьте публичную ссылку.' });
+    return;
+  }
+  const { data } = await response.json();
+  const download = document.querySelector('#download-track');
+  download.href = data.downloadUrl;
+  download.hidden = false;
+  if (!data.analysis) {
+    renderUnavailableTrack(data);
+    return;
+  }
+  data.analysis.name = data.title;
+  renderTrack(data.analysis, { persisted: true, analysisSources: data.analysisSources });
+}
+
+const processingOrder = ['UPLOADING', 'QUEUED', 'PARSING', 'ENRICHING', 'COMPLETE'];
+
+function updateProcessing(step) {
+  const activeIndex = processingOrder.indexOf(step);
+  document.querySelectorAll('[data-processing-step]').forEach((item) => {
+    const index = processingOrder.indexOf(item.dataset.processingStep);
+    item.classList.toggle('is-complete', activeIndex >= 0 && index < activeIndex);
+    item.classList.toggle('is-active', item.dataset.processingStep === step);
+  });
+}
+
+function showProcessingError(error) {
+  const failedStep = error.code === 'INVALID_GPX' ? 'PARSING' : error.code === 'ENRICHMENT_UNAVAILABLE' ? 'ENRICHING' : 'UPLOADING';
+  updateProcessing(failedStep);
+  const message = document.querySelector('#processing-error');
+  message.textContent = error.message;
+  message.hidden = false;
+  const details = document.querySelector('#processing-details');
+  details.hidden = false;
+  document.querySelector('#processing-code').textContent = error.code;
+  document.querySelector('#retry-processing').hidden = error.code !== 'ENRICHMENT_UNAVAILABLE';
+}
+
+function showTrackCreated(trackId) {
+  const toast = document.querySelector('#toast');
+  toast.replaceChildren('Трек успешно создан. ');
+  const link = document.createElement('a');
+  link.href = `/tracks/${trackId}`;
+  link.textContent = 'Открыть трек';
+  toast.append(link);
+  toast.classList.add('visible');
+  setTimeout(() => window.location.assign(`/tracks/${trackId}`), 900);
+}
+
+async function pollTrackStatus(trackId) {
+  while (activeUploadTrackId === trackId) {
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    const response = await fetch(`/api/tracks/${trackId}/status`, { headers: { accept: 'application/json' } });
+    if (!response.ok) throw new Error('Не удалось получить статус обработки.');
+    const { data } = await response.json();
+    updateProcessing(data.step);
+    if (data.status === 'READY') {
+      activeUploadTrackId = null;
+      updateProcessing('COMPLETE');
+      showTrackCreated(trackId);
+      return;
+    }
+    if (data.status === 'FAILED') {
+      activeUploadTrackId = trackId;
+      showProcessingError(data.error);
+      return;
+    }
+  }
+}
+
+async function uploadFile(file) {
+  if (!currentUser) return;
+  const processing = document.querySelector('#processing-overlay');
+  const error = document.querySelector('#processing-error');
+  const details = document.querySelector('#processing-details');
+  error.hidden = true;
+  details.hidden = true;
+  document.querySelector('#retry-processing').hidden = true;
+  processing.hidden = false;
+  updateProcessing('UPLOADING');
   try {
-    renderTrack(parseGpx(await file.text()));
-  } catch (error) {
-    const toast = document.querySelector('#toast');
-    toast.textContent = error.message;
-    toast.classList.add('visible');
-    setTimeout(() => toast.classList.remove('visible'), 4200);
+    const response = await fetch('/api/tracks', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/gpx+xml',
+        'x-gpx-filename': encodeURIComponent(file.name),
+      },
+      body: file,
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload?.error?.message || 'Не удалось загрузить GPX-файл.');
+    activeUploadTrackId = payload.data.id;
+    updateProcessing(payload.data.step);
+    await pollTrackStatus(activeUploadTrackId);
+  } catch (uploadError) {
+    showProcessingError({ message: uploadError.message, code: 'UPLOAD_FAILED' });
+  }
+}
+
+async function replaceTrackFile(file) {
+  if (!currentUser || !publicTrackId) return;
+  const processing = document.querySelector('#processing-overlay');
+  document.querySelector('#processing-error').hidden = true;
+  document.querySelector('#processing-details').hidden = true;
+  processing.hidden = false;
+  updateProcessing('UPLOADING');
+  try {
+    const response = await fetch(`/api/tracks/${publicTrackId}/file`, {
+      method: 'PUT',
+      headers: { accept: 'application/json', 'content-type': 'application/gpx+xml', 'x-gpx-filename': encodeURIComponent(file.name) },
+      body: file,
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload?.error?.message || 'Не удалось заменить GPX-файл.');
+    activeUploadTrackId = publicTrackId;
+    updateProcessing(payload.data.step);
+    await pollTrackStatus(publicTrackId);
+  } catch (replaceError) {
+    showProcessingError({ message: replaceError.message, code: 'REPLACEMENT_FAILED' });
   }
 }
 
@@ -717,14 +965,96 @@ document.addEventListener('keydown', (event) => {
   if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   refreshRouteFocus();
 });
-document.querySelector('#gpx-file').addEventListener('change', (event) => event.target.files[0] && loadFile(event.target.files[0]));
+document.querySelector('#gpx-file').addEventListener('change', (event) => {
+  if (event.target.files[0]) uploadFile(event.target.files[0]);
+  event.target.value = '';
+});
 const overlay = document.querySelector('#drop-overlay');
-window.addEventListener('dragover', (event) => { event.preventDefault(); overlay.classList.add('visible'); });
+window.addEventListener('dragover', (event) => { event.preventDefault(); if (currentUser) overlay.classList.add('visible'); });
 window.addEventListener('dragleave', (event) => { if (!event.relatedTarget) overlay.classList.remove('visible'); });
-window.addEventListener('drop', (event) => { event.preventDefault(); overlay.classList.remove('visible'); if (event.dataTransfer.files[0]) loadFile(event.dataTransfer.files[0]); });
+window.addEventListener('drop', (event) => {
+  event.preventDefault();
+  overlay.classList.remove('visible');
+  if (currentUser && event.dataTransfer.files[0]) uploadFile(event.dataTransfer.files[0]);
+});
+document.querySelector('#close-processing').addEventListener('click', () => {
+  activeUploadTrackId = null;
+  document.querySelector('#processing-overlay').hidden = true;
+});
+document.querySelector('#retry-processing').addEventListener('click', async () => {
+  if (!activeUploadTrackId) return;
+  const response = await fetch(`/api/tracks/${activeUploadTrackId}/retry-analysis`, { method: 'POST', headers: { accept: 'application/json' } });
+  const payload = await response.json();
+  if (!response.ok) {
+    showProcessingError({ message: payload?.error?.message || 'Не удалось повторить анализ.', code: payload?.error?.code || 'RETRY_FAILED' });
+    return;
+  }
+  document.querySelector('#processing-error').hidden = true;
+  document.querySelector('#processing-details').hidden = true;
+  document.querySelector('#retry-processing').hidden = true;
+  updateProcessing(payload.data.step);
+  await pollTrackStatus(activeUploadTrackId);
+});
 
-initMap();
-renderTrack(createDemoTrack());
-setColorMode('map', mapColorMode);
-setColorMode('profile', profileColorMode);
+document.querySelector('#track-search').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const query = document.querySelector('#track-query').value.trim();
+  const nextUrl = query ? `/my-tracks?query=${encodeURIComponent(query)}` : '/my-tracks';
+  window.history.replaceState(null, '', nextUrl);
+  loadMyTracks({ reset: true });
+});
+document.querySelector('#load-more-tracks').addEventListener('click', () => loadMyTracks());
+document.querySelector('#edit-track').addEventListener('click', () => document.querySelector('#edit-track-dialog').showModal());
+document.querySelector('#cancel-track-edit').addEventListener('click', () => document.querySelector('#edit-track-dialog').close());
+document.querySelector('#edit-track-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const error = document.querySelector('#edit-track-error');
+  error.hidden = true;
+  const response = await fetch(`/api/tracks/${publicTrackId}`, {
+    method: 'PATCH',
+    headers: { accept: 'application/json', 'content-type': 'application/json' },
+    body: JSON.stringify({ title: document.querySelector('#edit-track-title').value, speedKmh: Number(document.querySelector('#edit-track-speed').value) }),
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    error.textContent = payload?.error?.message || 'Не удалось сохранить изменения.';
+    error.hidden = false;
+    return;
+  }
+  document.querySelector('#edit-track-dialog').close();
+  payload.data.analysis.name = payload.data.title;
+  renderTrack(payload.data.analysis, { persisted: true, analysisSources: payload.data.analysisSources });
+});
+document.querySelector('#replacement-gpx').addEventListener('change', (event) => {
+  if (event.target.files[0]) {
+    document.querySelector('#edit-track-dialog').close();
+    replaceTrackFile(event.target.files[0]);
+  }
+  event.target.value = '';
+});
+document.querySelector('.source-popover').addEventListener('click', async (event) => {
+  if (!event.target.closest('.source-retry')) return;
+  const response = await fetch(`/api/tracks/${publicTrackId}/retry-analysis`, { method: 'POST', headers: { accept: 'application/json' } });
+  const payload = await response.json();
+  if (!response.ok) return;
+  activeUploadTrackId = publicTrackId;
+  document.querySelector('#processing-overlay').hidden = false;
+  updateProcessing(payload.data.step);
+  await pollTrackStatus(publicTrackId);
+});
+document.querySelector('#delete-track').addEventListener('click', async () => {
+  if (!window.confirm('Удалить этот трек и исходный GPX без возможности восстановления?')) return;
+  const response = await fetch(`/api/tracks/${publicTrackId}`, { method: 'DELETE', headers: { accept: 'application/json' } });
+  if (response.ok) window.location.assign('/my-tracks');
+});
+
+if (isMyTracksPage) document.querySelector('#track-query').value = new URLSearchParams(window.location.search).get('query') || '';
+if (!isMyTracksPage) {
+  initMap();
+  setColorMode('map', mapColorMode);
+  setColorMode('profile', profileColorMode);
+}
 restoreSession();
+const publicTrackMatch = window.location.pathname.match(/^\/tracks\/([a-f\d]{24})$/i);
+if (publicTrackMatch) loadPublicTrack(publicTrackMatch[1]);
+else if (!isMyTracksPage) renderTrack(createDemoTrack());

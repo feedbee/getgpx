@@ -1,6 +1,10 @@
 import { defineConfig, loadEnv } from 'vite';
 import { createAuthentication } from './src/backend/authentication.js';
 import { createDatabase } from './src/backend/database.js';
+import { analyzeGpxSource, enrichTrackAnalysis } from './src/backend/track-analysis.js';
+import { createTrackPersistence } from './src/backend/track-persistence.js';
+import { createTrackRouter } from './src/backend/track-routes.js';
+import { createTrackService } from './src/backend/track-service.js';
 import { valhallaMiddleware } from './src/backend/middleware.js';
 
 export default defineConfig(({ command, mode }) => {
@@ -20,14 +24,21 @@ export default defineConfig(({ command, mode }) => {
     async configureServer(server) {
       const database = createDatabase({ uri: environment.MONGODB_URI, databaseName: environment.MONGODB_DATABASE });
       await database.connect();
-      const { middleware } = await createAuthentication(database, {
+      const authentication = await createAuthentication(database, {
         clientId: environment.GOOGLE_CLIENT_ID,
         clientSecret: environment.GOOGLE_CLIENT_SECRET,
         redirectUri: environment.GOOGLE_REDIRECT_URI,
         sessionSecret: environment.SESSION_SECRET,
         secureCookies: false,
       });
-      server.middlewares.use(middleware);
+      const trackPersistence = await createTrackPersistence(database);
+      const trackService = createTrackService({
+        ...trackPersistence,
+        analyzeSource: analyzeGpxSource,
+        enrichAnalysis: enrichTrackAnalysis,
+      });
+      server.middlewares.use(authentication.middleware);
+      server.middlewares.use(createTrackRouter(trackService, authentication.service));
       server.httpServer?.once('close', () => database.close());
     },
   };

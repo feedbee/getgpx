@@ -15,12 +15,13 @@ Node.js / Express
   ├─ completes Google OAuth and owns opaque user sessions
   ├─ calls Valhalla and enriches matches from Overpass
   ├─ serves the static production bundle
-  └─ owns MongoDB lifecycle and readiness
+  ├─ owns MongoDB lifecycle and readiness
+  └─ initializes saved-track, GridFS, and enrichment-cache persistence
               │
-MongoDB (users and sessions; future saved tracks)
+MongoDB (users, sessions, tracks, GPX GridFS files, and enrichment cache)
 ```
 
-GPX content currently remains in browser memory. The API receives only coordinates needed for road matching; it does not persist tracks yet. MongoDB stores Google-linked users and hashed opaque sessions; Google OAuth tokens are discarded after profile lookup.
+Authenticated uploads are parsed and analysed by the backend, which stores owner-bound track records and source GPX files through MongoDB GridFS. Public track views read the persisted analysis, while a shared 30-day enrichment cache keeps successful Valhalla checkpoints and fully enriched OpenStreetMap results. MongoDB also stores Google-linked users and hashed opaque sessions; Google OAuth tokens are discarded after profile lookup.
 
 The production process fails startup when MongoDB configuration or connectivity is absent. Liveness deliberately avoids dependencies; readiness performs a MongoDB ping so an orchestrator can stop routing traffic to an unhealthy instance.
 
