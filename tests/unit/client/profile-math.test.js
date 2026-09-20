@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot } from '../../../src/client/domain/profile-math.js';
+import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot, visibleRangeIndices } from '../../../src/client/domain/profile-math.js';
 
 describe('areaPathFromCoordinates', () => {
   it('closes a profile segment against the chart baseline', () => {
@@ -9,6 +9,17 @@ describe('areaPathFromCoordinates', () => {
 
   it('does not draw an area for fewer than two coordinates', () => {
     expect(areaPathFromCoordinates([{ x: 12, y: 80 }], 264)).toBe('');
+  });
+});
+
+describe('visibleRangeIndices', () => {
+  it('clips a terrain range to the visible profile window', () => {
+    expect(visibleRangeIndices({ startIndex: 2, endIndex: 8 }, 4, 10)).toEqual([4, 8]);
+  });
+
+  it('rejects ranges without a visible line segment', () => {
+    expect(visibleRangeIndices({ startIndex: 2, endIndex: 3 }, 4, 10)).toBeNull();
+    expect(visibleRangeIndices({ startIndex: 4, endIndex: 4 }, 4, 10)).toBeNull();
   });
 });
 

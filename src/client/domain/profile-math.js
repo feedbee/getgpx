@@ -8,6 +8,12 @@ export function areaPathFromCoordinates(coordinates, baselineY) {
   return `${line} L${coordinates.at(-1).x.toFixed(1)},${baselineY} L${coordinates[0].x.toFixed(1)},${baselineY} Z`;
 }
 
+export function visibleRangeIndices(range, visibleStartIndex, visibleEndIndex) {
+  const startIndex = Math.max(range.startIndex, visibleStartIndex);
+  const endIndex = Math.min(range.endIndex, visibleEndIndex);
+  return endIndex - startIndex >= 1 ? [startIndex, endIndex] : null;
+}
+
 export function pointIndexAtRatio(points, startIndex, endIndex, ratio) {
   if (ratio <= 0) return startIndex;
   if (ratio >= 1) return endIndex;

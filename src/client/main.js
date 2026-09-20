@@ -11,7 +11,7 @@ import { createDemoTrack } from './domain/demo.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
 import { calculateSegmentGrades } from './domain/gradient.js';
 import { emptyPoiSelection, updatePoiSelection } from './domain/poi-selection.js';
-import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot } from './domain/profile-math.js';
+import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot, visibleRangeIndices } from './domain/profile-math.js';
 import { colorRunsForMode, highlightRunsForFilter, profileColorRuns } from './domain/route-color.js';
 import { isClosedRoute } from './domain/route-shape.js';
 import { applyValhallaMatches, classifySurface, classifyWayType, fetchValhallaMatches, roadQualityCategories, roadTypeLabel, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
@@ -115,7 +115,7 @@ app.innerHTML = `
           <div class="analysis-card profile-card">
             <div class="profile-toolbar"><div class="profile-mode segmented-control" aria-label="Цвет профиля"><button class="active" type="button" data-color-scope="profile" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="profile" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="profile" data-color-mode="waytype">Тип дороги</button><button type="button" data-color-scope="profile" data-color-mode="quality">Качество</button></div><div class="profile-actions segmented-control"><button id="zoom-back" type="button" disabled>← Назад</button><button id="zoom-reset" type="button" disabled>Reset</button></div></div>
             <div class="profile-wrap" id="profile-wrap" tabindex="0" role="slider" aria-label="Положение на профиле высоты" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-              <svg id="profile" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ebc35" stop-opacity=".24"/><stop offset="1" stop-color="#7ebc35" stop-opacity=".02"/></linearGradient></defs><g id="grid"></g><g id="climb-bands"></g><path id="profile-area" class="profile-area"></path><g id="profile-gradient-area"></g><g id="gradient-line"></g><g id="surface-ribbon"></g><rect id="profile-selection" class="profile-selection" x="0" y="18" width="0" height="246"></rect><line id="profile-cursor" class="profile-cursor" y1="18" y2="264"></line><circle id="profile-dot" class="profile-dot" r="6"></circle></svg>
+              <svg id="profile" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ebc35" stop-opacity=".24"/><stop offset="1" stop-color="#7ebc35" stop-opacity=".02"/></linearGradient></defs><g id="grid"></g><g id="climb-bands"></g><path id="profile-area" class="profile-area"></path><g id="profile-gradient-area"></g><g id="gradient-line"></g><g id="terrain-highlight"></g><g id="surface-ribbon"></g><rect id="profile-selection" class="profile-selection" x="0" y="18" width="0" height="246"></rect><line id="profile-cursor" class="profile-cursor" y1="18" y2="264"></line><circle id="profile-dot" class="profile-dot" r="6"></circle></svg>
               <div class="profile-pois" id="profile-pois" aria-hidden="true"></div>
               <div class="axis" id="axis"></div>
             </div>
@@ -536,8 +536,9 @@ function drawProfile(track) {
   const line = coords.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
   document.querySelector('#profile-area').setAttribute('d', `${line} L1200,264 L0,264 Z`);
   const profileCoordinates = (run) => {
-    const visibleRunStart = Math.max(run.startIndex, startIndex);
-    const visibleRunEnd = Math.min(run.endIndex, endIndex);
+    const visibleIndices = visibleRangeIndices(run, startIndex, endIndex);
+    if (!visibleIndices) return [];
+    const [visibleRunStart, visibleRunEnd] = visibleIndices;
     return track.points.slice(visibleRunStart, visibleRunEnd + 1)
       .filter((point) => Number.isFinite(point.ele))
       .map(chartCoordinates);
@@ -565,6 +566,11 @@ function drawProfile(track) {
   const highlightPaths = highlightedRuns.map((run) =>
     `<path class="profile-highlight" d="${run.path}" stroke="${run.color}"><title>${run.label}</title></path>`).join('');
   document.querySelector('#gradient-line').innerHTML = baseProfilePaths + highlightOutlines + highlightPaths;
+  const terrainRange = selectedTerrainRange();
+  const terrainPath = terrainRange ? profilePath(terrainRange) : '';
+  document.querySelector('#terrain-highlight').innerHTML = terrainPath
+    ? `<path class="terrain-highlight-outline" d="${terrainPath}"></path><path class="terrain-highlight-line" d="${terrainPath}" stroke="${terrainRange.color}"><title>${terrainRange.label}</title></path>`
+    : '';
   document.querySelector('#grid').innerHTML = [40, 95, 150, 205, 260].map((y) => `<line x1="0" y1="${y}" x2="1200" y2="${y}" />`).join('');
   document.querySelector('#axis').innerHTML = Array.from({ length: 6 }, (_, index) => `<span>${(startKm + (endKm - startKm) * index / 5).toFixed(1)} км</span>`).join('');
   document.querySelector('#min-label').textContent = `${Math.round(min)} м`;
@@ -1141,6 +1147,17 @@ terrainSection.addEventListener('pointerover', (event) => {
 terrainSection.addEventListener('pointerout', (event) => {
   const control = event.target.closest('[data-terrain-range]');
   if (!control || pinnedRange || event.relatedTarget?.closest?.('[data-terrain-range]') === control) return;
+  hoveredRange = null;
+  refreshRouteFocus();
+});
+terrainSection.addEventListener('focusin', (event) => {
+  const control = event.target.closest('[data-terrain-range]');
+  if (!control || pinnedRange || pinnedSurfaceId || pinnedWayTypeId || pinnedQualityId) return;
+  hoveredRange = terrainItem(control);
+  refreshRouteFocus();
+});
+terrainSection.addEventListener('focusout', (event) => {
+  if (pinnedRange || event.relatedTarget?.closest?.('[data-terrain-range]')) return;
   hoveredRange = null;
   refreshRouteFocus();
 });
