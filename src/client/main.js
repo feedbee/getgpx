@@ -9,11 +9,12 @@ import { formatTrackAttribution } from './track-meta-ui.js';
 import { analyzeTrack } from './domain/gpx.js';
 import { createDemoTrack } from './domain/demo.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
-import { calculateSegmentGrades, gradientColor, groupGradientRuns } from './domain/gradient.js';
+import { calculateSegmentGrades } from './domain/gradient.js';
 import { emptyPoiSelection, updatePoiSelection } from './domain/poi-selection.js';
 import { elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot } from './domain/profile-math.js';
+import { colorRunsForMode, highlightRunsForFilter } from './domain/route-color.js';
 import { isClosedRoute } from './domain/route-shape.js';
-import { applyValhallaMatches, classifySurface, classifyWayType, fetchValhallaMatches, groupQualityRuns, groupSurfaceRuns, groupWayTypeRuns, roadTypeLabel, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
+import { applyValhallaMatches, classifySurface, classifyWayType, fetchValhallaMatches, roadQualityCategories, roadTypeLabel, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
 
 const app = document.querySelector('#app');
 let map;
@@ -112,14 +113,14 @@ app.innerHTML = `
         <section class="content-section profile-section" id="details">
           <div class="compact-heading"><h2>Профиль высот</h2></div>
           <div class="analysis-card profile-card">
-            <div class="profile-toolbar"><div class="profile-mode segmented-control" aria-label="Цвет профиля"><button class="active" type="button" data-color-scope="profile" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="profile" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="profile" data-color-mode="waytype">Тип дороги</button></div><div class="profile-actions segmented-control"><button id="zoom-back" type="button" disabled>← Назад</button><button id="zoom-reset" type="button" disabled>Reset</button></div></div>
+            <div class="profile-toolbar"><div class="profile-mode segmented-control" aria-label="Цвет профиля"><button class="active" type="button" data-color-scope="profile" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="profile" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="profile" data-color-mode="waytype">Тип дороги</button><button type="button" data-color-scope="profile" data-color-mode="quality">Качество</button></div><div class="profile-actions segmented-control"><button id="zoom-back" type="button" disabled>← Назад</button><button id="zoom-reset" type="button" disabled>Reset</button></div></div>
             <div class="profile-wrap" id="profile-wrap" tabindex="0" role="slider" aria-label="Положение на профиле высоты" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <svg id="profile" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ebc35" stop-opacity=".24"/><stop offset="1" stop-color="#7ebc35" stop-opacity=".02"/></linearGradient></defs><g id="grid"></g><g id="climb-bands"></g><path id="profile-area" class="profile-area"></path><g id="gradient-line"></g><g id="surface-ribbon"></g><rect id="profile-selection" class="profile-selection" x="0" y="18" width="0" height="246"></rect><line id="profile-cursor" class="profile-cursor" y1="18" y2="264"></line><circle id="profile-dot" class="profile-dot" r="6"></circle></svg>
               <div class="profile-pois" id="profile-pois" aria-hidden="true"></div>
               <div class="axis" id="axis"></div>
             </div>
             <div class="gradient-legend route-legend" id="gradient-legend"><span><i class="grade-down"></i>спуск</span><span><i class="grade-easy"></i>0–3%</span><span><i class="grade-mid"></i>3–6%</span><span><i class="grade-hard"></i>6–9%</span><span><i class="grade-steep"></i>9–12%</span><span><i class="grade-max"></i>12%+</span></div>
-            <div class="surface-legend route-legend" id="surface-legend" hidden></div><div class="waytype-legend route-legend" id="waytype-legend" hidden></div>
+            <div class="surface-legend route-legend" id="surface-legend" hidden></div><div class="waytype-legend route-legend" id="waytype-legend" hidden></div><div class="quality-legend route-legend" id="quality-legend" hidden></div>
             <div class="profile-summary"><span><b id="profile-ascent">—</b> м<small>Набор</small></span><span><b id="profile-descent">—</b> м<small>Спуск</small></span><span><b id="max-label">—</b><small>Максимум</small></span><span><b id="min-label">—</b><small>Минимум</small></span></div>
           </div>
         </section>
@@ -139,7 +140,7 @@ app.innerHTML = `
           </div>
         </section>
       </div>
-      <aside class="map-column"><section class="map-shell" aria-label="Карта маршрута"><div id="map"></div><div class="map-mode segmented-control" aria-label="Цвет маршрута на карте"><button class="active" type="button" data-color-scope="map" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="map" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="map" data-color-mode="waytype">Тип дороги</button></div><div class="map-note" id="map-note"></div><div class="hover-readout" id="hover-readout" aria-live="polite"><b>Наведите на маршрут</b></div></section></aside>
+      <aside class="map-column"><section class="map-shell" aria-label="Карта маршрута"><div id="map"></div><div class="map-mode segmented-control" aria-label="Цвет маршрута на карте"><button class="active" type="button" data-color-scope="map" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="map" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="map" data-color-mode="waytype">Тип дороги</button><button type="button" data-color-scope="map" data-color-mode="quality">Качество</button></div><div class="map-note" id="map-note"></div><div class="hover-readout" id="hover-readout" aria-live="polite"><b>Наведите на маршрут</b></div></section></aside>
     </div>
   </main>
   <div class="drop-overlay" id="drop-overlay"><strong>Отпустите GPX здесь</strong><span>Маршрут будет загружен и обработан</span></div>
@@ -415,37 +416,34 @@ function selectedTerrainRange() {
   return pinnedRange || hoveredRange;
 }
 
+function selectedRouteFilter() {
+  if (selectedQualityId()) return { kind: 'quality', id: selectedQualityId() };
+  if (selectedWayTypeId()) return { kind: 'waytype', id: selectedWayTypeId() };
+  if (selectedSurfaceId()) return { kind: 'surface', id: selectedSurfaceId() };
+  return null;
+}
+
 function drawMap(track, { fit = true } = {}) {
   if (routeLine) map.eachLayer((layer) => { if (layer.options?.trackLayer && !layer.options?.rangeFocus) map.removeLayer(layer); });
   poiMarkers = [];
   const coordinates = track.points.map((point) => [point.lat, point.lon]);
   L.polyline(coordinates, { color: '#ffffff', weight: 8, opacity: 0.92, trackLayer: true, interactive: false }).addTo(map);
-  const focusedSurface = selectedSurfaceId();
-  const focusedWayType = selectedWayTypeId();
-  const focusedQuality = selectedQualityId();
-  const usesWayTypes = mapColorMode === 'waytype' || focusedWayType;
-  const usesQuality = Boolean(focusedQuality);
-  const runs = usesQuality
-    ? groupQualityRuns(track.points).map((run) => ({ ...run, color: run.quality.color, filterId: run.quality.id }))
-    : usesWayTypes
-    ? groupWayTypeRuns(track.points).map((run) => ({ ...run, color: run.wayType.color, filterId: run.wayType.id }))
-    : mapColorMode === 'surface' || focusedSurface
-      ? groupSurfaceRuns(track.points).map((run) => ({ ...run, color: run.surface.color, filterId: run.surface.id }))
-      : groupGradientRuns(track.points);
-  runs.forEach((run) => {
-    const selectedFilter = focusedQuality || focusedWayType || focusedSurface;
-    const emphasis = surfaceEmphasis(run.filterId, selectedFilter);
+  colorRunsForMode(track.points, mapColorMode).forEach((run) => {
     L.polyline(coordinates.slice(run.startIndex, run.endIndex + 1), {
       color: run.color,
-      weight: emphasis.highlighted ? 7 : 5,
-      opacity: emphasis.dimmed ? 0.38 : 1,
+      weight: 5,
+      opacity: 1,
       trackLayer: true, interactive: false,
     }).addTo(map);
-    if (emphasis.highlighted) {
-      L.polyline(coordinates.slice(run.startIndex, run.endIndex + 1), {
-        color: '#12251e', weight: 11, opacity: 0.72, trackLayer: true, interactive: false,
-      }).addTo(map).bringToBack();
-    }
+  });
+  highlightRunsForFilter(track.points, selectedRouteFilter()).forEach((run) => {
+    const highlightedCoordinates = coordinates.slice(run.startIndex, run.endIndex + 1);
+    L.polyline(highlightedCoordinates, {
+      color: '#ffffff', weight: 11, opacity: 0.94, trackLayer: true, interactive: false,
+    }).addTo(map);
+    L.polyline(highlightedCoordinates, {
+      color: run.color, weight: 7, opacity: 1, trackLayer: true, interactive: false,
+    }).addTo(map);
   });
   routeLine = L.polyline(coordinates, { color: '#000000', weight: 14, opacity: 0, trackLayer: true }).addTo(map);
   routeLine.on('mousemove', (event) => {
@@ -537,19 +535,27 @@ function drawProfile(track) {
   renderProfilePointsOfInterest(track, startKm, endKm);
   const line = coords.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
   document.querySelector('#profile-area').setAttribute('d', `${line} L1200,264 L0,264 Z`);
-  document.querySelector('#gradient-line').innerHTML = coords.slice(1).map((point, index) => {
-    const previous = coords[index];
-    const sourcePoint = visiblePoints[index + 1];
-    const focusedSurface = selectedSurfaceId();
-    const focusedWayType = selectedWayTypeId();
-    const focusedQuality = selectedQualityId();
-    const wayType = classifyWayType(sourcePoint.surface.highway);
-    const filterId = focusedQuality ? sourcePoint.surface.quality.id : focusedWayType ? wayType.id : sourcePoint.surface.id;
-    const emphasis = surfaceEmphasis(filterId, focusedQuality || focusedWayType || focusedSurface);
-    const color = focusedQuality ? sourcePoint.surface.quality.color : profileColorMode === 'waytype' || focusedWayType ? wayType.color : profileColorMode === 'surface' || focusedSurface ? sourcePoint.surface.color : gradientColor(sourcePoint.grade);
-    const title = focusedQuality ? sourcePoint.surface.quality.label : profileColorMode === 'waytype' || focusedWayType ? wayType.label : profileColorMode === 'surface' || focusedSurface ? sourcePoint.surface.label : `${sourcePoint.grade.toFixed(1)}%`;
-    return `<line x1="${previous.x}" y1="${previous.y}" x2="${point.x}" y2="${point.y}" stroke="${color}" opacity="${emphasis.dimmed ? 0.3 : 1}" stroke-width="${emphasis.highlighted ? 7 : 4}"><title>${title}</title></line>`;
+  const profilePath = (run) => {
+    const visibleRunStart = Math.max(run.startIndex, startIndex);
+    const visibleRunEnd = Math.min(run.endIndex, endIndex);
+    const runPoints = track.points.slice(visibleRunStart, visibleRunEnd + 1)
+      .filter((point) => Number.isFinite(point.ele))
+      .map(chartCoordinates);
+    if (runPoints.length < 2) return '';
+    return runPoints.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
+  };
+  const baseProfilePaths = colorRunsForMode(track.points, profileColorMode).map((run) => {
+    const path = profilePath(run);
+    return path ? `<path d="${path}" stroke="${run.color}"><title>${run.label}</title></path>` : '';
   }).join('');
+  const highlightedRuns = highlightRunsForFilter(track.points, selectedRouteFilter())
+    .map((run) => ({ ...run, path: profilePath(run) }))
+    .filter((run) => run.path);
+  const highlightOutlines = highlightedRuns.map((run) =>
+    `<path class="profile-highlight-outline" d="${run.path}" stroke="#fff"></path>`).join('');
+  const highlightPaths = highlightedRuns.map((run) =>
+    `<path class="profile-highlight" d="${run.path}" stroke="${run.color}"><title>${run.label}</title></path>`).join('');
+  document.querySelector('#gradient-line').innerHTML = baseProfilePaths + highlightOutlines + highlightPaths;
   document.querySelector('#grid').innerHTML = [40, 95, 150, 205, 260].map((y) => `<line x1="0" y1="${y}" x2="1200" y2="${y}" />`).join('');
   document.querySelector('#axis').innerHTML = Array.from({ length: 6 }, (_, index) => `<span>${(startKm + (endKm - startKm) * index / 5).toFixed(1)} км</span>`).join('');
   document.querySelector('#min-label').textContent = `${Math.round(min)} м`;
@@ -562,18 +568,16 @@ function drawProfile(track) {
     const width = ((to - from) / Math.max(endKm - startKm, 0.001)) * 1200;
     return `<rect class="climb-band" x="${x}" y="18" width="${width}" height="246" fill="${climb.color}"><title>Подъём: ${(climb.lengthM / 1000).toFixed(1)} км, ${climb.averageGrade.toFixed(1)}%</title></rect>`;
   }).join('');
-  const ribbonRuns = profileColorMode === 'waytype'
-    ? groupWayTypeRuns(track.points).map((run) => ({ ...run, item: run.wayType }))
-    : groupSurfaceRuns(track.points).map((run) => ({ ...run, item: run.surface }));
-  document.querySelector('#surface-ribbon').innerHTML = ribbonRuns.map((run) => {
+  const ribbonRuns = colorRunsForMode(track.points, profileColorMode);
+  const ribbonRect = (run) => {
     const from = Math.max(track.points[run.startIndex].distanceKm, startKm);
     const to = Math.min(track.points[run.endIndex].distanceKm, endKm);
     if (from >= to) return '';
     const x = ((from - startKm) / Math.max(endKm - startKm, 0.001)) * 1200;
     const width = ((to - from) / Math.max(endKm - startKm, 0.001)) * 1200;
-    const emphasis = surfaceEmphasis(run.item.id, profileColorMode === 'waytype' ? selectedWayTypeId() : selectedSurfaceId());
-    return `<rect x="${x}" y="${emphasis.highlighted ? 267 : 269}" width="${Math.max(width, 1)}" height="${emphasis.highlighted ? 13 : 9}" fill="${emphasis.dimmed ? '#aeb2aa' : run.item.color}" opacity="${emphasis.dimmed ? 0.2 : 1}"><title>${run.item.label}</title></rect>`;
-  }).join('');
+    return `<rect x="${x}" y="269" width="${Math.max(width, 1)}" height="9" fill="${run.color}"><title>${run.label}</title></rect>`;
+  };
+  document.querySelector('#surface-ribbon').innerHTML = ribbonRuns.map(ribbonRect).join('');
 }
 
 function refreshRouteFocus() {
@@ -674,6 +678,8 @@ function renderSurfaces(track) {
     `<span><i style="--surface-color:${item.color}"></i>${item.label}</span>`).join('');
   document.querySelector('#waytype-legend').innerHTML = wayTypeCategories.map((item) =>
     `<span><i style="--surface-color:${item.color}"></i>${item.label}</span>`).join('');
+  document.querySelector('#quality-legend').innerHTML = roadQualityCategories.map((item) =>
+    `<span><i style="--surface-color:${item.color}"></i>${item.label}</span>`).join('');
   document.querySelector('#quality-bar').innerHTML = quality.filter((item) => item.percent > 0).map((item) =>
     `<button type="button" data-quality-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${item.label}: ${item.percent.toFixed(1)}%" aria-label="${item.label}: ${item.percent.toFixed(1)}% маршрута" aria-pressed="false"></button>`).join('');
   document.querySelector('#quality-stats').innerHTML = quality.map((item) => `
@@ -693,6 +699,7 @@ function setColorMode(scope, mode) {
     document.querySelector('#gradient-legend').hidden = mode !== 'gradient';
     document.querySelector('#surface-legend').hidden = mode !== 'surface';
     document.querySelector('#waytype-legend').hidden = mode !== 'waytype';
+    document.querySelector('#quality-legend').hidden = mode !== 'quality';
   }
   if (!currentTrack) return;
   if (scope === 'map') drawMap(currentTrack, { fit: false });

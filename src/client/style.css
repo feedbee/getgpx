@@ -85,7 +85,9 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:600; }
 #grid line { stroke:var(--line); stroke-width:1; stroke-dasharray:3 7; vector-effect:non-scaling-stroke; }
 .profile-area { fill:url(#area-fill); }
 .climb-band { opacity:.13; }
-#gradient-line line { stroke-width:4; stroke-linecap:round; vector-effect:non-scaling-stroke; }
+#gradient-line path { fill:none; stroke-width:4; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
+#gradient-line path.profile-highlight-outline { stroke-width:10; }
+#gradient-line path.profile-highlight { stroke-width:6; }
 #surface-ribbon rect { vector-effect:non-scaling-stroke; }
 .profile-selection { fill:var(--acid); stroke:var(--ink); stroke-width:1; vector-effect:non-scaling-stroke; opacity:0; pointer-events:none; }
 .profile-selection.visible { opacity:.44; }
