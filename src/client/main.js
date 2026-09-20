@@ -5,7 +5,7 @@ import { renderAuthControl } from './auth-ui.js';
 import { cancelTrackSearch, createTrackCard } from './my-tracks-ui.js';
 import { closeOverflowMenuOnOutsideClick } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
-import { formatTrackAttribution } from './track-meta-ui.js';
+import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js';
 import { analyzeTrack } from './domain/gpx.js';
 import { createDemoTrack } from './domain/demo.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
@@ -47,6 +47,8 @@ const isMyTracksPage = window.location.pathname === '/my-tracks';
 let myTracksCursor = null;
 let myTracksLoading = false;
 let publicTrackId = null;
+let publicTrackData = null;
+let publicTrackOwnershipVerified = false;
 
 app.innerHTML = `
   <header class="topbar">
@@ -182,6 +184,19 @@ function closeUserMenu() {
   menu.hidden = true;
 }
 
+function renderTrackAttribution() {
+  if (!publicTrackData) return;
+  const uploader = resolveTrackUploader(publicTrackData, currentUser, publicTrackOwnershipVerified);
+  const attributionText = formatTrackAttribution({ ...publicTrackData, uploader });
+  const attribution = document.querySelector('#track-attribution');
+  attribution.hidden = !attributionText;
+  document.querySelector('#track-attribution-text').textContent = attributionText;
+  const uploaderAvatar = document.querySelector('#track-uploader-avatar');
+  uploaderAvatar.hidden = !uploader?.avatarUrl;
+  if (uploader?.avatarUrl) uploaderAvatar.src = uploader.avatarUrl;
+  else uploaderAvatar.removeAttribute('src');
+}
+
 function setAuthUser(user) {
   currentUser = user;
   authControl.innerHTML = renderAuthControl(user);
@@ -189,6 +204,8 @@ function setAuthUser(user) {
   if (isMyTracksPage) loadMyTracks({ reset: true });
   if (publicTrackId && user) loadTrackManagement(publicTrackId);
   if (!user) {
+    publicTrackOwnershipVerified = false;
+    renderTrackAttribution();
     document.querySelector('#owner-track-actions').hidden = true;
     document.querySelectorAll('.source-retry').forEach((button) => { button.hidden = true; });
   }
@@ -198,6 +215,9 @@ async function loadTrackManagement(trackId) {
   const response = await fetch(`/api/tracks/${trackId}/manage`, { headers: { accept: 'application/json' } });
   if (!response.ok) return;
   const { data } = await response.json();
+  if (trackId !== publicTrackId) return;
+  publicTrackOwnershipVerified = true;
+  renderTrackAttribution();
   document.querySelector('#owner-track-actions').hidden = false;
   document.querySelector('#edit-track-title').value = data.title;
   document.querySelector('#edit-track-speed').value = data.speedKmh || 20;
@@ -885,19 +905,16 @@ function renderUnavailableTrack(track) {
 
 async function loadPublicTrack(trackId) {
   publicTrackId = trackId;
+  publicTrackData = null;
+  publicTrackOwnershipVerified = false;
   const response = await fetch(`/api/tracks/${trackId}`, { headers: { accept: 'application/json' } });
   if (!response.ok) {
     renderUnavailableTrack({ title: 'Трек не найден', analysisNote: 'Проверьте публичную ссылку.' });
     return;
   }
   const { data } = await response.json();
-  const attribution = document.querySelector('#track-attribution');
-  const attributionText = formatTrackAttribution(data);
-  attribution.hidden = !attributionText;
-  document.querySelector('#track-attribution-text').textContent = attributionText;
-  const uploaderAvatar = document.querySelector('#track-uploader-avatar');
-  uploaderAvatar.hidden = !data.uploader?.avatarUrl;
-  if (data.uploader?.avatarUrl) uploaderAvatar.src = data.uploader.avatarUrl;
+  publicTrackData = data;
+  renderTrackAttribution();
   const download = document.querySelector('#download-track');
   download.href = data.downloadUrl;
   download.hidden = false;
