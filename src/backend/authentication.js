@@ -21,5 +21,5 @@ export async function createAuthentication(database, {
   const middleware = express();
   middleware.disable('x-powered-by');
   middleware.use(router);
-  return { service, router, middleware };
+  return { service, router, middleware, userRepository };
 }

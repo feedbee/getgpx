@@ -5,7 +5,9 @@ function createUsersCollection() {
   const documents = new Map();
   return {
     async findOne(query) {
-      return [...documents.values()].find((document) => document.googleSubject === query.googleSubject) || null;
+      return [...documents.values()].find((document) => (
+        query._id ? document._id === query._id : document.googleSubject === query.googleSubject
+      )) || null;
     },
     async findOneAndUpdate(query, update) {
       const existing = await this.findOne(query);
@@ -56,5 +58,16 @@ describe('user repository', () => {
 
     expect(user.email).toBe('new@example.com');
     expect(user.profileUpdatedAt).toEqual(changedAt);
+  });
+
+  it('returns only public profile fields for attribution', async () => {
+    const repository = createUserRepository(createUsersCollection());
+    const user = await repository.loginWithGoogle({
+      googleSubject: 'google-123', email: 'private@example.com', displayName: 'Rider', avatarUrl: 'https://example.com/avatar.jpg',
+    });
+
+    await expect(repository.findPublicProfileById(user._id)).resolves.toEqual({
+      displayName: 'Rider', avatarUrl: 'https://example.com/avatar.jpg',
+    });
   });
 });

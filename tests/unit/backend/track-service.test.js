@@ -35,18 +35,39 @@ function dependencies() {
   };
   const analyzeSource = vi.fn().mockReturnValue({ name: 'Ride', points: [{}, {}], distanceKm: 10 });
   const enrichAnalysis = vi.fn().mockImplementation(async (analysis) => ({ ...analysis, surfaces: [] }));
+  const userRepository = {
+    findPublicProfileById: vi.fn().mockResolvedValue({ displayName: 'Jan Kowalski', avatarUrl: 'https://example.com/jan.jpg' }),
+  };
   const service = createTrackService({
     trackRepository,
     gpxFileStore,
     enrichmentCacheRepository: { get: vi.fn(), put: vi.fn() },
+    userRepository,
     analyzeSource,
     enrichAnalysis,
     schedule: (job) => scheduled.push(job),
   });
-  return { service, scheduled, trackRepository, gpxFileStore, analyzeSource, enrichAnalysis };
+  return { service, scheduled, trackRepository, gpxFileStore, userRepository, analyzeSource, enrichAnalysis };
 }
 
 describe('track service', () => {
+  it('publishes the uploader profile and upload date with a public track', async () => {
+    const { service, trackRepository, userRepository } = dependencies();
+    const createdAt = new Date('2026-09-17T10:00:00.000Z');
+    trackRepository.findById.mockResolvedValue({
+      _id: 'track-1', ownerId: 'owner-1', title: 'Ride', createdAt,
+      analysisStatus: 'READY', analysis: { enrichmentSource: 'VALHALLA_OSM' },
+    });
+
+    const track = await service.getPublicTrack('track-1');
+
+    expect(userRepository.findPublicProfileById).toHaveBeenCalledWith('owner-1');
+    expect(track).toMatchObject({
+      createdAt: '2026-09-17T10:00:00.000Z',
+      uploader: { displayName: 'Jan Kowalski', avatarUrl: 'https://example.com/jan.jpg' },
+    });
+  });
+
   it('stores the source, creates a queued track and schedules processing', async () => {
     const { service, scheduled, gpxFileStore, trackRepository } = dependencies();
 
@@ -164,6 +185,8 @@ describe('track service', () => {
       analysisNote: 'Источники: GPX — маршрут, высоты и основные показатели. Дорожные данные недоступны.',
       analysisSources: { gpx: 'SUCCESS', valhalla: 'FAILED', openStreetMap: 'FAILED' },
       analysis: { distanceKm: 42, points: [{}, {}] },
+      createdAt: null,
+      uploader: { displayName: 'Jan Kowalski', avatarUrl: 'https://example.com/jan.jpg' },
       downloadUrl: '/api/tracks/track-1/download',
     });
     expect(track).not.toHaveProperty('ownerId');

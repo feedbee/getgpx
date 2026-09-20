@@ -35,5 +35,11 @@ export function createUserRepository(users) {
         { upsert: true, returnDocument: 'after' },
       );
     },
+
+    async findPublicProfileById(userId) {
+      const user = await users.findOne({ _id: userId });
+      if (!user) return null;
+      return { displayName: user.displayName, avatarUrl: user.avatarUrl || null };
+    },
   };
 }

@@ -54,7 +54,7 @@ function statusOf(track) {
   };
 }
 
-function publicTrack(track) {
+function publicTrack(track, uploader = null) {
   if (!track) return null;
   const analysisLevel = track.analysisStatus === 'READY' ? 'FULL' : track.analysis ? 'BASIC' : 'NONE';
   const hasValhalla = ['VALHALLA', 'VALHALLA_OSM'].includes(track.analysis?.enrichmentSource);
@@ -83,6 +83,8 @@ function publicTrack(track) {
     analysisNote,
     analysisSources,
     analysis: track.analysis,
+    createdAt: track.createdAt?.toISOString() || null,
+    uploader,
     downloadUrl: `/api/tracks/${id}/download`,
   };
 }
@@ -105,6 +107,7 @@ export function createTrackService({
   trackRepository,
   gpxFileStore,
   enrichmentCacheRepository,
+  userRepository,
   analyzeSource,
   enrichAnalysis,
   enrichmentTimeoutMs = EXTERNAL_ANALYSIS_TIMEOUT_MS,
@@ -262,7 +265,11 @@ export function createTrackService({
         trackId, ownerId, title, speedKmh,
         estimatedDurationMs: (track.analysis.distanceKm / speedKmh) * 3_600_000,
       });
-      return updated ? publicTrack(updated) : null;
+      if (!updated) return null;
+      const uploader = userRepository?.findPublicProfileById
+        ? await userRepository.findPublicProfileById(updated.ownerId)
+        : null;
+      return publicTrack(updated, uploader);
     },
 
     async replaceFile({ trackId, ownerId, filename, source }) {
@@ -300,7 +307,12 @@ export function createTrackService({
     },
 
     async getPublicTrack(trackId) {
-      return publicTrack(await trackRepository.findById(trackId));
+      const track = await trackRepository.findById(trackId);
+      if (!track) return null;
+      const uploader = userRepository?.findPublicProfileById
+        ? await userRepository.findPublicProfileById(track.ownerId)
+        : null;
+      return publicTrack(track, uploader);
     },
 
     async getPublicDownload(trackId) {

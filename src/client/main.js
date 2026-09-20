@@ -3,6 +3,8 @@ import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { renderAuthControl } from './auth-ui.js';
 import { createTrackCard } from './my-tracks-ui.js';
+import { closeOverflowMenuOnOutsideClick } from './route-actions-ui.js';
+import { formatTrackAttribution } from './track-meta-ui.js';
 import { analyzeTrack } from './domain/gpx.js';
 import { createDemoTrack } from './domain/demo.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
@@ -58,30 +60,37 @@ app.innerHTML = `
   </main>
   <main class="page" id="route" ${isMyTracksPage ? 'hidden' : ''}>
     <header class="route-header">
-      <p class="route-kicker">GPX ROUTE ANALYSIS</p>
       <p class="route-state-note" id="route-state-note" hidden></p>
-      <h1 id="track-name">Загрузка маршрута…</h1>
-      <div class="route-metrics" aria-label="Показатели маршрута">
-        <span aria-label="Расстояние маршрута"><span aria-hidden="true">↔</span> <b id="distance">—</b> км</span>
-        <span aria-label="Набор высоты"><span aria-hidden="true">↗</span> <b id="ascent">—</b> м <small>набор</small></span>
-        <span aria-label="Спуск по высоте"><span aria-hidden="true">↘</span> <b id="descent">—</b> м <small>спуск</small></span>
-        <span class="moving-metric">◷ <b id="duration">—</b> <i id="duration-unit"></i> <small>при скорости</small> <abbr id="average-speed-badge" title="Средняя скорость движения по данным GPX">— км/ч</abbr></span>
+      <div class="route-heading">
+        <div class="route-heading-copy">
+          <h1 id="track-name">Загрузка маршрута…</h1>
+        </div>
+        <div class="track-attribution" id="track-attribution" hidden>
+          <span class="track-attribution-avatar" aria-hidden="true"><img id="track-uploader-avatar" alt="" hidden /><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0"/></svg></span>
+          <span id="track-attribution-text"></span>
+        </div>
       </div>
-      <div class="route-actions"><button type="button">♡ Сохранить</button><button type="button">↗ Поделиться</button><a id="download-track" hidden>↓ Скачать трек</a><span class="owner-track-actions" id="owner-track-actions" hidden><button id="edit-track" type="button">Редактировать</button><button class="danger-button" id="delete-track" type="button">Удалить</button></span></div>
+      <div class="route-summary-row">
+        <div class="route-metrics" aria-label="Показатели маршрута">
+          <span aria-label="Расстояние маршрута"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 9l-3 3 3 3m10-6 3 3-3 3"/></svg><b id="distance">—</b> км</span>
+          <span aria-label="Набор высоты"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17 17 5m-7 0h7v7"/></svg><b id="ascent">—</b> м <small>набор</small></span>
+          <span aria-label="Спуск по высоте"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 12 12m0-7v7h-7"/></svg><b id="descent">—</b> м <small>спуск</small></span>
+          <span class="moving-metric"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><b id="duration">—</b> <i id="duration-unit"></i></span>
+          <span class="moving-metric"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.6 18a8 8 0 1 1 12.8 0M12 13l4-4"/><path d="M4 18h16"/></svg><abbr id="average-speed-badge" title="Средняя скорость движения по данным GPX">— км/ч</abbr></span>
+        </div>
+        <div class="route-actions" aria-label="Действия с маршрутом">
+          <button class="primary-action" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg>Сохранить</button>
+          <button type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg>Поделиться</button>
+          <a id="download-track" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></svg>Скачать трек</a>
+          <span class="owner-track-actions" id="owner-track-actions" hidden><details class="route-overflow"><summary aria-label="Дополнительные действия"><span aria-hidden="true">•••</span></summary><div><button id="edit-track" type="button">Редактировать</button><button class="danger-button" id="delete-track" type="button">Удалить</button></div></details></span>
+        </div>
+      </div>
     </header>
     <div class="route-workspace">
       <div class="route-content">
-        <nav class="section-nav" aria-label="Разделы маршрута">
-          <a href="#way-types">Информация о трассе</a><a href="#details">Профиль высот</a><a href="#climbs">Подъёмы и спуски</a>
+        <nav class="section-nav" aria-label="Содержание страницы">
+          <a href="#details">Профиль высот</a><a href="#way-types">Информация о трассе</a><a href="#climbs">Подъёмы и спуски</a>
         </nav>
-        <section class="content-section surface-section" id="way-types" aria-labelledby="surface-title">
-          <div class="compact-heading"><div class="surface-title-row"><h2 id="surface-title">Информация о трассе</h2><div class="source-help"><button class="source-help-trigger" type="button" aria-label="Источники данных" aria-haspopup="dialog" aria-controls="source-popover">?</button><div class="source-popover" id="source-popover" role="dialog" aria-label="Источники данных"><strong>Источники данных</strong><ul><li data-analysis-source="gpx"><span class="source-state" aria-hidden="true">…</span><span><b>GPX</b><small>Маршрут, высоты и время</small></span></li><li data-analysis-source="valhalla"><span class="source-state" aria-hidden="true">…</span><span><b>Valhalla</b><small>Сопоставление с дорогами и оценка покрытий</small></span><button class="source-retry" data-retry-source="valhalla" type="button" aria-label="Повторить получение данных Valhalla" title="Повторить" hidden>↻</button></li><li data-analysis-source="openStreetMap"><span class="source-state" aria-hidden="true">…</span><span><b>OpenStreetMap</b><small>Детальные теги покрытий и качества дорог</small></span><button class="source-retry" data-retry-source="openStreetMap" type="button" aria-label="Повторить получение данных OpenStreetMap" title="Повторить" hidden>↻</button></li></ul></div></div></div></div>
-          <div class="analysis-card">
-            <section class="distribution-group"><h3>Типы дорог</h3><div class="distribution-bar" id="way-type-bar" aria-label="Распределение типов дорог"></div><div class="distribution-list" id="way-type-stats"></div></section>
-            <section class="distribution-group"><h3>Покрытия</h3><div class="distribution-bar surface-bar" id="surface-bar" aria-label="Распределение покрытия"></div><div class="distribution-list surface-stats" id="surface-stats"></div></section>
-            <section class="distribution-group quality-compact"><h3>Качество проезда</h3><div class="distribution-bar" id="quality-bar" aria-label="Распределение качества проезда"></div><div class="distribution-list quality-stats" id="quality-stats"></div></section>
-          </div>
-        </section>
         <section class="content-section profile-section" id="details">
           <div class="compact-heading"><h2>Профиль высот</h2></div>
           <div class="analysis-card profile-card">
@@ -93,6 +102,14 @@ app.innerHTML = `
             <div class="gradient-legend route-legend" id="gradient-legend"><span><i class="grade-down"></i>спуск</span><span><i class="grade-easy"></i>0–3%</span><span><i class="grade-mid"></i>3–6%</span><span><i class="grade-hard"></i>6–9%</span><span><i class="grade-steep"></i>9–12%</span><span><i class="grade-max"></i>12%+</span></div>
             <div class="surface-legend route-legend" id="surface-legend" hidden></div><div class="waytype-legend route-legend" id="waytype-legend" hidden></div>
             <div class="profile-summary"><span><b id="profile-ascent">—</b> м<small>Набор</small></span><span><b id="profile-descent">—</b> м<small>Спуск</small></span><span><b id="max-label">—</b><small>Максимум</small></span><span><b id="min-label">—</b><small>Минимум</small></span></div>
+          </div>
+        </section>
+        <section class="content-section surface-section" id="way-types" aria-labelledby="surface-title">
+          <div class="compact-heading"><div class="surface-title-row"><h2 id="surface-title">Информация о трассе</h2><div class="source-help"><button class="source-help-trigger" type="button" aria-label="Источники данных" aria-haspopup="dialog" aria-controls="source-popover">?</button><div class="source-popover" id="source-popover" role="dialog" aria-label="Источники данных"><strong>Источники данных</strong><ul><li data-analysis-source="gpx"><span class="source-state" aria-hidden="true">…</span><span><b>GPX</b><small>Маршрут, высоты и время</small></span></li><li data-analysis-source="valhalla"><span class="source-state" aria-hidden="true">…</span><span><b>Valhalla</b><small>Сопоставление с дорогами и оценка покрытий</small></span><button class="source-retry" data-retry-source="valhalla" type="button" aria-label="Повторить получение данных Valhalla" title="Повторить" hidden>↻</button></li><li data-analysis-source="openStreetMap"><span class="source-state" aria-hidden="true">…</span><span><b>OpenStreetMap</b><small>Детальные теги покрытий и качества дорог</small></span><button class="source-retry" data-retry-source="openStreetMap" type="button" aria-label="Повторить получение данных OpenStreetMap" title="Повторить" hidden>↻</button></li></ul></div></div></div></div>
+          <div class="analysis-card">
+            <section class="distribution-group"><h3>Типы дорог</h3><div class="distribution-bar" id="way-type-bar" aria-label="Распределение типов дорог"></div><div class="distribution-list" id="way-type-stats"></div></section>
+            <section class="distribution-group"><h3>Покрытия</h3><div class="distribution-bar surface-bar" id="surface-bar" aria-label="Распределение покрытия"></div><div class="distribution-list surface-stats" id="surface-stats"></div></section>
+            <section class="distribution-group quality-compact"><h3>Качество проезда</h3><div class="distribution-bar" id="quality-bar" aria-label="Распределение качества проезда"></div><div class="distribution-list quality-stats" id="quality-stats"></div></section>
           </div>
         </section>
         <section class="content-section climbs-section" id="climbs" aria-labelledby="climbs-title">
@@ -242,6 +259,7 @@ authControl.addEventListener('click', async (event) => {
 
 document.addEventListener('click', (event) => {
   if (!authControl.contains(event.target)) closeUserMenu();
+  closeOverflowMenuOnOutsideClick(document.querySelector('.route-overflow'), event.target);
 });
 
 function formatDuration(ms) {
@@ -686,6 +704,13 @@ async function loadPublicTrack(trackId) {
     return;
   }
   const { data } = await response.json();
+  const attribution = document.querySelector('#track-attribution');
+  const attributionText = formatTrackAttribution(data);
+  attribution.hidden = !attributionText;
+  document.querySelector('#track-attribution-text').textContent = attributionText;
+  const uploaderAvatar = document.querySelector('#track-uploader-avatar');
+  uploaderAvatar.hidden = !data.uploader?.avatarUrl;
+  if (data.uploader?.avatarUrl) uploaderAvatar.src = data.uploader.avatarUrl;
   const download = document.querySelector('#download-track');
   download.href = data.downloadUrl;
   download.hidden = false;

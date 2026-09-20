@@ -17,6 +17,7 @@ const [authentication, trackPersistence] = await Promise.all([
 ]);
 const trackService = createTrackService({
   ...trackPersistence,
+  userRepository: authentication.userRepository,
   analyzeSource: analyzeGpxSource,
   enrichAnalysis: enrichTrackAnalysis,
 });
