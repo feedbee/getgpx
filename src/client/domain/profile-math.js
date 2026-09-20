@@ -2,6 +2,12 @@ export function pointerRatioInPlot(clientX, containerLeft, containerWidth) {
   return Math.max(0, Math.min(1, (clientX - containerLeft) / containerWidth));
 }
 
+export function areaPathFromCoordinates(coordinates, baselineY) {
+  if (coordinates.length < 2) return '';
+  const line = coordinates.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
+  return `${line} L${coordinates.at(-1).x.toFixed(1)},${baselineY} L${coordinates[0].x.toFixed(1)},${baselineY} Z`;
+}
+
 export function pointIndexAtRatio(points, startIndex, endIndex, ratio) {
   if (ratio <= 0) return startIndex;
   if (ratio >= 1) return endIndex;

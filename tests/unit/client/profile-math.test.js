@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot } from '../../../src/client/domain/profile-math.js';
+import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot } from '../../../src/client/domain/profile-math.js';
+
+describe('areaPathFromCoordinates', () => {
+  it('closes a profile segment against the chart baseline', () => {
+    expect(areaPathFromCoordinates([{ x: 12, y: 80 }, { x: 36, y: 42 }], 264))
+      .toBe('M12.0,80.0 L36.0,42.0 L36.0,264 L12.0,264 Z');
+  });
+
+  it('does not draw an area for fewer than two coordinates', () => {
+    expect(areaPathFromCoordinates([{ x: 12, y: 80 }], 264)).toBe('');
+  });
+});
 
 describe('pointerRatioInPlot', () => {
   it('maps the full SVG width to zero and one', () => {

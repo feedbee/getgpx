@@ -11,8 +11,8 @@ import { createDemoTrack } from './domain/demo.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
 import { calculateSegmentGrades } from './domain/gradient.js';
 import { emptyPoiSelection, updatePoiSelection } from './domain/poi-selection.js';
-import { elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot } from './domain/profile-math.js';
-import { colorRunsForMode, highlightRunsForFilter } from './domain/route-color.js';
+import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot } from './domain/profile-math.js';
+import { colorRunsForMode, highlightRunsForFilter, profileColorRuns } from './domain/route-color.js';
 import { isClosedRoute } from './domain/route-shape.js';
 import { applyValhallaMatches, classifySurface, classifyWayType, fetchValhallaMatches, roadQualityCategories, roadTypeLabel, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
 
@@ -115,7 +115,7 @@ app.innerHTML = `
           <div class="analysis-card profile-card">
             <div class="profile-toolbar"><div class="profile-mode segmented-control" aria-label="Цвет профиля"><button class="active" type="button" data-color-scope="profile" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="profile" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="profile" data-color-mode="waytype">Тип дороги</button><button type="button" data-color-scope="profile" data-color-mode="quality">Качество</button></div><div class="profile-actions segmented-control"><button id="zoom-back" type="button" disabled>← Назад</button><button id="zoom-reset" type="button" disabled>Reset</button></div></div>
             <div class="profile-wrap" id="profile-wrap" tabindex="0" role="slider" aria-label="Положение на профиле высоты" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-              <svg id="profile" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ebc35" stop-opacity=".24"/><stop offset="1" stop-color="#7ebc35" stop-opacity=".02"/></linearGradient></defs><g id="grid"></g><g id="climb-bands"></g><path id="profile-area" class="profile-area"></path><g id="gradient-line"></g><g id="surface-ribbon"></g><rect id="profile-selection" class="profile-selection" x="0" y="18" width="0" height="246"></rect><line id="profile-cursor" class="profile-cursor" y1="18" y2="264"></line><circle id="profile-dot" class="profile-dot" r="6"></circle></svg>
+              <svg id="profile" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ebc35" stop-opacity=".24"/><stop offset="1" stop-color="#7ebc35" stop-opacity=".02"/></linearGradient></defs><g id="grid"></g><g id="climb-bands"></g><path id="profile-area" class="profile-area"></path><g id="profile-gradient-area"></g><g id="gradient-line"></g><g id="surface-ribbon"></g><rect id="profile-selection" class="profile-selection" x="0" y="18" width="0" height="246"></rect><line id="profile-cursor" class="profile-cursor" y1="18" y2="264"></line><circle id="profile-dot" class="profile-dot" r="6"></circle></svg>
               <div class="profile-pois" id="profile-pois" aria-hidden="true"></div>
               <div class="axis" id="axis"></div>
             </div>
@@ -535,16 +535,25 @@ function drawProfile(track) {
   renderProfilePointsOfInterest(track, startKm, endKm);
   const line = coords.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
   document.querySelector('#profile-area').setAttribute('d', `${line} L1200,264 L0,264 Z`);
-  const profilePath = (run) => {
+  const profileCoordinates = (run) => {
     const visibleRunStart = Math.max(run.startIndex, startIndex);
     const visibleRunEnd = Math.min(run.endIndex, endIndex);
-    const runPoints = track.points.slice(visibleRunStart, visibleRunEnd + 1)
+    return track.points.slice(visibleRunStart, visibleRunEnd + 1)
       .filter((point) => Number.isFinite(point.ele))
       .map(chartCoordinates);
+  };
+  const profilePath = (run) => {
+    const runPoints = profileCoordinates(run);
     if (runPoints.length < 2) return '';
     return runPoints.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
   };
-  const baseProfilePaths = colorRunsForMode(track.points, profileColorMode).map((run) => {
+  const profileRuns = profileColorRuns(track.points, profileColorMode);
+  const gradientAreaPaths = profileRuns.area.map((run) => {
+    const path = areaPathFromCoordinates(profileCoordinates(run), 264);
+    return path ? `<path d="${path}" fill="${run.color}"></path>` : '';
+  }).join('');
+  document.querySelector('#profile-gradient-area').innerHTML = gradientAreaPaths;
+  const baseProfilePaths = profileRuns.line.map((run) => {
     const path = profilePath(run);
     return path ? `<path d="${path}" stroke="${run.color}"><title>${run.label}</title></path>` : '';
   }).join('');

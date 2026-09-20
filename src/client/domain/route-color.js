@@ -14,6 +14,13 @@ export function colorRunsForMode(points, mode) {
   return groupGradientRuns(points).map((run) => ({ ...run, label: 'Градиент' }));
 }
 
+export function profileColorRuns(points, mode) {
+  return {
+    area: colorRunsForMode(points, 'gradient'),
+    line: colorRunsForMode(points, mode),
+  };
+}
+
 export function highlightRunsForFilter(points, filter) {
   if (!filter) return [];
   return colorRunsForMode(points, filter.kind).filter((run) => {

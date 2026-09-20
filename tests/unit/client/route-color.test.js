@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { colorRunsForMode, highlightRunsForFilter } from '../../../src/client/domain/route-color.js';
+import { colorRunsForMode, highlightRunsForFilter, profileColorRuns } from '../../../src/client/domain/route-color.js';
 
 const points = [
   { surface: { id: 'asphalt', color: '#111', highway: 'secondary', quality: { id: 'good', color: '#0a0' } }, grade: 1 },
@@ -25,5 +25,9 @@ describe('route color layers', () => {
 
   it('provides gradient colors for the profile ribbon', () => {
     expect(colorRunsForMode(points, 'gradient').map((run) => run.color)).toEqual(['#84a83f', '#d6b737']);
+  });
+
+  it.each(['gradient', 'surface', 'waytype', 'quality'])('keeps gradient area colors behind %s profile lines', (mode) => {
+    expect(profileColorRuns(points, mode).area.map((run) => run.color)).toEqual(['#84a83f', '#d6b737']);
   });
 });
