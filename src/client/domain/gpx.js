@@ -45,12 +45,21 @@ export function parseGpx(xml, { fallbackName = 'Маршрут без назва
     };
   }).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon));
 
+  const pointsOfInterest = Array.from(document.getElementsByTagName('wpt')).map((node, index) => ({
+    lat: Number(node.getAttribute('lat')),
+    lon: Number(node.getAttribute('lon')),
+    name: textOf(node, 'name') || textOf(node, 'desc') || `Точка интереса ${index + 1}`,
+    type: textOf(node, 'type'),
+    symbol: textOf(node, 'sym'),
+  })).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon));
+
   if (points.length < 2) throw new Error('В GPX не найдено достаточно точек маршрута.');
 
   return {
     name: textOf(track, 'name') || textOf(route, 'name')
       || textOf(document.getElementsByTagName('metadata')[0], 'name') || fallbackName,
     points,
+    pointsOfInterest,
   };
 }
 

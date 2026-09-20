@@ -1,9 +1,5 @@
-export const PLOT_INSET_RATIO = 0.025;
-
 export function pointerRatioInPlot(clientX, containerLeft, containerWidth) {
-  const plotLeft = containerLeft + containerWidth * PLOT_INSET_RATIO;
-  const plotWidth = containerWidth * (1 - PLOT_INSET_RATIO * 2);
-  return Math.max(0, Math.min(1, (clientX - plotLeft) / plotWidth));
+  return Math.max(0, Math.min(1, (clientX - containerLeft) / containerWidth));
 }
 
 export function pointIndexAtRatio(points, startIndex, endIndex, ratio) {
@@ -20,6 +16,20 @@ export function pointIndexAtRatio(points, startIndex, endIndex, ratio) {
   }
   if (low === startIndex) return low;
   return targetKm - points[low - 1].distanceKm <= points[low].distanceKm - targetKm ? low - 1 : low;
+}
+
+export function nearestRoutePointIndex(points, target) {
+  if (!points.length || !Number.isFinite(target?.lat) || !Number.isFinite(target?.lon)) return -1;
+  let bestIndex = -1;
+  let bestDistance = Infinity;
+  points.forEach((point, index) => {
+    const distance = (point.lat - target.lat) ** 2 + (point.lon - target.lon) ** 2;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+  return bestIndex;
 }
 
 export function elevationGainLoss(points, startIndex = 0, endIndex = points.length - 1) {

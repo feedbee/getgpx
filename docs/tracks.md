@@ -35,7 +35,9 @@ Use a `tracks` collection for searchable metadata and derived analysis. Every tr
 has a schema version, immutable owner id, public Mongo ObjectId, original filename,
 editable title, timestamps, analysis status/error, processing revision, effective
 speed, metrics, normalized preview path, route points, and derived road, surface,
-gradient, climb, and descent data.
+gradient, climb, and descent data. Named GPX waypoints are retained as points of
+interest with their coordinates, type, and symbol so public track pages can render
+them independently from reduced route geometry.
 
 Metrics are calculated from every accepted source point. To stay below MongoDB's
 16 MiB BSON document limit and keep browser rendering responsive, persisted display

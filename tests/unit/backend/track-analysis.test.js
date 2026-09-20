@@ -46,6 +46,23 @@ describe('server track analysis', () => {
     expect(analysis.distanceKm).toBeGreaterThan(0);
   });
 
+  it('keeps points of interest when persisted route geometry is reduced', () => {
+    const analysis = analyzeGpxSource(`
+      <gpx><wpt lat="50.005" lon="19.005"><name>Bakery</name></wpt><trk><trkseg>
+        <trkpt lat="50" lon="19"/><trkpt lat="50.01" lon="19.01"/><trkpt lat="50.02" lon="19.02"/>
+      </trkseg></trk></gpx>
+    `, { filename: 'ride.gpx', maxPersistedPoints: 2 });
+
+    expect(analysis.points).toHaveLength(2);
+    expect(analysis.pointsOfInterest).toEqual([{
+      lat: 50.005,
+      lon: 19.005,
+      name: 'Bakery',
+      type: '',
+      symbol: '',
+    }]);
+  });
+
   it('caches external matches and persists derived display data', async () => {
     const base = analyzeGpxSource(unnamedGpx, { filename: 'ride.gpx' });
     const matches = [

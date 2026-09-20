@@ -10,7 +10,8 @@ import { analyzeTrack } from './domain/gpx.js';
 import { createDemoTrack } from './domain/demo.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
 import { calculateSegmentGrades, gradientColor, groupGradientRuns } from './domain/gradient.js';
-import { elevationGainLoss, pointIndexAtRatio, pointerRatioInPlot } from './domain/profile-math.js';
+import { emptyPoiSelection, updatePoiSelection } from './domain/poi-selection.js';
+import { elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot } from './domain/profile-math.js';
 import { isClosedRoute } from './domain/route-shape.js';
 import { applyValhallaMatches, classifySurface, classifyWayType, fetchValhallaMatches, groupQualityRuns, groupSurfaceRuns, groupWayTypeRuns, roadTypeLabel, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
 
@@ -18,6 +19,8 @@ const app = document.querySelector('#app');
 let map;
 let routeLine;
 let activeMarker;
+let poiMarkers = [];
+let poiSelection = { ...emptyPoiSelection };
 let focusLayers = [];
 let currentTrack;
 let activePointIndex = 0;
@@ -100,14 +103,19 @@ app.innerHTML = `
     <div class="route-workspace">
       <div class="route-content">
         <nav class="section-nav route-tabs" aria-label="Содержание страницы">
-          <a href="#details">Профиль высот</a><a href="#way-types">Информация о трассе</a><a href="#climbs">Подъёмы и спуски</a>
+          <a href="#points-of-interest" id="poi-nav-link" hidden>Точки интереса</a><a href="#details">Профиль высот</a><a href="#way-types">Информация о трассе</a><a href="#climbs">Подъёмы и спуски</a>
         </nav>
+        <section class="content-section poi-section" id="points-of-interest" aria-labelledby="poi-title" hidden>
+          <div class="compact-heading"><h2 id="poi-title">Точки интереса</h2><p id="poi-count"></p></div>
+          <div class="analysis-card poi-list" id="poi-list"></div>
+        </section>
         <section class="content-section profile-section" id="details">
           <div class="compact-heading"><h2>Профиль высот</h2></div>
           <div class="analysis-card profile-card">
             <div class="profile-toolbar"><div class="profile-mode segmented-control" aria-label="Цвет профиля"><button class="active" type="button" data-color-scope="profile" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="profile" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="profile" data-color-mode="waytype">Тип дороги</button></div><div class="profile-actions segmented-control"><button id="zoom-back" type="button" disabled>← Назад</button><button id="zoom-reset" type="button" disabled>Reset</button></div></div>
             <div class="profile-wrap" id="profile-wrap" tabindex="0" role="slider" aria-label="Положение на профиле высоты" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <svg id="profile" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ebc35" stop-opacity=".24"/><stop offset="1" stop-color="#7ebc35" stop-opacity=".02"/></linearGradient></defs><g id="grid"></g><g id="climb-bands"></g><path id="profile-area" class="profile-area"></path><g id="gradient-line"></g><g id="surface-ribbon"></g><rect id="profile-selection" class="profile-selection" x="0" y="18" width="0" height="246"></rect><line id="profile-cursor" class="profile-cursor" y1="18" y2="264"></line><circle id="profile-dot" class="profile-dot" r="6"></circle></svg>
+              <div class="profile-pois" id="profile-pois" aria-hidden="true"></div>
               <div class="axis" id="axis"></div>
             </div>
             <div class="gradient-legend route-legend" id="gradient-legend"><span><i class="grade-down"></i>спуск</span><span><i class="grade-easy"></i>0–3%</span><span><i class="grade-mid"></i>3–6%</span><span><i class="grade-hard"></i>6–9%</span><span><i class="grade-steep"></i>9–12%</span><span><i class="grade-max"></i>12%+</span></div>
@@ -284,6 +292,98 @@ function makeEndpointIcon(label, type) {
   return L.divIcon({ className: '', html: `<div class="endpoint endpoint-${type}">${label}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
 }
 
+function makePoiIcon(index) {
+  return L.divIcon({ className: '', html: `<div class="poi-marker"><span>${index + 1}</span></div>`, iconSize: [28, 32], iconAnchor: [14, 30] });
+}
+
+function selectedPoiIndex() {
+  return poiSelection.pinnedIndex ?? poiSelection.hoveredIndex;
+}
+
+function renderPoiSelection() {
+  const index = selectedPoiIndex();
+  document.querySelectorAll('[data-poi-index]').forEach((row) => {
+    row.classList.toggle('is-active', Number(row.dataset.poiIndex) === index);
+    row.setAttribute('aria-pressed', String(Number(row.dataset.poiIndex) === poiSelection.pinnedIndex));
+  });
+  document.querySelectorAll('[data-profile-poi-index]').forEach((marker) => {
+    marker.classList.toggle('is-active', Number(marker.dataset.profilePoiIndex) === index);
+  });
+  poiMarkers.forEach((marker, markerIndex) => {
+    marker.getElement()?.querySelector('.poi-marker')?.classList.toggle('is-active', markerIndex === index);
+    marker.setZIndexOffset(markerIndex === index ? 1200 : 700);
+    if (markerIndex === index) marker.openTooltip();
+    else marker.closeTooltip();
+  });
+}
+
+function applyPoiSelection(nextSelection, { restorePointIndex = null } = {}) {
+  poiSelection = nextSelection;
+  renderPoiSelection();
+  const index = selectedPoiIndex();
+  const routePointIndex = currentTrack?.pointsOfInterest?.[index]?.routePointIndex;
+  if (Number.isInteger(routePointIndex) && routePointIndex >= 0) {
+    setActivePoint(routePointIndex, { showContext: true });
+  } else if (Number.isInteger(restorePointIndex)) {
+    setActivePoint(restorePointIndex);
+  }
+}
+
+function hoverPoi(index) {
+  applyPoiSelection(updatePoiSelection(poiSelection, {
+    type: 'hover', index, currentPointIndex: activePointIndex,
+  }));
+}
+
+function leavePoi() {
+  const restorePointIndex = poiSelection.returnPointIndex;
+  applyPoiSelection(updatePoiSelection(poiSelection, { type: 'leave' }), { restorePointIndex });
+}
+
+function togglePoi(index) {
+  const restorePointIndex = poiSelection.returnPointIndex;
+  applyPoiSelection(updatePoiSelection(poiSelection, {
+    type: 'toggle', index, currentPointIndex: activePointIndex,
+  }), { restorePointIndex });
+}
+
+function renderPointsOfInterest(pointsOfInterest = []) {
+  const section = document.querySelector('#points-of-interest');
+  const navLink = document.querySelector('#poi-nav-link');
+  const list = document.querySelector('#poi-list');
+  section.hidden = pointsOfInterest.length === 0;
+  navLink.hidden = pointsOfInterest.length === 0;
+  list.replaceChildren();
+  if (!pointsOfInterest.length) return;
+
+  const lastTwoDigits = pointsOfInterest.length % 100;
+  const lastDigit = pointsOfInterest.length % 10;
+  const countLabel = lastTwoDigits >= 11 && lastTwoDigits <= 14
+    ? 'точек' : lastDigit === 1 ? 'точка' : lastDigit >= 2 && lastDigit <= 4 ? 'точки' : 'точек';
+  document.querySelector('#poi-count').textContent = `${pointsOfInterest.length.toLocaleString('ru-RU')} ${countLabel}`;
+  pointsOfInterest.forEach((point, index) => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'poi-row';
+    row.dataset.poiIndex = String(index);
+    row.setAttribute('aria-pressed', 'false');
+    const number = document.createElement('b');
+    number.textContent = String(index + 1);
+    const copy = document.createElement('span');
+    const name = document.createElement('strong');
+    name.textContent = point.name;
+    copy.append(name);
+    const detail = point.type || point.symbol;
+    if (detail) {
+      const meta = document.createElement('small');
+      meta.textContent = detail;
+      copy.append(meta);
+    }
+    row.append(number, copy);
+    list.append(row);
+  });
+}
+
 function initMap() {
   map = L.map('map', { zoomControl: false, attributionControl: true });
   map.createPane('startMarkerPane');
@@ -296,13 +396,7 @@ function initMap() {
 }
 
 function nearestPoint(latlng) {
-  let bestIndex = 0;
-  let bestDistance = Infinity;
-  currentTrack.points.forEach((point, index) => {
-    const distance = (point.lat - latlng.lat) ** 2 + (point.lon - latlng.lng) ** 2;
-    if (distance < bestDistance) { bestDistance = distance; bestIndex = index; }
-  });
-  return bestIndex;
+  return nearestRoutePointIndex(currentTrack.points, { lat: latlng.lat, lon: latlng.lng });
 }
 
 function selectedSurfaceId() {
@@ -323,6 +417,7 @@ function selectedTerrainRange() {
 
 function drawMap(track, { fit = true } = {}) {
   if (routeLine) map.eachLayer((layer) => { if (layer.options?.trackLayer && !layer.options?.rangeFocus) map.removeLayer(layer); });
+  poiMarkers = [];
   const coordinates = track.points.map((point) => [point.lat, point.lon]);
   L.polyline(coordinates, { color: '#ffffff', weight: 8, opacity: 0.92, trackLayer: true, interactive: false }).addTo(map);
   const focusedSurface = selectedSurfaceId();
@@ -353,8 +448,10 @@ function drawMap(track, { fit = true } = {}) {
     }
   });
   routeLine = L.polyline(coordinates, { color: '#000000', weight: 14, opacity: 0, trackLayer: true }).addTo(map);
-  routeLine.on('mousemove', (event) => setActivePoint(nearestPoint(event.latlng), { showContext: true }));
-  routeLine.on('mouseout', () => setPointContext(null));
+  routeLine.on('mousemove', (event) => {
+    if (poiSelection.pinnedIndex === null) setActivePoint(nearestPoint(event.latlng), { showContext: true });
+  });
+  routeLine.on('mouseout', () => { if (poiSelection.pinnedIndex === null) setPointContext(null); });
   const closedRoute = isClosedRoute(track.points);
   L.marker(coordinates[0], {
     icon: makeEndpointIcon('A', 'start'), trackLayer: true, pane: 'startMarkerPane', interactive: false, zIndexOffset: 1000,
@@ -365,6 +462,18 @@ function drawMap(track, { fit = true } = {}) {
       icon: makeEndpointIcon('B', 'finish'), trackLayer: true, interactive: false, zIndexOffset: 900, title: 'Финиш маршрута',
     }).addTo(map);
   }
+  poiMarkers = (track.pointsOfInterest || []).map((point, index) => {
+    const tooltip = document.createElement('span');
+    tooltip.textContent = point.name;
+    const marker = L.marker([point.lat, point.lon], {
+      icon: makePoiIcon(index), trackLayer: true, zIndexOffset: 700, title: point.name,
+    }).addTo(map).bindTooltip(tooltip, { direction: 'top', offset: [0, -26] });
+    marker.on('mouseover', () => hoverPoi(index));
+    marker.on('mouseout', () => leavePoi());
+    marker.on('click', () => togglePoi(index));
+    return marker;
+  });
+  renderPoiSelection();
   document.querySelector('#map-note').innerHTML = closedRoute
     ? '<span class="start-dot"></span><b>СТАРТ / ФИНИШ</b>'
     : '<span class="start-dot"></span><b>СТАРТ</b><i class="finish-dot"></i><b>ФИНИШ</b>';
@@ -400,6 +509,23 @@ function chartCoordinates(point) {
   return { x, y };
 }
 
+function renderProfilePointsOfInterest(track, startKm, endKm) {
+  const group = document.querySelector('#profile-pois');
+  group.replaceChildren();
+  (track.pointsOfInterest || []).forEach((point, index) => {
+    const routePoint = track.points[point.routePointIndex];
+    if (!routePoint || routePoint.distanceKm < startKm || routePoint.distanceKm > endKm) return;
+    const ratio = (routePoint.distanceKm - startKm) / Math.max(endKm - startKm, 0.001);
+    const marker = document.createElement('span');
+    marker.className = 'profile-poi';
+    marker.dataset.profilePoiIndex = String(index);
+    marker.style.left = `${ratio * 100}%`;
+    marker.title = point.name;
+    marker.textContent = String(index + 1);
+    group.append(marker);
+  });
+}
+
 function drawProfile(track) {
   currentViewMetrics = visibleMetrics();
   const { startIndex, endIndex, startKm, endKm, min, max } = currentViewMetrics;
@@ -408,6 +534,7 @@ function drawProfile(track) {
   document.querySelector('#profile-descent').textContent = descentM.toLocaleString('ru-RU');
   const visiblePoints = track.points.slice(startIndex, endIndex + 1).filter((point) => Number.isFinite(point.ele));
   const coords = visiblePoints.map(chartCoordinates);
+  renderProfilePointsOfInterest(track, startKm, endKm);
   const line = coords.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
   document.querySelector('#profile-area').setAttribute('d', `${line} L1200,264 L0,264 Z`);
   document.querySelector('#gradient-line').innerHTML = coords.slice(1).map((point, index) => {
@@ -658,11 +785,16 @@ function renderTrack(rawTrack, { persisted = false, analysisSources } = {}) {
   hoveredRange = null;
   pinnedRange = null;
   currentTrack = persisted ? rawTrack : analyzeTrack(rawTrack);
+  poiSelection = { ...emptyPoiSelection };
   const grades = calculateSegmentGrades(currentTrack.points);
   currentTrack.points = currentTrack.points.map((point, index) => ({
     ...point,
     grade: Number.isFinite(point.grade) ? point.grade : grades[index],
     surface: point.surface || classifySurface(point.surfaceTags),
+  }));
+  currentTrack.pointsOfInterest = (currentTrack.pointsOfInterest || []).map((point) => ({
+    ...point,
+    routePointIndex: nearestRoutePointIndex(currentTrack.points, point),
   }));
   currentTrack.climbs ??= detectClimbs(currentTrack.points);
   currentTrack.descents ??= detectDescents(currentTrack.points);
@@ -695,6 +827,7 @@ function renderTrack(rawTrack, { persisted = false, analysisSources } = {}) {
     : speed ? `Расчётная скорость: ${speed.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} км/ч`
       : 'В GPX недостаточно данных для расчёта скорости';
   drawMap(currentTrack);
+  renderPointsOfInterest(currentTrack.pointsOfInterest);
   if (currentTrack.hasElevation) drawProfile(currentTrack);
   renderClimbs(currentTrack);
   renderSurfaces(currentTrack);
@@ -852,6 +985,13 @@ async function replaceTrackFile(file) {
 
 const profile = document.querySelector('#profile-wrap');
 profile.addEventListener('pointermove', (event) => {
+  const poiMarker = event.target.closest('[data-profile-poi-index]');
+  if (poiMarker) {
+    hoverPoi(Number(poiMarker.dataset.profilePoiIndex));
+    return;
+  }
+  if (poiSelection.hoveredIndex !== null && poiSelection.pinnedIndex === null) leavePoi();
+  if (poiSelection.pinnedIndex !== null) return;
   const rect = profile.getBoundingClientRect();
   const ratio = pointerRatioInPlot(event.clientX, rect.left, rect.width);
   const index = pointIndexAtRatio(currentTrack.points, viewRange[0], viewRange[1], ratio);
@@ -867,9 +1007,16 @@ profile.addEventListener('pointermove', (event) => {
   }
 });
 profile.addEventListener('pointerleave', () => {
-  if (!selectionStart) setPointContext(null);
+  leavePoi();
+  if (!selectionStart && poiSelection.pinnedIndex === null) setPointContext(null);
+});
+profile.addEventListener('click', (event) => {
+  const marker = event.target.closest('[data-profile-poi-index]');
+  if (marker) togglePoi(Number(marker.dataset.profilePoiIndex));
 });
 profile.addEventListener('pointerdown', (event) => {
+  if (event.target.closest('[data-profile-poi-index]')) return;
+  if (poiSelection.pinnedIndex !== null) return;
   if (event.button !== 0) return;
   const rect = profile.getBoundingClientRect();
   const ratio = pointerRatioInPlot(event.clientX, rect.left, rect.width);
@@ -893,6 +1040,7 @@ profile.addEventListener('pointerup', (event) => {
 });
 profile.addEventListener('keydown', (event) => {
   if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+  if (poiSelection.pinnedIndex !== null) return;
   event.preventDefault();
   setActivePoint(activePointIndex + (event.key === 'ArrowRight' ? 1 : -1));
 });
@@ -996,6 +1144,27 @@ document.querySelectorAll('[data-terrain-tab]').forEach((button) => button.addEv
   document.querySelector('#climbs-list').hidden = button.dataset.terrainTab !== 'climbs';
   document.querySelector('#descents-list').hidden = button.dataset.terrainTab !== 'descents';
 }));
+
+const poiSection = document.querySelector('.poi-section');
+poiSection.addEventListener('pointerover', (event) => {
+  const row = event.target.closest('[data-poi-index]');
+  if (row) hoverPoi(Number(row.dataset.poiIndex));
+});
+poiSection.addEventListener('pointerout', (event) => {
+  const row = event.target.closest('[data-poi-index]');
+  if (row && !row.contains(event.relatedTarget)) leavePoi();
+});
+poiSection.addEventListener('focusin', (event) => {
+  const row = event.target.closest('[data-poi-index]');
+  if (row) hoverPoi(Number(row.dataset.poiIndex));
+});
+poiSection.addEventListener('focusout', (event) => {
+  if (!event.relatedTarget?.closest?.('[data-poi-index]')) leavePoi();
+});
+poiSection.addEventListener('click', (event) => {
+  const row = event.target.closest('[data-poi-index]');
+  if (row) togglePoi(Number(row.dataset.poiIndex));
+});
 
 const topbar = document.querySelector('.topbar');
 const compactRouteHeader = document.querySelector('.compact-route-header');

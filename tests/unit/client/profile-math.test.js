@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { elevationGainLoss, pointIndexAtRatio, pointerRatioInPlot } from '../../../src/client/domain/profile-math.js';
+import { elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot } from '../../../src/client/domain/profile-math.js';
 
 describe('pointerRatioInPlot', () => {
-  it('maps the actual chart edges to zero and one instead of the container edges', () => {
-    expect(pointerRatioInPlot(125, 100, 1000)).toBe(0);
-    expect(pointerRatioInPlot(1075, 100, 1000)).toBe(1);
+  it('maps the full SVG width to zero and one', () => {
+    expect(pointerRatioInPlot(100, 100, 1000)).toBe(0);
+    expect(pointerRatioInPlot(1100, 100, 1000)).toBe(1);
+    expect(pointerRatioInPlot(350, 100, 1000)).toBe(0.25);
     expect(pointerRatioInPlot(600, 100, 1000)).toBe(0.5);
   });
 
@@ -37,5 +38,22 @@ describe('elevationGainLoss', () => {
 
   it('ignores intervals without two valid elevation values', () => {
     expect(elevationGainLoss([{ ele: 10 }, { ele: null }, { ele: 16 }], 0, 2)).toEqual({ ascentM: 0, descentM: 0 });
+  });
+});
+
+describe('nearestRoutePointIndex', () => {
+  it('places a point of interest at the closest route point', () => {
+    const points = [
+      { lat: 50, lon: 19, distanceKm: 0 },
+      { lat: 50.1, lon: 19.1, distanceKm: 5 },
+      { lat: 50.2, lon: 19.2, distanceKm: 10 },
+    ];
+
+    expect(nearestRoutePointIndex(points, { lat: 50.11, lon: 19.09 })).toBe(1);
+  });
+
+  it('returns no index for invalid coordinates or an empty route', () => {
+    expect(nearestRoutePointIndex([], { lat: 50, lon: 19 })).toBe(-1);
+    expect(nearestRoutePointIndex([{ lat: 50, lon: 19 }], { lat: Number.NaN, lon: 19 })).toBe(-1);
   });
 });

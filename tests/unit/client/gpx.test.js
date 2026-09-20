@@ -21,6 +21,23 @@ describe('parseGpx', () => {
     expect(track.points[1].time).toBeInstanceOf(Date);
   });
 
+  it('extracts named GPX waypoints as points of interest', () => {
+    const track = parseGpx(`
+      <gpx><wpt lat="50.005" lon="19.006"><name>Water stop</name><type>Drinking Water</type><sym>Water Source</sym></wpt>
+        <wpt lat="invalid" lon="19.1"><name>Broken point</name></wpt>
+        <trk><trkseg><trkpt lat="50" lon="19"/><trkpt lat="50.01" lon="19.01"/></trkseg></trk>
+      </gpx>
+    `);
+
+    expect(track.pointsOfInterest).toEqual([{
+      lat: 50.005,
+      lon: 19.006,
+      name: 'Water stop',
+      type: 'Drinking Water',
+      symbol: 'Water Source',
+    }]);
+  });
+
   it('rejects files without a usable track', () => {
     expect(() => parseGpx('<gpx><trk /></gpx>')).toThrow(/точек маршрута/i);
   });
