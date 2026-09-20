@@ -14,6 +14,21 @@ export function visibleRangeIndices(range, visibleStartIndex, visibleEndIndex) {
   return endIndex - startIndex >= 1 ? [startIndex, endIndex] : null;
 }
 
+export function profileRangePosition(points, range, visibleStartKm, visibleEndKm, chartWidth = 1200) {
+  const from = Math.max(points[range.startIndex].distanceKm, visibleStartKm);
+  const to = Math.min(points[range.endIndex].distanceKm, visibleEndKm);
+  if (from >= to) return null;
+  const visibleDistanceKm = Math.max(visibleEndKm - visibleStartKm, 0.001);
+  return {
+    x: ((from - visibleStartKm) / visibleDistanceKm) * chartWidth,
+    width: ((to - from) / visibleDistanceKm) * chartWidth,
+  };
+}
+
+export function profileFocusVisibility(placement) {
+  return { profile: placement === 'profile', ribbon: placement === 'ribbon' };
+}
+
 export function pointIndexAtRatio(points, startIndex, endIndex, ratio) {
   if (ratio <= 0) return startIndex;
   if (ratio >= 1) return endIndex;

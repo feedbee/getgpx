@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot, visibleRangeIndices } from '../../../src/client/domain/profile-math.js';
+import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot, profileFocusVisibility, profileRangePosition, visibleRangeIndices } from '../../../src/client/domain/profile-math.js';
 
 describe('areaPathFromCoordinates', () => {
   it('closes a profile segment against the chart baseline', () => {
@@ -20,6 +20,26 @@ describe('visibleRangeIndices', () => {
   it('rejects ranges without a visible line segment', () => {
     expect(visibleRangeIndices({ startIndex: 2, endIndex: 3 }, 4, 10)).toBeNull();
     expect(visibleRangeIndices({ startIndex: 4, endIndex: 4 }, 4, 10)).toBeNull();
+  });
+});
+
+describe('profileRangePosition', () => {
+  const points = [0, 2, 5, 8, 10].map((distanceKm) => ({ distanceKm }));
+
+  it('positions a selected range on the straight profile ribbon', () => {
+    expect(profileRangePosition(points, { startIndex: 1, endIndex: 3 }, 0, 10)).toEqual({ x: 240, width: 720 });
+  });
+
+  it('clips a selected range to the visible profile distance', () => {
+    expect(profileRangePosition(points, { startIndex: 0, endIndex: 4 }, 2, 8)).toEqual({ x: 0, width: 1200 });
+    expect(profileRangePosition(points, { startIndex: 0, endIndex: 1 }, 5, 8)).toBeNull();
+  });
+});
+
+describe('profileFocusVisibility', () => {
+  it('selects exactly one focus presentation', () => {
+    expect(profileFocusVisibility('profile')).toEqual({ profile: true, ribbon: false });
+    expect(profileFocusVisibility('ribbon')).toEqual({ profile: false, ribbon: true });
   });
 });
 

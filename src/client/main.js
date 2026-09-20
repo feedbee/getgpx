@@ -11,7 +11,7 @@ import { createDemoTrack } from './domain/demo.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
 import { calculateSegmentGrades } from './domain/gradient.js';
 import { emptyPoiSelection, updatePoiSelection } from './domain/poi-selection.js';
-import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot, visibleRangeIndices } from './domain/profile-math.js';
+import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot, profileFocusVisibility, profileRangePosition, visibleRangeIndices } from './domain/profile-math.js';
 import { colorRunsForMode, highlightRunsForFilter, profileColorRuns } from './domain/route-color.js';
 import { isClosedRoute } from './domain/route-shape.js';
 import { applyValhallaMatches, classifySurface, classifyWayType, fetchValhallaMatches, roadQualityCategories, roadTypeLabel, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
@@ -31,6 +31,7 @@ let selectionStart = null;
 let currentViewMetrics = null;
 let mapColorMode = 'gradient';
 let profileColorMode = 'gradient';
+let profileFocusPlacement = 'ribbon';
 let enrichmentRun = 0;
 let hoveredSurfaceId = null;
 let pinnedSurfaceId = null;
@@ -113,9 +114,9 @@ app.innerHTML = `
         <section class="content-section profile-section" id="details">
           <div class="compact-heading"><h2>Профиль высот</h2></div>
           <div class="analysis-card profile-card">
-            <div class="profile-toolbar"><div class="profile-mode segmented-control" aria-label="Цвет профиля"><button class="active" type="button" data-color-scope="profile" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="profile" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="profile" data-color-mode="waytype">Тип дороги</button><button type="button" data-color-scope="profile" data-color-mode="quality">Качество</button></div><div class="profile-actions segmented-control"><button id="zoom-back" type="button" disabled>← Назад</button><button id="zoom-reset" type="button" disabled>Reset</button></div></div>
+            <div class="profile-toolbar"><div class="profile-mode segmented-control" aria-label="Цвет профиля"><button class="active" type="button" data-color-scope="profile" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="profile" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="profile" data-color-mode="waytype">Тип дороги</button><button type="button" data-color-scope="profile" data-color-mode="quality">Качество</button></div><div class="profile-toolbar-actions"><div class="profile-overlay-settings"><button class="profile-settings-trigger" id="profile-settings-trigger" type="button" aria-label="Настройки наложения" aria-expanded="false" aria-controls="profile-settings-popover"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="M19 13.2v-2.4l-2-.7a7 7 0 0 0-.6-1.4l.9-1.9-1.7-1.7-1.9.9a7 7 0 0 0-1.4-.6l-.7-2H9.2l-.7 2a7 7 0 0 0-1.4.6l-1.9-.9-1.7 1.7.9 1.9a7 7 0 0 0-.6 1.4l-2 .7v2.4l2 .7a7 7 0 0 0 .6 1.4l-.9 1.9 1.7 1.7 1.9-.9a7 7 0 0 0 1.4.6l.7 2h2.4l.7-2a7 7 0 0 0 1.4-.6l1.9.9 1.7-1.7-.9-1.9a7 7 0 0 0 .6-1.4l2-.7Z"/></svg></button><div class="profile-settings-popover" id="profile-settings-popover" role="dialog" aria-labelledby="profile-settings-title" hidden><strong id="profile-settings-title">Отображать наложение</strong><div class="profile-focus-placement segmented-control" aria-label="Расположение подсветки"><button type="button" data-profile-focus-placement="profile" aria-pressed="false">На профиле</button><button class="active" type="button" data-profile-focus-placement="ribbon" aria-pressed="true">На полоске</button></div></div></div><div class="profile-actions segmented-control"><button id="zoom-back" type="button" disabled>← Назад</button><button id="zoom-reset" type="button" disabled>Отмена</button></div></div></div>
             <div class="profile-wrap" id="profile-wrap" tabindex="0" role="slider" aria-label="Положение на профиле высоты" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-              <svg id="profile" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ebc35" stop-opacity=".24"/><stop offset="1" stop-color="#7ebc35" stop-opacity=".02"/></linearGradient></defs><g id="grid"></g><g id="climb-bands"></g><path id="profile-area" class="profile-area"></path><g id="profile-gradient-area"></g><g id="gradient-line"></g><g id="terrain-highlight"></g><g id="surface-ribbon"></g><rect id="profile-selection" class="profile-selection" x="0" y="18" width="0" height="246"></rect><line id="profile-cursor" class="profile-cursor" y1="18" y2="264"></line><circle id="profile-dot" class="profile-dot" r="6"></circle></svg>
+              <svg id="profile" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ebc35" stop-opacity=".24"/><stop offset="1" stop-color="#7ebc35" stop-opacity=".02"/></linearGradient></defs><g id="grid"></g><g id="climb-bands"></g><path id="profile-area" class="profile-area"></path><g id="profile-gradient-area"></g><g id="gradient-line"></g><g id="profile-focus-profile"></g><g id="surface-ribbon"></g><g id="profile-focus-ribbon"></g><rect id="profile-selection" class="profile-selection" x="0" y="18" width="0" height="246"></rect><line id="profile-cursor" class="profile-cursor" y1="18" y2="264"></line><circle id="profile-dot" class="profile-dot" r="6"></circle></svg>
               <div class="profile-pois" id="profile-pois" aria-hidden="true"></div>
               <div class="axis" id="axis"></div>
             </div>
@@ -558,19 +559,15 @@ function drawProfile(track) {
     const path = profilePath(run);
     return path ? `<path d="${path}" stroke="${run.color}"><title>${run.label}</title></path>` : '';
   }).join('');
-  const highlightedRuns = highlightRunsForFilter(track.points, selectedRouteFilter())
-    .map((run) => ({ ...run, path: profilePath(run) }))
-    .filter((run) => run.path);
-  const highlightOutlines = highlightedRuns.map((run) =>
-    `<path class="profile-highlight-outline" d="${run.path}" stroke="#fff"></path>`).join('');
-  const highlightPaths = highlightedRuns.map((run) =>
-    `<path class="profile-highlight" d="${run.path}" stroke="${run.color}"><title>${run.label}</title></path>`).join('');
-  document.querySelector('#gradient-line').innerHTML = baseProfilePaths + highlightOutlines + highlightPaths;
+  document.querySelector('#gradient-line').innerHTML = baseProfilePaths;
+  const focusedRuns = highlightRunsForFilter(track.points, selectedRouteFilter());
   const terrainRange = selectedTerrainRange();
-  const terrainPath = terrainRange ? profilePath(terrainRange) : '';
-  document.querySelector('#terrain-highlight').innerHTML = terrainPath
-    ? `<path class="terrain-highlight-outline" d="${terrainPath}"></path><path class="terrain-highlight-line" d="${terrainPath}" stroke="${terrainRange.color}"><title>${terrainRange.label}</title></path>`
-    : '';
+  if (terrainRange) focusedRuns.push(terrainRange);
+  const focusVisibility = profileFocusVisibility(profileFocusPlacement);
+  document.querySelector('#profile-focus-profile').innerHTML = focusVisibility.profile ? focusedRuns.map((run) => {
+    const path = profilePath(run);
+    return path ? `<path class="profile-focus-path-outline" d="${path}"></path><path class="profile-focus-path-line" d="${path}" stroke="${run.color}"><title>${run.label}</title></path>` : '';
+  }).join('') : '';
   document.querySelector('#grid').innerHTML = [40, 95, 150, 205, 260].map((y) => `<line x1="0" y1="${y}" x2="1200" y2="${y}" />`).join('');
   document.querySelector('#axis').innerHTML = Array.from({ length: 6 }, (_, index) => `<span>${(startKm + (endKm - startKm) * index / 5).toFixed(1)} км</span>`).join('');
   document.querySelector('#min-label').textContent = `${Math.round(min)} м`;
@@ -585,14 +582,19 @@ function drawProfile(track) {
   }).join('');
   const ribbonRuns = colorRunsForMode(track.points, profileColorMode);
   const ribbonRect = (run) => {
-    const from = Math.max(track.points[run.startIndex].distanceKm, startKm);
-    const to = Math.min(track.points[run.endIndex].distanceKm, endKm);
-    if (from >= to) return '';
-    const x = ((from - startKm) / Math.max(endKm - startKm, 0.001)) * 1200;
-    const width = ((to - from) / Math.max(endKm - startKm, 0.001)) * 1200;
+    const position = profileRangePosition(track.points, run, startKm, endKm);
+    if (!position) return '';
+    const { x, width } = position;
     return `<rect x="${x}" y="269" width="${Math.max(width, 1)}" height="9" fill="${run.color}"><title>${run.label}</title></rect>`;
   };
   document.querySelector('#surface-ribbon').innerHTML = ribbonRuns.map(ribbonRect).join('');
+  const focusRect = (run) => {
+    const position = profileRangePosition(track.points, run, startKm, endKm);
+    if (!position) return '';
+    const { x, width } = position;
+    return `<rect class="profile-focus-outline" x="${x}" y="265" width="${Math.max(width, 1)}" height="17" rx="2"></rect><rect class="profile-focus-line" x="${x}" y="268" width="${Math.max(width, 1)}" height="11" rx="1" fill="${run.color}"><title>${run.label}</title></rect>`;
+  };
+  document.querySelector('#profile-focus-ribbon').innerHTML = focusVisibility.ribbon ? focusedRuns.map(focusRect).join('') : '';
 }
 
 function refreshRouteFocus() {
@@ -720,6 +722,16 @@ function setColorMode(scope, mode) {
   if (scope === 'map') drawMap(currentTrack, { fit: false });
   if (scope === 'profile' && currentTrack.hasElevation) drawProfile(currentTrack);
   setActivePoint(activePointIndex);
+}
+
+function setProfileFocusPlacement(placement) {
+  profileFocusPlacement = placement;
+  document.querySelectorAll('[data-profile-focus-placement]').forEach((button) => {
+    const active = button.dataset.profileFocusPlacement === placement;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  if (currentTrack?.hasElevation) drawProfile(currentTrack);
 }
 
 async function enrichTrackSurfaces(track, runId) {
@@ -1075,6 +1087,23 @@ document.querySelector('#zoom-reset').addEventListener('click', () => {
   setViewRange([0, currentTrack.points.length - 1], { remember: false });
 });
 document.querySelectorAll('[data-color-mode]').forEach((button) => button.addEventListener('click', () => setColorMode(button.dataset.colorScope, button.dataset.colorMode)));
+document.querySelectorAll('[data-profile-focus-placement]').forEach((button) => button.addEventListener('click', () => setProfileFocusPlacement(button.dataset.profileFocusPlacement)));
+const profileSettings = document.querySelector('.profile-overlay-settings');
+const profileSettingsTrigger = document.querySelector('#profile-settings-trigger');
+const profileSettingsPopover = document.querySelector('#profile-settings-popover');
+function setProfileSettingsOpen(open) {
+  profileSettingsPopover.hidden = !open;
+  profileSettingsTrigger.setAttribute('aria-expanded', String(open));
+}
+profileSettingsTrigger.addEventListener('click', () => setProfileSettingsOpen(profileSettingsPopover.hidden));
+document.addEventListener('pointerdown', (event) => {
+  if (!profileSettingsPopover.hidden && !profileSettings.contains(event.target)) setProfileSettingsOpen(false);
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || profileSettingsPopover.hidden) return;
+  setProfileSettingsOpen(false);
+  profileSettingsTrigger.focus();
+});
 const surfaceSection = document.querySelector('.surface-section');
 surfaceSection.addEventListener('pointerover', (event) => {
   const control = event.target.closest('[data-surface-filter]:not(:disabled),[data-waytype-filter]:not(:disabled),[data-quality-filter]:not(:disabled)');
