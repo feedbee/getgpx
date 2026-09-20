@@ -4,6 +4,7 @@ import './style.css';
 import { renderAuthControl } from './auth-ui.js';
 import { createTrackCard } from './my-tracks-ui.js';
 import { closeOverflowMenuOnOutsideClick } from './route-actions-ui.js';
+import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution } from './track-meta-ui.js';
 import { analyzeTrack } from './domain/gpx.js';
 import { createDemoTrack } from './domain/demo.js';
@@ -45,6 +46,16 @@ let publicTrackId = null;
 app.innerHTML = `
   <header class="topbar">
     <div class="topbar-inner"><a class="brand" href="/" aria-label="Trace, главная"><span class="brand-mark">T</span><span>TRACE</span></a>
+    <section class="compact-route-header" aria-label="Текущий маршрут" aria-hidden="true">
+      <strong id="compact-track-name">Загрузка маршрута…</strong>
+      <div class="compact-route-metrics" aria-label="Краткие показатели маршрута">
+        <span aria-label="Расстояние маршрута"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 9l-3 3 3 3m10-6 3 3-3 3"/></svg><b id="compact-distance">—</b> км</span>
+        <span aria-label="Набор высоты"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17 17 5m-7 0h7v7"/></svg><b id="compact-ascent">—</b> м <small>набор</small></span>
+        <span aria-label="Спуск по высоте"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 12 12m0-7v7h-7"/></svg><b id="compact-descent">—</b> м <small>спуск</small></span>
+        <span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><b id="compact-duration">—</b> <i id="compact-duration-unit"></i></span>
+        <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.6 18a8 8 0 1 1 12.8 0M12 13l4-4"/><path d="M4 18h16"/></svg><b id="compact-speed">— км/ч</b></span>
+      </div>
+    </section>
     <div class="topbar-actions"><label class="upload-button" data-auth-upload for="gpx-file" hidden><span aria-hidden="true">↗</span> Загрузить GPX</label><div id="auth-control">${renderAuthControl(null)}</div></div></div>
     <input id="gpx-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden />
   </header>
@@ -88,7 +99,7 @@ app.innerHTML = `
     </header>
     <div class="route-workspace">
       <div class="route-content">
-        <nav class="section-nav" aria-label="Содержание страницы">
+        <nav class="section-nav route-tabs" aria-label="Содержание страницы">
           <a href="#details">Профиль высот</a><a href="#way-types">Информация о трассе</a><a href="#climbs">Подъёмы и спуски</a>
         </nav>
         <section class="content-section profile-section" id="details">
@@ -659,17 +670,25 @@ function renderTrack(rawTrack, { persisted = false, analysisSources } = {}) {
   zoomHistory = [];
   currentViewMetrics = null;
   document.querySelector('#track-name').textContent = currentTrack.name;
+  document.querySelector('#compact-track-name').textContent = currentTrack.name;
   document.querySelector('#distance').textContent = currentTrack.distanceKm.toFixed(1);
+  document.querySelector('#compact-distance').textContent = currentTrack.distanceKm.toFixed(1);
   document.querySelector('#ascent').textContent = currentTrack.hasElevation ? currentTrack.ascentM.toLocaleString('ru-RU') : '—';
+  document.querySelector('#compact-ascent').textContent = currentTrack.hasElevation ? currentTrack.ascentM.toLocaleString('ru-RU') : '—';
   document.querySelector('#descent').textContent = currentTrack.hasElevation ? currentTrack.descentM.toLocaleString('ru-RU') : '—';
+  document.querySelector('#compact-descent').textContent = currentTrack.hasElevation ? currentTrack.descentM.toLocaleString('ru-RU') : '—';
   const [duration, unit] = formatDuration(currentTrack.estimatedDurationMs || currentTrack.movingTimeMs);
   document.querySelector('#duration').textContent = duration;
   document.querySelector('#duration-unit').textContent = unit;
+  document.querySelector('#compact-duration').textContent = duration;
+  document.querySelector('#compact-duration-unit').textContent = unit;
   document.querySelector('#profile-ascent').textContent = currentTrack.ascentM.toLocaleString('ru-RU');
   document.querySelector('#profile-descent').textContent = currentTrack.descentM.toLocaleString('ru-RU');
   const speedBadge = document.querySelector('#average-speed-badge');
   const speed = currentTrack.effectiveSpeedKmh || currentTrack.movingAverageSpeedKmh;
   speedBadge.textContent = speed
+    ? `${speed.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} км/ч` : '— км/ч';
+  document.querySelector('#compact-speed').textContent = speed
     ? `${speed.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} км/ч` : '— км/ч';
   speedBadge.title = currentTrack.movingAverageSpeedKmh
     ? `Средняя скорость движения по данным GPX: ${speed.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} км/ч`
@@ -690,6 +709,7 @@ function renderTrack(rawTrack, { persisted = false, analysisSources } = {}) {
 
 function renderUnavailableTrack(track) {
   document.querySelector('#track-name').textContent = track.title;
+  document.querySelector('#compact-track-name').textContent = track.title;
   document.querySelector('#route-state-note').textContent = track.analysisNote;
   document.querySelector('#route-state-note').hidden = false;
   document.querySelector('.route-metrics').hidden = true;
@@ -976,6 +996,27 @@ document.querySelectorAll('[data-terrain-tab]').forEach((button) => button.addEv
   document.querySelector('#climbs-list').hidden = button.dataset.terrainTab !== 'climbs';
   document.querySelector('#descents-list').hidden = button.dataset.terrainTab !== 'descents';
 }));
+
+const topbar = document.querySelector('.topbar');
+const compactRouteHeader = document.querySelector('.compact-route-header');
+let routeHeaderFrame;
+function refreshStickyRouteHeader() {
+  routeHeaderFrame = null;
+  const visible = shouldShowCompactRouteHeader({
+    routeHeaderBottom: document.querySelector('.route-header').getBoundingClientRect().bottom,
+    topbarHeight: topbar.getBoundingClientRect().height,
+    routePageHidden: document.querySelector('#route').hidden,
+  });
+  topbar.classList.toggle('has-compact-route', visible);
+  compactRouteHeader.setAttribute('aria-hidden', String(!visible));
+}
+function scheduleStickyRouteHeaderRefresh() {
+  if (!routeHeaderFrame) routeHeaderFrame = window.requestAnimationFrame(refreshStickyRouteHeader);
+}
+window.addEventListener('scroll', scheduleStickyRouteHeaderRefresh, { passive: true });
+window.addEventListener('resize', scheduleStickyRouteHeaderRefresh);
+refreshStickyRouteHeader();
+
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') closeUserMenu();
   if (event.key !== 'Escape' || (!pinnedSurfaceId && !pinnedWayTypeId && !pinnedQualityId && !pinnedRange)) return;
