@@ -17,8 +17,8 @@ nav a.active { color:var(--ink); border-color:var(--ink); }
 .upload-button:hover,.upload-button:focus-within { color:var(--paper); background:var(--ink); }
 .topbar-actions { display:flex; align-items:center; gap:10px; }
 #auth-control { position:relative; display:flex; }
-.login-button { display:inline-flex; align-items:center; min-height:38px; padding:0 13px; border:1px solid var(--line); color:var(--ink); font-size:12px; font-weight:700; text-decoration:none; }
-.login-button:hover,.login-button:focus-visible { border-color:var(--ink); outline:none; background:var(--white); }
+.login-button { display:inline-flex; align-items:center; min-height:38px; padding:0 13px; border:1px solid var(--line); border-radius:10px; color:var(--ink); font-size:12px; font-weight:700; text-decoration:none; }
+.login-button:hover,.login-button:focus-visible { border-color:var(--ink); outline:none; background:#e7ece4; }
 .avatar-button { width:38px; height:38px; display:grid; place-items:center; overflow:hidden; padding:0; border:1px solid var(--line); border-radius:50%; background:#d9c69d; color:#38451b; cursor:pointer; font-weight:800; }
 .avatar-button:hover,.avatar-button:focus-visible,.avatar-button[aria-expanded="true"] { border-color:var(--ink); outline:2px solid var(--paper); box-shadow:0 0 0 3px var(--ink); }
 .avatar-button img { width:100%; height:100%; object-fit:cover; }
@@ -165,8 +165,8 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:600; }
 .processing-steps li::before { content:counter(processing); position:absolute; left:0; top:0; width:28px; height:28px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:var(--white); font-size:10px; font-weight:700; }
 .processing-steps li:not(:last-child)::after { content:''; position:absolute; left:14px; top:28px; bottom:0; width:1px; background:var(--line); }
 .processing-steps li.is-active { color:var(--ink); font-weight:700; }
-.processing-steps li.is-active::before { border-color:var(--ink); background:var(--acid); box-shadow:0 0 0 4px rgba(215,255,63,.25); }
-.processing-steps li.is-complete::before { content:'✓'; border-color:var(--ink); background:var(--ink); color:var(--acid); }
+.processing-steps li.is-active::before { border-color:#173d31; background:#e4eee8; color:#173d31; box-shadow:0 0 0 4px rgba(23,61,49,.1); }
+.processing-steps li.is-complete::before { content:'✓'; border-color:#203a2b; background:#203a2b; color:var(--white); }
 .processing-error { margin:0 0 10px; padding:12px; border-left:3px solid #c45a42; background:#f3e3df; font-size:12px; line-height:1.5; }
 .processing-details { margin:0 0 16px; color:var(--muted); font-size:11px; }
 .processing-details code { display:block; margin-top:7px; color:var(--ink); }
@@ -344,7 +344,7 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:600; }
 .track-preview span { font:700 13px 'Sora',sans-serif; letter-spacing:.12em; }
 .track-card-body { min-width:0; display:grid; justify-items:start; gap:7px; }
 .track-status { padding:4px 8px; border-radius:999px; background:#dde0d8; color:#41463e; font-size:9px; font-weight:800; letter-spacing:.04em; }
-.track-status-ready { background:#d7ff3f; color:#283111; }
+.track-status-ready { background:#e4eee8; color:#173d31; }
 .track-status-failed { background:#f2d0c7; color:#7b2f20; }
 .track-status-processing { background:#d9e5f3; color:#244e78; }
 .track-card-title { max-width:720px; overflow:hidden; color:var(--ink); font:600 18px/1.25 'Sora',sans-serif; letter-spacing:-.02em; text-decoration:none; text-overflow:ellipsis; white-space:nowrap; }
@@ -356,6 +356,44 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:600; }
 .load-more-tracks { display:block; margin:32px auto 0; }
 .load-more-tracks[hidden] { display:none; }
 
+/* Collection and dialogs share the route page visual language. */
+.my-tracks-page { width:min(calc(100% - 48px),1728px); padding-top:48px; }
+.my-tracks-header { align-items:center; padding-bottom:24px; border-color:var(--line); }
+.my-tracks-header h1 { font-size:clamp(38px,4.8vw,64px); }
+.my-tracks-upload,.load-more-tracks { border-radius:10px; }
+.my-tracks-upload { border-color:var(--line); background:var(--white); }
+.my-tracks-upload:hover,.my-tracks-upload:focus-visible { border-color:var(--ink); outline:none; background:#e7ece4; }
+.track-search { grid-template-columns:minmax(0,680px); gap:9px; padding:22px 0; }
+.track-search label { letter-spacing:.04em; text-transform:none; }
+.track-search-controls { display:flex; gap:8px; }
+.track-search-input { position:relative; flex:1 1 auto; }
+.track-search input { min-height:44px; padding:0 46px 0 14px; border:1px solid var(--line); border-radius:10px; }
+.track-search input:focus { border-color:var(--ink); outline:2px solid var(--acid); outline-offset:1px; }
+.track-search input::-webkit-search-cancel-button { display:none; }
+.track-search .track-search-clear { position:absolute; top:50%; right:7px; width:30px; min-height:30px; padding:0; border:0; border-radius:7px; background:transparent; color:var(--muted); font-size:22px; font-weight:400; line-height:1; transform:translateY(-50%); }
+.track-search .track-search-clear:hover,.track-search .track-search-clear:focus-visible { background:#e7e8e2; color:var(--ink); outline:none; }
+.track-search .track-search-submit { min-height:44px; border-radius:10px; background:#203a2b; }
+.track-search .track-search-submit:hover,.track-search .track-search-submit:focus-visible,.load-more-tracks:hover,.load-more-tracks:focus-visible { border-color:#17291f; background:#17291f; outline:2px solid var(--acid); outline-offset:2px; }
+.track-card { grid-template-columns:104px minmax(0,1fr) 44px; min-height:132px; gap:20px; }
+.track-preview { width:104px; height:104px; border-radius:10px; }
+.track-status { border-radius:6px; }
+.track-card-download { border:1px solid var(--line); border-radius:10px; background:transparent; }
+.track-card-download:hover,.track-card-download:focus-visible { border-color:var(--ink); background:var(--white); outline:2px solid var(--acid); outline-offset:2px; }
+
+.processing-overlay,.edit-track-dialog::backdrop { background:rgba(24,27,22,.54); backdrop-filter:blur(10px); }
+.processing-card,.edit-track-dialog { border:1px solid var(--line); border-radius:14px; background:var(--white); box-shadow:0 24px 80px rgba(24,27,22,.24); }
+.processing-card { padding:32px; }
+.processing-card h2,.edit-track-dialog h2 { font-size:clamp(26px,4vw,34px); }
+.edit-track-dialog form { gap:20px; padding:32px; }
+.edit-track-dialog label { gap:8px; color:var(--ink); font-size:12px; }
+.edit-track-dialog input { min-height:44px; border-radius:10px; background:var(--paper); }
+.edit-track-dialog input:focus { border-color:var(--ink); outline:2px solid var(--acid); outline-offset:1px; }
+.edit-track-dialog .replace-gpx-control { padding:12px 14px; border-radius:10px; background:transparent; font-size:12px; font-weight:700; }
+.processing-actions button,.edit-track-dialog button { min-height:42px; padding:0 15px; border:1px solid var(--line); border-radius:9px; background:transparent; font-size:12px; font-weight:700; }
+.processing-actions button:hover,.processing-actions button:focus-visible,.edit-track-dialog button:hover,.edit-track-dialog button:focus-visible { border-color:var(--ink); background:#e7ece4; outline:none; }
+.edit-track-dialog button[type="submit"] { border-color:#203a2b; background:#203a2b; color:var(--white); }
+.edit-track-dialog button[type="submit"]:hover,.edit-track-dialog button[type="submit"]:focus-visible { background:#17291f; }
+
 @media (max-width:700px) {
   .my-tracks-page { width:calc(100% - 32px); padding-top:36px; }
   .my-tracks-header { align-items:start; flex-direction:column; }
@@ -365,6 +403,9 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:600; }
   .track-card-title { font-size:15px; }
   .track-card-metrics { font-size:11px; }
   .track-card-download { width:38px; height:38px; }
+  .track-search-controls { align-items:stretch; }
+  .track-search .track-search-submit { padding-inline:14px; }
+  .processing-card,.edit-track-dialog form { padding:24px; }
 }
 
 /* Readability and synchronized route controls */

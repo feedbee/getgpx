@@ -2,7 +2,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { renderAuthControl } from './auth-ui.js';
-import { createTrackCard } from './my-tracks-ui.js';
+import { cancelTrackSearch, createTrackCard } from './my-tracks-ui.js';
 import { closeOverflowMenuOnOutsideClick } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution } from './track-meta-ui.js';
@@ -67,7 +67,7 @@ app.innerHTML = `
       <div><p class="route-kicker">ЛИЧНАЯ КОЛЛЕКЦИЯ</p><h1>Мои треки</h1><p>Ваши маршруты — от свежих загрузок к старым.</p></div>
       <label class="my-tracks-upload" data-auth-upload for="gpx-file" hidden><span aria-hidden="true">＋</span> Загрузить GPX</label>
     </header>
-    <form class="track-search" id="track-search" role="search"><label for="track-query">Поиск по названию</label><div><input id="track-query" name="query" type="search" maxlength="100" placeholder="Например, вечерний гравий" autocomplete="off" /><button type="submit">Найти</button></div></form>
+    <form class="track-search" id="track-search" role="search"><label for="track-query">Поиск по названию</label><div class="track-search-controls"><span class="track-search-input"><input id="track-query" name="query" type="search" maxlength="100" placeholder="Например, вечерний гравий" autocomplete="off" /><button class="track-search-clear" id="track-search-clear" type="button" aria-label="Отменить поиск" title="Отменить поиск" hidden>×</button></span><button class="track-search-submit" type="submit">Найти</button></div></form>
     <p class="my-tracks-message" id="my-tracks-message" role="status">Войдите, чтобы увидеть свои треки.</p>
     <section class="track-list" id="track-list" aria-live="polite"></section>
     <button class="load-more-tracks" id="load-more-tracks" type="button" hidden>Показать ещё</button>
@@ -1238,6 +1238,14 @@ document.querySelector('#track-search').addEventListener('submit', (event) => {
   window.history.replaceState(null, '', nextUrl);
   loadMyTracks({ reset: true });
 });
+const trackQueryInput = document.querySelector('#track-query');
+const trackSearchClear = document.querySelector('#track-search-clear');
+trackQueryInput.addEventListener('input', () => { trackSearchClear.hidden = !trackQueryInput.value; });
+trackSearchClear.addEventListener('click', () => {
+  cancelTrackSearch({ input: trackQueryInput, history: window.history, reload: loadMyTracks });
+  trackSearchClear.hidden = true;
+  trackQueryInput.focus();
+});
 document.querySelector('#load-more-tracks').addEventListener('click', () => loadMyTracks());
 document.querySelector('#edit-track').addEventListener('click', () => document.querySelector('#edit-track-dialog').showModal());
 document.querySelector('#cancel-track-edit').addEventListener('click', () => document.querySelector('#edit-track-dialog').close());
@@ -1283,7 +1291,10 @@ document.querySelector('#delete-track').addEventListener('click', async () => {
   if (response.ok) window.location.assign('/my-tracks');
 });
 
-if (isMyTracksPage) document.querySelector('#track-query').value = new URLSearchParams(window.location.search).get('query') || '';
+if (isMyTracksPage) {
+  trackQueryInput.value = new URLSearchParams(window.location.search).get('query') || '';
+  trackSearchClear.hidden = !trackQueryInput.value;
+}
 if (!isMyTracksPage) {
   initMap();
   setColorMode('map', mapColorMode);

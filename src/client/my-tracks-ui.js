@@ -21,6 +21,12 @@ export function previewPolyline(preview) {
   return preview.points.map((point) => `${Number(point[0]).toFixed(2)},${Number(point[1]).toFixed(2)}`).join(' ');
 }
 
+export function cancelTrackSearch({ input, history, reload }) {
+  input.value = '';
+  history.replaceState(null, '', '/my-tracks');
+  reload({ reset: true });
+}
+
 function metric(value, suffix, digits = 0) {
   return Number.isFinite(value) ? `${value.toLocaleString('ru-RU', { maximumFractionDigits: digits })} ${suffix}` : '—';
 }
