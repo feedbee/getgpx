@@ -2,6 +2,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { renderAuthControl } from './auth-ui.js';
+import { HOME_EXAMPLE_TRACK_ID, renderHomePage } from './home-page-ui.js';
 import { cancelTrackSearch, createTrackCard } from './my-tracks-ui.js';
 import { closeOverflowMenuOnOutsideClick } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
@@ -44,6 +45,7 @@ let pinnedRange = null;
 let currentUser = null;
 let activeUploadTrackId = null;
 const isMyTracksPage = window.location.pathname === '/my-tracks';
+const isHomePage = window.location.pathname === '/';
 let myTracksCursor = null;
 let myTracksLoading = false;
 let publicTrackId = null;
@@ -66,6 +68,7 @@ app.innerHTML = `
     <div class="topbar-actions"><label class="upload-button" data-auth-upload for="gpx-file" hidden><span aria-hidden="true">↗</span> Загрузить GPX</label><div id="auth-control">${renderAuthControl(null)}</div></div></div>
     <input id="gpx-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden />
   </header>
+  ${isHomePage ? renderHomePage() : ''}
   <main class="my-tracks-page" id="my-tracks" ${isMyTracksPage ? '' : 'hidden'}>
     <header class="my-tracks-header">
       <div><p class="route-kicker">ЛИЧНАЯ КОЛЛЕКЦИЯ</p><h1>Мои треки</h1><p>Ваши маршруты — от свежих загрузок к старым.</p></div>
@@ -76,7 +79,7 @@ app.innerHTML = `
     <section class="track-list" id="track-list" aria-live="polite"></section>
     <button class="load-more-tracks" id="load-more-tracks" type="button" hidden>Показать ещё</button>
   </main>
-  <main class="page" id="route" ${isMyTracksPage ? 'hidden' : ''}>
+  <main class="page" id="route" ${isMyTracksPage || isHomePage ? 'hidden' : ''}>
     <header class="route-header">
       <p class="route-state-note" id="route-state-note" hidden></p>
       <div class="route-heading">
@@ -201,6 +204,8 @@ function setAuthUser(user) {
   currentUser = user;
   authControl.innerHTML = renderAuthControl(user);
   document.querySelectorAll('[data-auth-upload]').forEach((control) => { control.hidden = !user; });
+  document.querySelectorAll('[data-home-guest]').forEach((control) => { control.hidden = Boolean(user); });
+  document.querySelectorAll('[data-home-author]').forEach((control) => { control.hidden = !user; });
   if (isMyTracksPage) loadMyTracks({ reset: true });
   if (publicTrackId && user) loadTrackManagement(publicTrackId);
   if (!user) {
@@ -415,6 +420,33 @@ function initMap() {
     attribution: '&copy; OpenStreetMap',
   }).addTo(map);
   L.control.zoom({ position: 'topright' }).addTo(map);
+}
+
+async function initHomeExampleMap() {
+  const container = document.querySelector('#home-example-map');
+  const previewContainer = document.querySelector('#home-preview-example-map');
+  const loading = document.querySelector('#home-map-loading');
+  if (!container) return;
+  try {
+    const response = await fetch(`/api/tracks/${HOME_EXAMPLE_TRACK_ID}`, { headers: { accept: 'application/json' } });
+    const payload = await response.json();
+    if (!response.ok) throw new Error('Track unavailable');
+    const track = payload.data.analysis;
+    const coordinates = track.points.map((point) => [point.lat, point.lon]);
+    [container, previewContainer].filter(Boolean).forEach((mapContainer) => {
+      const homeMap = L.map(mapContainer, { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(homeMap);
+      const outline = L.polyline(coordinates, { color: '#fafbf7', weight: 8, opacity: 0.92, interactive: false }).addTo(homeMap);
+      L.polyline(coordinates, { color: '#173d31', weight: 4, opacity: 0.96, interactive: false }).addTo(homeMap);
+      (track.pointsOfInterest || []).slice(0, 14).forEach((point) => {
+        L.circleMarker([point.lat, point.lon], { radius: 4, weight: 2, color: '#fafbf7', fillColor: '#e36b32', fillOpacity: 1, interactive: false }).addTo(homeMap);
+      });
+      homeMap.fitBounds(outline.getBounds(), { padding: [28, 28] });
+    });
+    loading.hidden = true;
+  } catch {
+    loading.textContent = 'Карта временно недоступна';
+  }
 }
 
 function nearestPoint(latlng) {
@@ -1374,12 +1406,13 @@ if (isMyTracksPage) {
   trackQueryInput.value = new URLSearchParams(window.location.search).get('query') || '';
   trackSearchClear.hidden = !trackQueryInput.value;
 }
-if (!isMyTracksPage) {
+if (!isMyTracksPage && !isHomePage) {
   initMap();
   setColorMode('map', mapColorMode);
   setColorMode('profile', profileColorMode);
 }
+if (isHomePage) initHomeExampleMap();
 restoreSession();
 const publicTrackMatch = window.location.pathname.match(/^\/tracks\/([a-f\d]{24})$/i);
 if (publicTrackMatch) loadPublicTrack(publicTrackMatch[1]);
-else if (!isMyTracksPage) renderTrack(createDemoTrack());
+else if (!isMyTracksPage && !isHomePage) renderTrack(createDemoTrack());
