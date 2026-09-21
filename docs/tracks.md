@@ -26,8 +26,9 @@ edit flow. The user menu links to `/my-tracks`.
 - Failed external enrichment keeps the uploaded track with `analysisStatus: failed`.
   Its owner can retry; its original GPX remains publicly downloadable by id, while
   the analysis page is not considered successfully published until analysis succeeds.
-- Track cards show name, upload date, core metrics, and a normalized route-line SVG
-  preview without a map layer. A map-backed preview is a later enhancement.
+- Track cards show name, upload date, compact external-service links, core metrics,
+  and a normalized route-line SVG preview without a map layer. A map-backed preview
+  is a later enhancement.
 
 ## Data and storage
 

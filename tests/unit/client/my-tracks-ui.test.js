@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, formatTrackDuration, formatTrackMetrics, previewPolyline, trackStatusLabel } from '../../../src/client/my-tracks-ui.js';
+import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, createTrackCard, formatTrackDuration, formatTrackMetrics, previewPolyline, trackStatusLabel } from '../../../src/client/my-tracks-ui.js';
 
 describe('my tracks UI', () => {
   it('formats processing and terminal statuses in friendly Russian', () => {
@@ -52,6 +52,33 @@ describe('my tracks UI', () => {
     });
     expect(bulkSelectionState({ total: 3, selected: 3 })).toEqual({
       allSelected: true, selectLabel: 'Отменить выбор', deleteLabel: 'Удалить (3)', deleteDisabled: false,
+    });
+  });
+
+  it('places compact external-service icons beside the track date', () => {
+    const documentRef = {
+      createElement: (tagName) => ({
+        tagName,
+        dataset: {},
+        attributes: {},
+        setAttribute(name, value) { this.attributes[name] = value; },
+        append(...children) { this.children = children; },
+        replaceChildren(...children) { this.children = children; },
+      }),
+    };
+    const card = createTrackCard({
+      id: 'track-1', title: 'Ride', status: 'READY', createdAt: '2026-09-17T10:00:00.000Z',
+      url: '/tracks/track-1', downloadUrl: '/api/tracks/track-1/download',
+      externalLinks: { strava: 'https://www.strava.com/routes/1' },
+    }, documentRef);
+
+    const dateRow = card.children[1].children[3];
+    expect(dateRow.className).toBe('track-card-date-row');
+    expect(dateRow.children[0].tagName).toBe('time');
+    expect(dateRow.children[1].children[0]).toMatchObject({
+      href: 'https://www.strava.com/routes/1',
+      target: '_blank',
+      title: 'Открыть трек в Strava',
     });
   });
 });

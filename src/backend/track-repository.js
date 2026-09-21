@@ -75,7 +75,7 @@ export function createTrackRepository(tracks) {
       }
       return tracks.find(filter, {
         projection: {
-          title: 1, createdAt: 1, analysisStatus: 1, analysisStep: 1,
+          title: 1, createdAt: 1, externalLinks: 1, analysisStatus: 1, analysisStep: 1,
           'analysis.distanceKm': 1, 'analysis.ascentM': 1, 'analysis.descentM': 1,
           'analysis.effectiveSpeedKmh': 1,
           'analysis.estimatedDurationMs': 1, 'analysis.preview': 1,

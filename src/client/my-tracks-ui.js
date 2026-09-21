@@ -1,3 +1,5 @@
+import { renderExternalTrackLinks } from './external-track-links-ui.js';
+
 const STATUS_LABELS = {
   READY: 'Готов',
   FAILED: 'Нужен повторный анализ',
@@ -91,7 +93,13 @@ export function createTrackCard(track, documentRef = document) {
   date.className = 'track-card-date';
   date.dateTime = track.createdAt;
   date.textContent = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(track.createdAt));
-  body.append(badge, title, metrics, date);
+  const dateRow = documentRef.createElement('div');
+  dateRow.className = 'track-card-date-row';
+  const externalLinks = documentRef.createElement('span');
+  externalLinks.className = 'track-card-external-links';
+  renderExternalTrackLinks(externalLinks, track.externalLinks, documentRef, { compact: true });
+  dateRow.append(date, externalLinks);
+  body.append(badge, title, metrics, dateRow);
 
   const actions = documentRef.createElement('div');
   actions.className = 'track-card-actions';

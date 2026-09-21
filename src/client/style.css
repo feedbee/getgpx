@@ -500,6 +500,14 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:600; }
 .track-card-title:hover { text-decoration:underline; text-decoration-thickness:1px; text-underline-offset:3px; }
 .track-card-metrics { margin:0; color:var(--muted); font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; }
 .track-card-date { color:var(--muted); font-size:11px; }
+.track-card-date-row { min-height:16px; display:flex; align-items:center; gap:10px; }
+.track-card-external-links { display:flex; align-items:center; gap:5px; }
+.track-card-external-links[hidden] { display:none; }
+.external-track-link-compact { width:16px; min-height:16px; padding:0; border:0; border-radius:4px; }
+.external-track-link-compact > span:first-child { width:16px; height:16px; border:0; border-radius:4px; }
+.external-track-link-compact img { filter:grayscale(1); transition:filter .15s ease; }
+.external-track-link-compact:hover img,.external-track-link-compact:focus-visible img { filter:grayscale(0); }
+.external-track-link-compact:hover,.external-track-link-compact:focus-visible { outline:1px solid var(--ink); outline-offset:2px; background:transparent; }
 .track-card-actions { display:flex; align-items:center; gap:6px; }
 .track-card-action,.track-card-download { width:44px; height:44px; display:grid; place-items:center; padding:0; border:1px solid transparent; border-radius:50%; background:var(--white); color:var(--ink); cursor:pointer; text-decoration:none; }
 .track-card-action svg,.track-card-download svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }

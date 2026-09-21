@@ -111,7 +111,7 @@ describe('track repository', () => {
 
     expect(collection.find).toHaveBeenCalledWith({ ownerId, normalizedName: { $regex: 'вечер\\.\\*' }, $or: [
       { createdAt: { $lt: before.createdAt } }, { createdAt: before.createdAt, _id: { $lt: before.id } },
-    ] }, expect.objectContaining({ projection: expect.objectContaining({ title: 1, 'analysis.preview': 1 }) }));
+    ] }, expect.objectContaining({ projection: expect.objectContaining({ title: 1, externalLinks: 1, 'analysis.preview': 1 }) }));
     const cursor = collection.find.mock.results[0].value;
     expect(cursor.sort).toHaveBeenCalledWith({ createdAt: -1, _id: -1 });
     expect(cursor.limit).toHaveBeenCalledWith(25);

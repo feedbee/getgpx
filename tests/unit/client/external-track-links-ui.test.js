@@ -52,4 +52,30 @@ describe('external track links', () => {
     });
     expect(container.children[0].children[0].children[0].src).toContain('ride-with-gps.jpg');
   });
+
+  it('renders icon-only links for compact track-card metadata', () => {
+    const container = { hidden: true, replaceChildren: (...children) => { container.children = children; } };
+    const documentRef = {
+      createElement: (tagName) => ({
+        tagName,
+        attributes: {},
+        setAttribute(name, value) { this.attributes[name] = value; },
+        append(...children) { this.children = children; },
+      }),
+    };
+
+    renderExternalTrackLinks(container, {
+      komoot: 'https://www.komoot.com/tour/1',
+      strava: 'https://www.strava.com/routes/2',
+    }, documentRef, { compact: true });
+
+    expect(container.children).toHaveLength(2);
+    expect(container.children[0].className).toContain('external-track-link-compact');
+    expect(container.children[0].children).toHaveLength(1);
+    expect(container.children[0]).toMatchObject({
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      title: 'Открыть трек в Komoot',
+    });
+  });
 });

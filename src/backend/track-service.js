@@ -118,6 +118,7 @@ function trackCard(track) {
     speedKmh: track.analysis?.effectiveSpeedKmh ?? null,
     estimatedDurationMs: track.analysis?.estimatedDurationMs ?? null,
     preview: track.analysis?.preview ?? null,
+    externalLinks: track.externalLinks || {},
     url: `/tracks/${id}`,
     downloadUrl: `/api/tracks/${id}/download`,
   };

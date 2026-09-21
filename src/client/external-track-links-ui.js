@@ -32,7 +32,7 @@ export function availableExternalTrackLinks(links = {}) {
     : []);
 }
 
-export function renderExternalTrackLinks(container, links, documentRef = null) {
+export function renderExternalTrackLinks(container, links, documentRef = null, { compact = false } = {}) {
   const available = availableExternalTrackLinks(links);
   if (!available.length) {
     container.replaceChildren();
@@ -42,7 +42,7 @@ export function renderExternalTrackLinks(container, links, documentRef = null) {
   const ownerDocument = documentRef || document;
   const anchors = available.map((service) => {
     const anchor = ownerDocument.createElement('a');
-    anchor.className = `external-track-link external-track-link-${service.id}`;
+    anchor.className = `external-track-link external-track-link-${service.id}${compact ? ' external-track-link-compact' : ''}`;
     anchor.href = service.url;
     anchor.target = '_blank';
     anchor.rel = 'noopener noreferrer';
@@ -57,9 +57,12 @@ export function renderExternalTrackLinks(container, links, documentRef = null) {
     image.width = 30;
     image.height = 30;
     mark.append(image);
-    const label = ownerDocument.createElement('span');
-    label.textContent = service.label;
-    anchor.append(mark, label);
+    if (compact) anchor.append(mark);
+    else {
+      const label = ownerDocument.createElement('span');
+      label.textContent = service.label;
+      anchor.append(mark, label);
+    }
     return anchor;
   });
   container.replaceChildren(...anchors);
