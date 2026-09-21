@@ -309,6 +309,20 @@ export function createTrackService({
       return true;
     },
 
+    async deleteTracks({ trackIds, ownerId }) {
+      const deletedIds = [];
+      for (const trackId of trackIds) {
+        const track = await trackRepository.deleteOwned(trackId, ownerId);
+        if (!track) continue;
+        await Promise.allSettled([
+          gpxFileStore.delete(track.sourceFileId),
+          track.replacement?.sourceFileId ? gpxFileStore.delete(track.replacement.sourceFileId) : Promise.resolve(),
+        ]);
+        deletedIds.push(trackId);
+      }
+      return deletedIds;
+    },
+
     async listMyTracks({ ownerId, query = '', cursor = '' }) {
       const tracks = await trackRepository.listOwned({ ownerId, query, before: decodeCursor(cursor), limit: MY_TRACKS_PAGE_SIZE });
       const hasMore = tracks.length > MY_TRACKS_PAGE_SIZE;

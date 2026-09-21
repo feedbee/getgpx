@@ -27,6 +27,24 @@ export function cancelTrackSearch({ input, history, reload }) {
   reload({ reset: true });
 }
 
+export function bulkDeleteSummary(tracks) {
+  return {
+    count: tracks.length,
+    titles: tracks.slice(0, 10).map((track) => track.title),
+    remaining: Math.max(0, tracks.length - 10),
+  };
+}
+
+export function bulkSelectionState({ total, selected }) {
+  const allSelected = total > 0 && selected === total;
+  return {
+    allSelected,
+    selectLabel: allSelected ? 'Отменить выбор' : 'Выбрать всё',
+    deleteLabel: selected ? `Удалить (${selected})` : 'Удалить',
+    deleteDisabled: selected === 0,
+  };
+}
+
 function metric(value, suffix, digits = 0) {
   return Number.isFinite(value) ? `${value.toLocaleString('ru-RU', { maximumFractionDigits: digits })} ${suffix}` : '—';
 }
@@ -77,6 +95,12 @@ export function createTrackCard(track, documentRef = document) {
 
   const actions = documentRef.createElement('div');
   actions.className = 'track-card-actions';
+  const select = documentRef.createElement('input');
+  select.className = 'track-card-select';
+  select.type = 'checkbox';
+  select.value = track.id;
+  select.dataset.trackSelect = '';
+  select.setAttribute('aria-label', `Выбрать ${track.title}`);
   const edit = documentRef.createElement('button');
   edit.className = 'track-card-action';
   edit.type = 'button';
@@ -97,7 +121,7 @@ export function createTrackCard(track, documentRef = document) {
   download.setAttribute('download', '');
   download.setAttribute('aria-label', `Скачать ${track.title}`);
   download.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4-4 4 4 4-4M5 20h14"/></svg>';
-  actions.append(edit, remove, download);
+  actions.append(select, edit, remove, download);
   article.append(previewLink, body, actions);
   return article;
 }

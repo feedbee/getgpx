@@ -319,4 +319,19 @@ describe('track service', () => {
     expect(gpxFileStore.delete).toHaveBeenCalledWith('active');
     expect(gpxFileStore.delete).toHaveBeenCalledWith('pending');
   });
+
+  it('deletes multiple owned tracks and reports only records that existed', async () => {
+    const { service, trackRepository, gpxFileStore } = dependencies();
+    trackRepository.deleteOwned
+      .mockResolvedValueOnce({ sourceFileId: 'active-1' })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ sourceFileId: 'active-3', replacement: { sourceFileId: 'pending-3' } });
+
+    await expect(service.deleteTracks({ trackIds: ['track-1', 'track-2', 'track-3'], ownerId: 'owner-1' }))
+      .resolves.toEqual(['track-1', 'track-3']);
+
+    expect(gpxFileStore.delete).toHaveBeenCalledWith('active-1');
+    expect(gpxFileStore.delete).toHaveBeenCalledWith('active-3');
+    expect(gpxFileStore.delete).toHaveBeenCalledWith('pending-3');
+  });
 });

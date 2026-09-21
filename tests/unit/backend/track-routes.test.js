@@ -148,4 +148,36 @@ describe('track HTTP handlers', () => {
     expect(validResponse.statusCode).toBe(200);
     expect(invalidResponse.statusCode).toBe(422);
   });
+
+  it('validates and deletes a unique list of owned track ids', async () => {
+    const ownerId = new ObjectId();
+    const firstId = new ObjectId();
+    const secondId = new ObjectId();
+    const trackService = { deleteTracks: vi.fn().mockResolvedValue([firstId, secondId]) };
+    const handlers = createTrackHandlers(trackService, { getUser: vi.fn().mockResolvedValue({ id: ownerId.toString() }) });
+    const source = request();
+    source.body = { ids: [firstId.toString(), firstId.toString(), secondId.toString()] };
+    const result = response();
+
+    await handlers.removeMany(source, result);
+
+    expect(trackService.deleteTracks).toHaveBeenCalledWith({ ownerId, trackIds: [firstId, secondId] });
+    expect(result.body).toEqual({ data: { deletedIds: [firstId.toString(), secondId.toString()] } });
+  });
+
+  it('rejects empty, oversized, or malformed bulk deletion input', async () => {
+    const ownerId = new ObjectId();
+    const trackService = { deleteTracks: vi.fn() };
+    const handlers = createTrackHandlers(trackService, { getUser: vi.fn().mockResolvedValue({ id: ownerId.toString() }) });
+    const invalidBodies = [{ ids: [] }, { ids: Array.from({ length: 101 }, () => new ObjectId().toString()) }, { ids: ['not-an-id'] }];
+
+    for (const body of invalidBodies) {
+      const source = request();
+      source.body = body;
+      const result = response();
+      await handlers.removeMany(source, result);
+      expect(result.statusCode).toBe(422);
+    }
+    expect(trackService.deleteTracks).not.toHaveBeenCalled();
+  });
 });

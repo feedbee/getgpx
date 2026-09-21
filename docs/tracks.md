@@ -98,6 +98,7 @@ The parser must be bounded and must not permit XML external entities.
 - `POST /api/tracks/:id/retry-analysis` — owner-only retry after enrichment failure.
 - `GET /api/tracks/:id/download` — public original GPX download with its filename.
 - `DELETE /api/tracks/:id` — owner-only permanent deletion after UI confirmation.
+- `DELETE /api/tracks` — owner-only bulk deletion of 1–100 track ids after a single UI confirmation.
 
 The upload request uses `application/gpx+xml` and a percent-encoded `X-GPX-Filename`
 header. `GET /api/tracks/:id/status` is owner-only and exposes the `QUEUED`, `PARSING`,

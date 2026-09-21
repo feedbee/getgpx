@@ -130,6 +130,21 @@ export function createTrackHandlers(trackService, authService) {
       return deleted ? send(response, 200, { data: { deleted: true } }) : error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
     },
 
+    async removeMany(request, response) {
+      const ownerId = await authenticatedOwner(request, response);
+      if (!ownerId) return;
+      if (!Array.isArray(request.body?.ids) || request.body.ids.length < 1 || request.body.ids.length > 100) {
+        return error(response, 422, 'INVALID_TRACK_IDS', 'Выберите от 1 до 100 треков.');
+      }
+      const uniqueIds = [...new Set(request.body.ids)];
+      const trackIds = uniqueIds.map(objectId);
+      if (trackIds.some((trackId) => !trackId)) {
+        return error(response, 422, 'INVALID_TRACK_IDS', 'Список треков содержит некорректный идентификатор.');
+      }
+      const deletedIds = await trackService.deleteTracks({ trackIds, ownerId });
+      return send(response, 200, { data: { deletedIds: deletedIds.map(String) } });
+    },
+
     async download(request, response) {
       const trackId = objectId(request.params.id);
       if (!trackId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
@@ -202,6 +217,7 @@ export function createTrackRouter(trackService, authService) {
   const router = Router();
   router.post('/api/tracks', handlers.upload);
   router.get('/api/tracks/mine', handlers.mine);
+  router.delete('/api/tracks', express.json({ limit: '16kb' }), handlers.removeMany);
   router.get('/api/tracks/:id/status', handlers.status);
   router.get('/api/tracks/:id/manage', handlers.management);
   router.patch('/api/tracks/:id', express.json({ limit: '16kb' }), handlers.update);

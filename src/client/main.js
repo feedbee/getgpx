@@ -3,7 +3,7 @@ import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { renderAuthControl } from './auth-ui.js';
 import { HOME_EXAMPLE_TRACK_ID, renderHomePage } from './home-page-ui.js';
-import { cancelTrackSearch, createTrackCard } from './my-tracks-ui.js';
+import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, createTrackCard } from './my-tracks-ui.js';
 import { closeOverflowMenuOnOutsideClick } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js';
@@ -53,6 +53,7 @@ let publicTrackData = null;
 let publicTrackOwnershipVerified = false;
 let managedTrackId = null;
 let managedTrackTitle = '';
+let tracksPendingDeletion = [];
 
 app.innerHTML = `
   <header class="topbar">
@@ -77,6 +78,7 @@ app.innerHTML = `
       <label class="my-tracks-upload" data-auth-upload for="gpx-file" hidden><span aria-hidden="true">＋</span> Загрузить GPX</label>
     </header>
     <form class="track-search" id="track-search" role="search"><label for="track-query">Поиск по названию</label><div class="track-search-controls"><span class="track-search-input"><input id="track-query" name="query" type="search" maxlength="100" placeholder="Например, вечерний гравий" autocomplete="off" /><button class="track-search-clear" id="track-search-clear" type="button" aria-label="Отменить поиск" title="Отменить поиск" hidden>×</button></span><button class="track-search-submit" type="submit">Найти</button></div></form>
+    <div class="track-list-toolbar"><button class="select-all-tracks" id="select-all-tracks" type="button" disabled>Выбрать всё</button><button class="bulk-delete-tracks" id="bulk-delete-tracks" type="button" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg><span>Удалить</span></button></div>
     <p class="my-tracks-message" id="my-tracks-message" role="status">Войдите, чтобы увидеть свои треки.</p>
     <section class="track-list" id="track-list" aria-live="polite"></section>
     <button class="load-more-tracks" id="load-more-tracks" type="button" hidden>Показать ещё</button>
@@ -179,8 +181,9 @@ app.innerHTML = `
   <dialog class="confirm-delete-dialog" id="confirm-delete-dialog">
     <form method="dialog">
       <div class="confirm-delete-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg></div>
-      <div><p class="route-kicker">УДАЛЕНИЕ ТРЕКА</p><h2>Удалить трек?</h2></div>
-      <p>«<strong id="delete-track-name"></strong>» и исходный GPX будут удалены без возможности восстановления.</p>
+      <div><p class="route-kicker">УДАЛЕНИЕ ТРЕКОВ</p><h2 id="delete-dialog-title">Удалить трек?</h2></div>
+      <p id="delete-track-description"></p>
+      <ul class="delete-track-list" id="delete-track-list"></ul>
       <p class="form-error" id="delete-track-error" hidden></p>
       <div class="confirm-delete-actions"><button type="button" id="cancel-track-delete">Отмена</button><button class="confirm-delete-button" type="button" id="confirm-track-delete">Удалить</button></div>
     </form>
@@ -257,6 +260,7 @@ async function loadMyTracks({ reset = false } = {}) {
   if (reset) {
     myTracksCursor = null;
     list.replaceChildren();
+    updateBulkDeleteButton();
   }
   myTracksLoading = true;
   message.textContent = 'Загружаем треки…';
@@ -271,6 +275,7 @@ async function loadMyTracks({ reset = false } = {}) {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload?.error?.message || 'Не удалось загрузить список треков.');
     payload.data.items.forEach((track) => list.append(createTrackCard(track)));
+    updateBulkDeleteButton();
     myTracksCursor = payload.data.nextCursor;
     message.textContent = list.children.length ? '' : (query ? 'По вашему запросу ничего не найдено.' : 'Здесь пока нет треков. Загрузите первый GPX.');
     message.hidden = Boolean(list.children.length);
@@ -297,7 +302,49 @@ function openTrackEditor({ id, title, speedKmh }) {
 function openTrackDeleteConfirmation({ id, title }) {
   managedTrackId = id;
   managedTrackTitle = title;
-  document.querySelector('#delete-track-name').textContent = title;
+  openTracksDeleteConfirmation([{ id, title }]);
+}
+
+function selectedTrackCards() {
+  return [...document.querySelectorAll('[data-track-select]:checked')].map((checkbox) => {
+    const card = checkbox.closest('.track-card');
+    return { id: card.dataset.trackId, title: card.dataset.trackTitle };
+  });
+}
+
+function updateBulkDeleteButton() {
+  const checkboxes = [...document.querySelectorAll('[data-track-select]')];
+  const selectedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+  const state = bulkSelectionState({ total: checkboxes.length, selected: selectedCount });
+  const selectAll = document.querySelector('#select-all-tracks');
+  const remove = document.querySelector('#bulk-delete-tracks');
+  selectAll.disabled = checkboxes.length === 0;
+  selectAll.textContent = state.selectLabel;
+  selectAll.setAttribute('aria-pressed', String(state.allSelected));
+  remove.disabled = state.deleteDisabled;
+  remove.querySelector('span').textContent = state.deleteLabel;
+  checkboxes.forEach((checkbox) => checkbox.closest('.track-card').classList.toggle('is-selected', checkbox.checked));
+}
+
+function openTracksDeleteConfirmation(tracks) {
+  tracksPendingDeletion = tracks;
+  const summary = bulkDeleteSummary(tracks);
+  document.querySelector('#delete-dialog-title').textContent = summary.count === 1
+    ? 'Удалить трек?' : `Удалить ${summary.count} треков?`;
+  document.querySelector('#delete-track-description').textContent = summary.count === 1
+    ? 'Трек и исходный GPX будут удалены без возможности восстановления.'
+    : `${summary.count} треков и их исходные GPX будут удалены без возможности восстановления:`;
+  const list = document.querySelector('#delete-track-list');
+  list.replaceChildren(...summary.titles.map((trackTitle) => {
+    const item = document.createElement('li');
+    item.textContent = trackTitle;
+    return item;
+  }));
+  if (summary.remaining) {
+    const item = document.createElement('li');
+    item.textContent = `А также ещё ${summary.remaining} других треков`;
+    list.append(item);
+  }
   document.querySelector('#delete-track-error').hidden = true;
   document.querySelector('#confirm-track-delete').disabled = false;
   document.querySelector('#confirm-delete-dialog').showModal();
@@ -1387,6 +1434,18 @@ trackSearchClear.addEventListener('click', () => {
   trackQueryInput.focus();
 });
 document.querySelector('#load-more-tracks').addEventListener('click', () => loadMyTracks());
+document.querySelector('#select-all-tracks').addEventListener('click', () => {
+  const checkboxes = [...document.querySelectorAll('[data-track-select]')];
+  const select = checkboxes.some((checkbox) => !checkbox.checked);
+  checkboxes.forEach((checkbox) => { checkbox.checked = select; });
+  updateBulkDeleteButton();
+});
+document.querySelector('#bulk-delete-tracks').addEventListener('click', () => {
+  const tracks = selectedTrackCards();
+  if (!tracks.length) return;
+  managedTrackId = null;
+  openTracksDeleteConfirmation(tracks);
+});
 document.querySelector('#edit-track').addEventListener('click', () => openTrackEditor({
   id: publicTrackId,
   title: document.querySelector('#edit-track-title').value,
@@ -1444,7 +1503,14 @@ document.querySelector('#confirm-track-delete').addEventListener('click', async 
   const error = document.querySelector('#delete-track-error');
   button.disabled = true;
   error.hidden = true;
-  const response = await fetch(`/api/tracks/${managedTrackId}`, { method: 'DELETE', headers: { accept: 'application/json' } });
+  const isBulkDelete = managedTrackId === null;
+  const response = await fetch(isBulkDelete ? '/api/tracks' : `/api/tracks/${managedTrackId}`, {
+    method: 'DELETE',
+    headers: isBulkDelete
+      ? { accept: 'application/json', 'content-type': 'application/json' }
+      : { accept: 'application/json' },
+    body: isBulkDelete ? JSON.stringify({ ids: tracksPendingDeletion.map((track) => track.id) }) : undefined,
+  });
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
     error.textContent = payload?.error?.message || 'Не удалось удалить трек.';
@@ -1464,6 +1530,9 @@ document.querySelector('#track-list').addEventListener('click', (event) => {
   const track = { id: card.dataset.trackId, title: card.dataset.trackTitle, speedKmh: Number(card.dataset.trackSpeed) };
   if (action.dataset.trackAction === 'edit') openTrackEditor(track);
   if (action.dataset.trackAction === 'delete') openTrackDeleteConfirmation(track);
+});
+document.querySelector('#track-list').addEventListener('change', (event) => {
+  if (event.target.matches('[data-track-select]')) updateBulkDeleteButton();
 });
 
 if (isMyTracksPage) {

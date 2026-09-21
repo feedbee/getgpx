@@ -521,10 +521,21 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:600; }
 .track-search .track-search-submit { min-height:44px; border-radius:var(--control-radius); background:var(--primary); }
 .track-search .track-search-submit:hover,.load-more-tracks:hover { border-color:var(--primary-hover); background:var(--primary-hover); }
 .track-search .track-search-submit:focus-visible,.load-more-tracks:focus-visible { border-color:var(--primary-hover); background:var(--primary-hover); outline:2px solid var(--ink); outline-offset:2px; }
+.track-list-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:16px; padding:18px 0 4px; }
+.select-all-tracks { padding:6px 0; border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:12px; font-weight:700; text-decoration:underline; text-decoration-thickness:1px; text-underline-offset:3px; }
+.select-all-tracks:hover,.select-all-tracks:focus-visible { color:var(--ink); outline:none; }
+.select-all-tracks:disabled { color:var(--muted); cursor:not-allowed; opacity:.6; }
+.bulk-delete-tracks { min-height:42px; display:inline-flex; align-items:center; gap:8px; padding:0 16px; border:1px solid var(--line); border-radius:9px; background:var(--white); color:var(--danger); cursor:pointer; font-size:12px; font-weight:700; }
+.bulk-delete-tracks svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.bulk-delete-tracks:hover,.bulk-delete-tracks:focus-visible { border-color:var(--danger); background:#f2ded9; outline:2px solid var(--ink); outline-offset:2px; }
+.bulk-delete-tracks:disabled { border-color:var(--line); background:transparent; color:var(--muted); cursor:not-allowed; opacity:.65; outline:none; }
 .track-card { grid-template-columns:104px minmax(0,1fr) auto; min-height:132px; gap:20px; }
+.track-card.is-selected { background:rgba(217,198,157,.34); }
 .track-preview { width:104px; height:104px; border-radius:10px; }
 .track-status { border-radius:6px; }
 .track-card-action,.track-card-download { border:1px solid var(--line); border-radius:10px; background:transparent; }
+.track-card-select { width:20px; height:20px; margin:0 8px 0 0; accent-color:var(--primary); cursor:pointer; }
+.track-card-select:focus-visible { outline:2px solid var(--ink); outline-offset:3px; }
 .track-card-action:hover,.track-card-download:hover { border-color:var(--ink); background:var(--white); }
 .track-card-action:focus-visible,.track-card-download:focus-visible { border-color:var(--ink); background:var(--white); outline:2px solid var(--ink); outline-offset:2px; }
 
@@ -546,6 +557,8 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:600; }
 .confirm-delete-dialog h2 { margin:0; font:600 28px/1.1 'Sora',sans-serif; letter-spacing:-.035em; }
 .confirm-delete-dialog form > p { grid-column:1 / -1; margin:4px 0 0; color:var(--muted); font-size:13px; line-height:1.55; }
 .confirm-delete-dialog form > p strong { color:var(--ink); }
+.delete-track-list { grid-column:1 / -1; max-height:230px; margin:0; padding-left:22px; overflow:auto; color:var(--ink); font-size:13px; line-height:1.5; }
+.delete-track-list li + li { margin-top:5px; }
 .confirm-delete-icon { width:44px; height:44px; display:grid; place-items:center; border-radius:10px; background:#f2ded9; color:var(--danger); }
 .confirm-delete-icon svg { width:21px; height:21px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
 .confirm-delete-actions { grid-column:1 / -1; display:flex; justify-content:flex-end; gap:8px; margin-top:8px; }

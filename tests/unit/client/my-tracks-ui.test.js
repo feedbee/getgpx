@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cancelTrackSearch, formatTrackDuration, formatTrackMetrics, previewPolyline, trackStatusLabel } from '../../../src/client/my-tracks-ui.js';
+import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, formatTrackDuration, formatTrackMetrics, previewPolyline, trackStatusLabel } from '../../../src/client/my-tracks-ui.js';
 
 describe('my tracks UI', () => {
   it('formats processing and terminal statuses in friendly Russian', () => {
@@ -34,5 +34,24 @@ describe('my tracks UI', () => {
     expect(input.value).toBe('');
     expect(history.replaceState).toHaveBeenCalledWith(null, '', '/my-tracks');
     expect(reload).toHaveBeenCalledWith({ reset: true });
+  });
+
+  it('summarizes the first ten selected tracks and the remaining count', () => {
+    const tracks = Array.from({ length: 13 }, (_, index) => ({ id: `track-${index + 1}`, title: `Трек ${index + 1}` }));
+
+    expect(bulkDeleteSummary(tracks)).toEqual({
+      count: 13,
+      titles: tracks.slice(0, 10).map((track) => track.title),
+      remaining: 3,
+    });
+  });
+
+  it('switches the bulk action between selecting and clearing all loaded tracks', () => {
+    expect(bulkSelectionState({ total: 3, selected: 0 })).toEqual({
+      allSelected: false, selectLabel: 'Выбрать всё', deleteLabel: 'Удалить', deleteDisabled: true,
+    });
+    expect(bulkSelectionState({ total: 3, selected: 3 })).toEqual({
+      allSelected: true, selectLabel: 'Отменить выбор', deleteLabel: 'Удалить (3)', deleteDisabled: false,
+    });
   });
 });
