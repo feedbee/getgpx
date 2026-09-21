@@ -100,6 +100,7 @@ function publicTrack(track, uploader = null) {
     analysisNote,
     analysisSources,
     analysis: track.analysis,
+    externalLinks: track.externalLinks || {},
     createdAt: track.createdAt?.toISOString() || null,
     uploader,
     downloadUrl: `/api/tracks/${id}/download`,
@@ -269,6 +270,7 @@ export function createTrackService({
       return {
         id: track._id.toString(), title: track.title,
         speedKmh: track.analysis?.effectiveSpeedKmh ?? null,
+        externalLinks: track.externalLinks || {},
         analysis: statusOf(track),
         replacement: track.replacement ? statusOf(track) : null,
         canRetry: track.replacement
@@ -281,11 +283,11 @@ export function createTrackService({
       };
     },
 
-    async updateDetails({ trackId, ownerId, title, speedKmh }) {
+    async updateDetails({ trackId, ownerId, title, speedKmh, externalLinks }) {
       const track = await trackRepository.findOwnedById(trackId, ownerId);
       if (!track?.analysis) return null;
       const updated = await trackRepository.updateDetails({
-        trackId, ownerId, title, speedKmh,
+        trackId, ownerId, title, speedKmh, externalLinks,
         estimatedDurationMs: (track.analysis.distanceKm / speedKmh) * 3_600_000,
       });
       if (!updated) return null;

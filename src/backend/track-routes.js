@@ -4,6 +4,7 @@ import { sessionTokenFromRequest } from './auth.js';
 import { GpxFileTooLargeError } from './gpx-file-store.js';
 import { TRACK_UPLOAD_LIMITS } from './track-repository.js';
 import { InvalidTrackCursorError, TrackLimitReachedError } from './track-service.js';
+import { normalizeExternalTrackLinks } from './external-track-links.js';
 
 const GPX_CONTENT_TYPES = new Set(['application/gpx+xml', 'application/xml', 'text/xml']);
 
@@ -101,9 +102,11 @@ export function createTrackHandlers(trackService, authService) {
       if (!trackId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
       const title = typeof request.body?.title === 'string' ? request.body.title.normalize('NFKC').trim() : '';
       const speedKmh = Number(request.body?.speedKmh);
+      const externalLinks = normalizeExternalTrackLinks(request.body?.externalLinks);
       if (!title || title.length > 200) return error(response, 422, 'INVALID_TRACK_TITLE', 'Название должно содержать от 1 до 200 символов.');
       if (!Number.isFinite(speedKmh) || speedKmh < 1 || speedKmh > 50) return error(response, 422, 'INVALID_TRACK_SPEED', 'Скорость должна быть от 1 до 50 км/ч.');
-      const track = await trackService.updateDetails({ trackId, ownerId, title, speedKmh });
+      if (!externalLinks) return error(response, 422, 'INVALID_EXTERNAL_LINKS', 'Проверьте ссылки на внешние сервисы. Допустимы только HTTPS-ссылки на соответствующий сервис.');
+      const track = await trackService.updateDetails({ trackId, ownerId, title, speedKmh, externalLinks });
       return track ? send(response, 200, { data: track }) : error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
     },
 

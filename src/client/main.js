@@ -7,6 +7,7 @@ import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, createTrackCa
 import { closeOverflowMenuOnOutsideClick } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js';
+import { availableExternalTrackLinks, renderExternalTrackLinks } from './external-track-links-ui.js';
 import { analyzeTrack } from './domain/gpx.js';
 import { createDemoTrack } from './domain/demo.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
@@ -114,8 +115,12 @@ app.innerHTML = `
     <div class="route-workspace">
       <div class="route-content">
         <nav class="section-nav route-tabs" aria-label="Содержание страницы">
-          <a href="#points-of-interest" id="poi-nav-link" hidden>Точки интереса</a><a href="#details">Профиль высот</a><a href="#way-types">Информация о трассе</a><a href="#climbs">Подъёмы и спуски</a>
+          <a href="#external-track-links-section" id="external-track-links-nav" hidden>В сервисах</a><a href="#points-of-interest" id="poi-nav-link" hidden>Точки интереса</a><a href="#details">Профиль высот</a><a href="#way-types">Информация о трассе</a><a href="#climbs">Подъёмы и спуски</a>
         </nav>
+        <section class="content-section external-track-links-section" id="external-track-links-section" aria-labelledby="external-track-links-title" hidden>
+          <div class="compact-heading"><h2 id="external-track-links-title">Трек в сервисах</h2></div>
+          <div class="external-track-links" id="external-track-links"></div>
+        </section>
         <section class="content-section poi-section" id="points-of-interest" aria-labelledby="poi-title" hidden>
           <div class="compact-heading"><h2 id="poi-title">Точки интереса</h2><p id="poi-count"></p></div>
           <div class="analysis-card poi-list" id="poi-list"></div>
@@ -173,6 +178,12 @@ app.innerHTML = `
       <p class="route-kicker">РЕДАКТИРОВАНИЕ</p><h2>Параметры трека</h2>
       <label>Название<input id="edit-track-title" name="title" required maxlength="200" /></label>
       <label>Расчётная скорость, км/ч<input id="edit-track-speed" name="speedKmh" type="number" min="1" max="50" step="0.1" required /></label>
+      <fieldset class="external-links-fields"><legend>Ссылки на трек в других сервисах</legend>
+        <label>Komoot<input id="edit-track-komoot" name="komoot" type="url" inputmode="url" placeholder="https://www.komoot.com/tour/…" /></label>
+        <label>Strava<input id="edit-track-strava" name="strava" type="url" inputmode="url" placeholder="https://www.strava.com/routes/…" /></label>
+        <label>Garmin<input id="edit-track-garmin" name="garmin" type="url" inputmode="url" placeholder="https://connect.garmin.com/modern/course/…" /></label>
+        <label>Ride with GPS<input id="edit-track-ride-with-gps" name="rideWithGps" type="url" inputmode="url" placeholder="https://ridewithgps.com/routes/…" /></label>
+      </fieldset>
       <label class="replace-gpx-control" for="replacement-gpx">Заменить исходный GPX…</label>
       <p class="form-error" id="edit-track-error" hidden></p>
       <div><button type="button" id="cancel-track-edit">Отмена</button><button type="submit">Сохранить</button></div>
@@ -240,6 +251,7 @@ async function loadTrackManagement(trackId) {
   document.querySelector('#owner-track-actions').hidden = false;
   document.querySelector('#edit-track-title').value = data.title;
   document.querySelector('#edit-track-speed').value = data.speedKmh || 20;
+  setExternalLinkFields(data.externalLinks);
   document.querySelectorAll('.source-retry').forEach((button) => {
     button.hidden = !data.canRetry || button.dataset.retrySource !== data.retrySource;
   });
@@ -290,13 +302,37 @@ async function loadMyTracks({ reset = false } = {}) {
   }
 }
 
-function openTrackEditor({ id, title, speedKmh }) {
+function setExternalLinkFields(links = {}) {
+  document.querySelector('#edit-track-komoot').value = links.komoot || '';
+  document.querySelector('#edit-track-strava').value = links.strava || '';
+  document.querySelector('#edit-track-garmin').value = links.garmin || '';
+  document.querySelector('#edit-track-ride-with-gps').value = links.rideWithGps || '';
+}
+
+function externalLinksFromEditor() {
+  return {
+    komoot: document.querySelector('#edit-track-komoot').value,
+    strava: document.querySelector('#edit-track-strava').value,
+    garmin: document.querySelector('#edit-track-garmin').value,
+    rideWithGps: document.querySelector('#edit-track-ride-with-gps').value,
+  };
+}
+
+function openTrackEditor({ id, title, speedKmh, externalLinks }) {
   managedTrackId = id;
   managedTrackTitle = title;
   document.querySelector('#edit-track-title').value = title;
   document.querySelector('#edit-track-speed').value = speedKmh || 20;
+  setExternalLinkFields(externalLinks);
   document.querySelector('#edit-track-error').hidden = true;
   document.querySelector('#edit-track-dialog').showModal();
+}
+
+async function openTrackEditorFromList(track) {
+  const response = await fetch(`/api/tracks/${track.id}/manage`, { headers: { accept: 'application/json' } });
+  if (!response.ok) return;
+  const { data } = await response.json();
+  openTrackEditor(data);
 }
 
 function openTrackDeleteConfirmation({ id, title }) {
@@ -1022,6 +1058,10 @@ async function loadPublicTrack(trackId) {
   }
   const { data } = await response.json();
   publicTrackData = data;
+  renderExternalTrackLinks(document.querySelector('#external-track-links'), data.externalLinks);
+  const linksSection = document.querySelector('#external-track-links-section');
+  linksSection.hidden = availableExternalTrackLinks(data.externalLinks).length === 0;
+  document.querySelector('#external-track-links-nav').hidden = linksSection.hidden;
   renderTrackAttribution();
   const download = document.querySelector('#download-track');
   download.href = data.downloadUrl;
@@ -1450,6 +1490,7 @@ document.querySelector('#edit-track').addEventListener('click', () => openTrackE
   id: publicTrackId,
   title: document.querySelector('#edit-track-title').value,
   speedKmh: Number(document.querySelector('#edit-track-speed').value),
+  externalLinks: publicTrackData?.externalLinks,
 }));
 document.querySelector('#cancel-track-edit').addEventListener('click', () => document.querySelector('#edit-track-dialog').close());
 document.querySelector('#edit-track-form').addEventListener('submit', async (event) => {
@@ -1459,7 +1500,11 @@ document.querySelector('#edit-track-form').addEventListener('submit', async (eve
   const response = await fetch(`/api/tracks/${managedTrackId}`, {
     method: 'PATCH',
     headers: { accept: 'application/json', 'content-type': 'application/json' },
-    body: JSON.stringify({ title: document.querySelector('#edit-track-title').value, speedKmh: Number(document.querySelector('#edit-track-speed').value) }),
+    body: JSON.stringify({
+      title: document.querySelector('#edit-track-title').value,
+      speedKmh: Number(document.querySelector('#edit-track-speed').value),
+      externalLinks: externalLinksFromEditor(),
+    }),
   });
   const payload = await response.json();
   if (!response.ok) {
@@ -1472,6 +1517,11 @@ document.querySelector('#edit-track-form').addEventListener('submit', async (eve
     await loadMyTracks({ reset: true });
   } else {
     managedTrackTitle = payload.data.title;
+    publicTrackData = payload.data;
+    renderExternalTrackLinks(document.querySelector('#external-track-links'), payload.data.externalLinks);
+    const linksSection = document.querySelector('#external-track-links-section');
+    linksSection.hidden = availableExternalTrackLinks(payload.data.externalLinks).length === 0;
+    document.querySelector('#external-track-links-nav').hidden = linksSection.hidden;
     payload.data.analysis.name = payload.data.title;
     renderTrack(payload.data.analysis, { persisted: true, analysisSources: payload.data.analysisSources });
   }
@@ -1528,7 +1578,7 @@ document.querySelector('#track-list').addEventListener('click', (event) => {
   if (!action) return;
   const card = action.closest('.track-card');
   const track = { id: card.dataset.trackId, title: card.dataset.trackTitle, speedKmh: Number(card.dataset.trackSpeed) };
-  if (action.dataset.trackAction === 'edit') openTrackEditor(track);
+  if (action.dataset.trackAction === 'edit') openTrackEditorFromList(track);
   if (action.dataset.trackAction === 'delete') openTrackDeleteConfirmation(track);
 });
 document.querySelector('#track-list').addEventListener('change', (event) => {

@@ -208,6 +208,7 @@ describe('track service', () => {
       analysisNote: 'Источники: GPX — маршрут, высоты и основные показатели. Дорожные данные недоступны.',
       analysisSources: { gpx: 'SUCCESS', valhalla: 'FAILED', openStreetMap: 'FAILED' },
       analysis: { distanceKm: 42, points: [{}, {}] },
+      externalLinks: {},
       createdAt: null,
       uploader: { displayName: 'Jan Kowalski', avatarUrl: 'https://example.com/jan.jpg' },
       downloadUrl: '/api/tracks/track-1/download',
@@ -303,12 +304,28 @@ describe('track service', () => {
       analysis: { distanceKm: 25, effectiveSpeedKmh: values.speedKmh, estimatedDurationMs: values.estimatedDurationMs },
     }));
 
-    const result = await service.updateDetails({ trackId: 'track-1', ownerId: 'owner-1', title: 'New title', speedKmh: 25 });
+    const externalLinks = { komoot: 'https://www.komoot.com/tour/123' };
+    const result = await service.updateDetails({ trackId: 'track-1', ownerId: 'owner-1', title: 'New title', speedKmh: 25, externalLinks });
 
-    expect(trackRepository.updateDetails).toHaveBeenCalledWith(expect.objectContaining({ estimatedDurationMs: 3_600_000 }));
+    expect(trackRepository.updateDetails).toHaveBeenCalledWith(expect.objectContaining({ estimatedDurationMs: 3_600_000, externalLinks }));
     expect(result.title).toBe('New title');
     expect(analyzeSource).not.toHaveBeenCalled();
     expect(enrichAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('exposes external service links publicly and in owner management data', async () => {
+    const { service, trackRepository } = dependencies();
+    const externalLinks = { strava: 'https://www.strava.com/routes/123' };
+    trackRepository.findById.mockResolvedValue({
+      _id: 'track-1', ownerId: 'owner-1', title: 'Ride', analysisStatus: 'READY',
+      analysis: { enrichmentSource: 'VALHALLA_OSM' }, externalLinks,
+    });
+    trackRepository.findOwnedById.mockResolvedValue({
+      _id: 'track-1', title: 'Ride', analysisStatus: 'READY', analysis: { effectiveSpeedKmh: 20 }, externalLinks,
+    });
+
+    await expect(service.getPublicTrack('track-1')).resolves.toMatchObject({ externalLinks });
+    await expect(service.getManagement({ trackId: 'track-1', ownerId: 'owner-1' })).resolves.toMatchObject({ externalLinks });
   });
 
   it('keeps the active source while a replacement is processed, then deletes the old file', async () => {

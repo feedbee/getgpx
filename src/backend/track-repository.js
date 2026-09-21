@@ -182,7 +182,7 @@ export function createTrackRepository(tracks) {
       );
     },
 
-    updateDetails({ trackId, ownerId, title, speedKmh, estimatedDurationMs }, now = new Date()) {
+    updateDetails({ trackId, ownerId, title, speedKmh, estimatedDurationMs, externalLinks }, now = new Date()) {
       return tracks.findOneAndUpdate(
         { _id: trackId, ownerId },
         {
@@ -191,6 +191,7 @@ export function createTrackRepository(tracks) {
             normalizedName: normalizeTrackName(title),
             'analysis.effectiveSpeedKmh': speedKmh,
             'analysis.estimatedDurationMs': estimatedDurationMs,
+            externalLinks,
             updatedAt: now,
           },
         },

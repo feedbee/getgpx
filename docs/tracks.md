@@ -33,7 +33,8 @@ edit flow. The user menu links to `/my-tracks`.
 
 Use a `tracks` collection for searchable metadata and derived analysis. Every track
 has a schema version, immutable owner id, public Mongo ObjectId, original filename,
-editable title, timestamps, analysis status/error, processing revision, effective
+editable title, optional HTTPS links to Komoot, Strava, Garmin, and Ride with GPS,
+timestamps, analysis status/error, processing revision, effective
 speed, metrics, normalized preview path, route points, and derived road, surface,
 gradient, climb, and descent data. Named GPX waypoints are retained as points of
 interest with their coordinates, type, and symbol so public track pages can render
@@ -101,7 +102,7 @@ The parser must be bounded and must not permit XML external entities.
 - `GET /api/tracks/mine?query=&cursor=` — authenticated owner list, newest first.
 - `GET /api/tracks/:id` — public track at any processing outcome, including the
   deepest completed analysis and a human-readable provenance note.
-- `PATCH /api/tracks/:id` — owner-only title and/or speed update.
+- `PATCH /api/tracks/:id` — owner-only title, speed, and external-service links update.
 - `PUT /api/tracks/:id/file` — owner-only GPX replacement and reprocessing.
 - `POST /api/tracks/:id/retry-analysis` — owner-only retry after enrichment failure.
 - `GET /api/tracks/:id/download` — public original GPX download with its filename.
@@ -183,8 +184,11 @@ analysis status, and public GPX download action.
 ## Stage 5 decisions
 
 Editable titles contain 1–200 normalized characters. Manual cycling speed is limited
-to 1–50 km/h and changes estimated duration without rerunning route analysis. GPX
-replacement keeps the existing public file, title, and analysis available while a
+to 1–50 km/h and changes estimated duration without rerunning route analysis. External
+service links are optional and restricted to HTTPS URLs on the matching Komoot,
+Strava, Garmin, or Ride with GPS domain. Public pages omit the service block when no
+links are configured and open configured services in a new browser tab.
+GPX replacement keeps the existing public file, title, and analysis available while a
 pending revision is processed; the new file and all derived data become active in a
 single atomic commit only after successful processing. A failed pending revision can
 be replaced again, while failed external enrichment can be retried from that step.

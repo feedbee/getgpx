@@ -202,4 +202,27 @@ describe('track repository', () => {
       analysisError: null,
     });
   });
+
+  it('stores external service links together with editable track details', async () => {
+    const repository = createTrackRepository(createTracksCollection());
+    const ownerId = new ObjectId();
+    const track = await repository.createProcessing({
+      ownerId,
+      sourceFileId: new ObjectId(),
+      originalFilename: 'ride.gpx',
+      title: 'Ride',
+    });
+    const externalLinks = { komoot: 'https://www.komoot.com/tour/123' };
+
+    const updated = await repository.updateDetails({
+      trackId: track._id,
+      ownerId,
+      title: 'Ride',
+      speedKmh: 20,
+      estimatedDurationMs: 3_600_000,
+      externalLinks,
+    });
+
+    expect(updated.externalLinks).toEqual(externalLinks);
+  });
 });

@@ -149,7 +149,16 @@ describe('track HTTP handlers', () => {
     const trackService = { updateDetails: vi.fn().mockResolvedValue({ id: trackId.toString(), title: 'Renamed' }) };
     const handlers = createTrackHandlers(trackService, { getUser: vi.fn().mockResolvedValue({ id: ownerId.toString() }) });
     const valid = request({ params: { id: trackId.toString() } });
-    valid.body = { title: ' Renamed ', speedKmh: 32.5 };
+    valid.body = {
+      title: ' Renamed ',
+      speedKmh: 32.5,
+      externalLinks: {
+        komoot: ' https://www.komoot.com/tour/123 ',
+        strava: '',
+        garmin: 'https://connect.garmin.com/modern/course/456',
+        rideWithGps: 'https://ridewithgps.com/routes/789',
+      },
+    };
     const invalid = request({ params: { id: trackId.toString() } });
     invalid.body = { title: 'Ride', speedKmh: 51 };
     const validResponse = response();
@@ -158,9 +167,40 @@ describe('track HTTP handlers', () => {
     await handlers.update(valid, validResponse);
     await handlers.update(invalid, invalidResponse);
 
-    expect(trackService.updateDetails).toHaveBeenCalledWith({ trackId, ownerId, title: 'Renamed', speedKmh: 32.5 });
+    expect(trackService.updateDetails).toHaveBeenCalledWith({
+      trackId,
+      ownerId,
+      title: 'Renamed',
+      speedKmh: 32.5,
+      externalLinks: {
+        komoot: 'https://www.komoot.com/tour/123',
+        garmin: 'https://connect.garmin.com/modern/course/456',
+        rideWithGps: 'https://ridewithgps.com/routes/789',
+      },
+    });
     expect(validResponse.statusCode).toBe(200);
     expect(invalidResponse.statusCode).toBe(422);
+  });
+
+  it('rejects external links that do not use HTTPS or the matching service domain', async () => {
+    const ownerId = new ObjectId();
+    const trackId = new ObjectId();
+    const trackService = { updateDetails: vi.fn() };
+    const handlers = createTrackHandlers(trackService, { getUser: vi.fn().mockResolvedValue({ id: ownerId.toString() }) });
+
+    for (const externalLinks of [
+      { komoot: 'javascript:alert(1)' },
+      { strava: 'https://example.com/activities/1' },
+      { unknown: 'https://example.com' },
+    ]) {
+      const source = request({ params: { id: trackId.toString() } });
+      source.body = { title: 'Ride', speedKmh: 20, externalLinks };
+      const result = response();
+      await handlers.update(source, result);
+      expect(result.statusCode).toBe(422);
+      expect(result.body.error.code).toBe('INVALID_EXTERNAL_LINKS');
+    }
+    expect(trackService.updateDetails).not.toHaveBeenCalled();
   });
 
   it('validates and deletes a unique list of owned track ids', async () => {
