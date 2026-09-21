@@ -38,6 +38,17 @@ describe('parseGpx', () => {
     }]);
   });
 
+  it('keeps missing elevation distinct from sea level', () => {
+    const track = parseGpx(`
+      <gpx><trk><trkseg>
+        <trkpt lat="50" lon="19"/><trkpt lat="50.01" lon="19.01"><ele>0</ele></trkpt>
+      </trkseg></trk></gpx>
+    `);
+
+    expect(track.points.map(({ ele }) => ele)).toEqual([null, 0]);
+    expect(analyzeTrack(track).hasElevation).toBe(false);
+  });
+
   it('rejects files without a usable track', () => {
     expect(() => parseGpx('<gpx><trk /></gpx>')).toThrow(/точек маршрута/i);
   });

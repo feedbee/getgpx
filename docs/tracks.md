@@ -44,6 +44,13 @@ Metrics are calculated from every accepted source point. To stay below MongoDB's
 geometry is uniformly reduced to at most 10,000 points while retaining the first and
 last point; `sourcePointCount` records the original size.
 
+Missing GPX elevations are represented as missing values rather than zero. During
+external enrichment the backend fills only missing values from Valhalla's digital
+elevation model, recalculates the elevation profile, ascent, and descent, and records
+`elevationSource` so calculated terrain heights remain distinguishable from GPX data.
+If the elevation lookup is unavailable, road enrichment continues and the UI omits
+the incomplete profile instead of displaying a false flat line.
+
 Store the original GPX in MongoDB GridFS and reference its file id from the track.
 This avoids MongoDB's 16 MB document limit and prevents list/detail metadata reads
 from loading the source file. S3-compatible object storage remains a future option;

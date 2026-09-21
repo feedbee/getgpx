@@ -111,3 +111,24 @@ export async function matchTrackWithValhalla(points, { endpoint = process.env.VA
   if (!response.ok) throw new Error(`Valhalla HTTP ${response.status}`);
   return normalizeValhallaMatch(await response.json(), originalIndexes);
 }
+
+export async function fetchTrackElevations(points, {
+  endpoint = process.env.ELEVATION_URL || process.env.VALHALLA_URL || DEFAULT_URL,
+  signal,
+  fetchImplementation = fetch,
+} = {}) {
+  const url = new URL(endpoint);
+  if (!url.pathname.endsWith('/height')) url.pathname = url.pathname.replace(/\/trace_attributes\/?$/, '/height');
+  const response = await fetchImplementation(url.toString(), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ shape: points.map(({ lat, lon }) => ({ lat, lon })), height_precision: 1 }),
+    signal,
+  });
+  if (!response.ok) throw new Error(`Valhalla elevation HTTP ${response.status}`);
+  const payload = await response.json();
+  if (!Array.isArray(payload?.height) || payload.height.length !== points.length) {
+    throw new Error('Valhalla вернула некорректные данные высот.');
+  }
+  return payload.height.map((height) => (Number.isFinite(height) ? height : null));
+}

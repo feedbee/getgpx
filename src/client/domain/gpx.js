@@ -37,10 +37,12 @@ export function parseGpx(xml, { fallbackName = 'Маршрут без назва
 
   const points = rawPoints.map((node) => {
     const timeText = textOf(node, 'time');
+    const elevationText = textOf(node, 'ele');
+    const elevation = elevationText === '' ? null : Number(elevationText);
     return {
       lat: Number(node.getAttribute('lat')),
       lon: Number(node.getAttribute('lon')),
-      ele: Number(textOf(node, 'ele')),
+      ele: Number.isFinite(elevation) ? elevation : null,
       time: timeText ? new Date(timeText) : null,
     };
   }).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon));
@@ -123,6 +125,6 @@ export function analyzeTrack(track) {
     movingSpeedThresholdKmh: MOVING_SPEED_THRESHOLD_KMH,
     movingAverageSpeedKmh: movingTimeMs > 0 ? (movingDistanceM / 1000) / (movingTimeMs / 3_600_000) : null,
     averageSpeedKmh: durationMs > 0 ? (distanceM / 1000) / (durationMs / 3_600_000) : null,
-    hasElevation: elevationCount > 1,
+    hasElevation: elevationCount === points.length && elevationCount > 1,
   };
 }

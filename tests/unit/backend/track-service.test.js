@@ -233,6 +233,18 @@ describe('track service', () => {
     expect(osm.analysisSources).toEqual({ gpx: 'SUCCESS', valhalla: 'SUCCESS', openStreetMap: 'SUCCESS' });
   });
 
+  it('attributes calculated elevation to the terrain model', async () => {
+    const { service, trackRepository } = dependencies();
+    trackRepository.findById.mockResolvedValue({
+      _id: 'track-1', title: 'Ride', analysisStatus: 'READY',
+      analysis: { enrichmentSource: 'VALHALLA_OSM', elevationSource: 'VALHALLA_DEM' },
+    });
+
+    const track = await service.getPublicTrack('track-1');
+
+    expect(track.analysisNote).toContain('высоты по модели рельефа Valhalla');
+  });
+
   it('returns 24 compact cards and an opaque cursor without route points', async () => {
     const { service, trackRepository } = dependencies();
     trackRepository.listOwned.mockResolvedValue(Array.from({ length: 25 }, (_, index) => ({

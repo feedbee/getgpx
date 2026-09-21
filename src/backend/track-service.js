@@ -65,14 +65,22 @@ function publicTrack(track, uploader = null) {
     valhalla: hasValhalla ? 'SUCCESS' : isEnriching ? 'PENDING' : 'FAILED',
     openStreetMap: hasOsm ? 'SUCCESS' : isEnriching ? 'PENDING' : 'FAILED',
   };
+  const elevationSource = track.analysis?.elevationSource;
+  const elevationAttribution = elevationSource === 'VALHALLA_DEM'
+    ? 'маршрут из GPX, высоты по модели рельефа Valhalla'
+    : 'маршрут и высоты из GPX';
   let analysisNote = 'Источники: исходный GPX сохранён, но данные маршрута разобрать не удалось.';
-  if (analysisLevel === 'BASIC') analysisNote = 'Источники: GPX — маршрут, высоты и основные показатели. Дорожные данные недоступны.';
+  if (analysisLevel === 'BASIC') analysisNote = elevationSource === 'NONE' || elevationSource === 'GPX_PARTIAL'
+    ? 'Источники: GPX — маршрут и основные показатели. Высоты и дорожные данные недоступны.'
+    : 'Источники: GPX — маршрут, высоты и основные показатели. Дорожные данные недоступны.';
   if (track.analysisStatus === 'PROCESSING' && analysisLevel === 'NONE') analysisNote = 'Источники: GPX сохранён и ожидает обработки.';
-  if (track.analysisStatus === 'PROCESSING' && analysisLevel === 'BASIC') analysisNote = 'Источники: GPX — маршрут, высоты и основные показатели. Дорожные данные ещё обрабатываются.';
+  if (track.analysisStatus === 'PROCESSING' && analysisLevel === 'BASIC') analysisNote = elevationSource === 'NONE' || elevationSource === 'GPX_PARTIAL'
+    ? 'Источники: GPX — маршрут и основные показатели. Высоты и дорожные данные ещё обрабатываются.'
+    : 'Источники: GPX — маршрут, высоты и основные показатели. Дорожные данные ещё обрабатываются.';
   if (analysisLevel === 'FULL' && track.analysis?.enrichmentSource === 'VALHALLA') {
-    analysisNote = 'Источники: GPX — маршрут и высоты; Valhalla — типы дорог и оценка покрытий. Детальные теги OpenStreetMap временно недоступны.';
+    analysisNote = `Источники: ${elevationAttribution}; Valhalla — типы дорог и оценка покрытий. Детальные теги OpenStreetMap временно недоступны.`;
   } else if (analysisLevel === 'FULL') {
-    analysisNote = 'Источники: GPX — маршрут и высоты; Valhalla — сопоставление с дорогами; OpenStreetMap — покрытия и качество дорог.';
+    analysisNote = `Источники: ${elevationAttribution}; Valhalla — сопоставление с дорогами; OpenStreetMap — покрытия и качество дорог.`;
   }
   const id = track._id.toString();
   return {

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { createValhallaPayload, normalizeValhallaMatch, validateMatchRequest } from '../../../src/backend/valhalla.js';
+import { describe, expect, it, vi } from 'vitest';
+import { createValhallaPayload, fetchTrackElevations, normalizeValhallaMatch, validateMatchRequest } from '../../../src/backend/valhalla.js';
 
 describe('validateMatchRequest', () => {
   it('accepts a bounded coordinate list and rejects malformed or oversized input', () => {
@@ -51,5 +51,29 @@ describe('normalizeValhallaMatch', () => {
     expect(normalizeValhallaMatch(response, [0, 1])[1]).toMatchObject({
       pointIndex: 1, surface: 'paved_smooth', wayId: 99, matchType: 'unmatched',
     });
+  });
+});
+
+describe('fetchTrackElevations', () => {
+  it('loads DEM heights from the elevation endpoint derived from Valhalla URL', async () => {
+    const fetchImplementation = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ height: [101.2, null, 123.4] }),
+    });
+
+    const elevations = await fetchTrackElevations([
+      { lat: 50, lon: 19 }, { lat: 50.01, lon: 19.01 }, { lat: 50.02, lon: 19.02 },
+    ], {
+      endpoint: 'https://valhalla.example/trace_attributes',
+      fetchImplementation,
+    });
+
+    expect(elevations).toEqual([101.2, null, 123.4]);
+    expect(fetchImplementation).toHaveBeenCalledWith('https://valhalla.example/height', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ shape: [
+        { lat: 50, lon: 19 }, { lat: 50.01, lon: 19.01 }, { lat: 50.02, lon: 19.02 },
+      ], height_precision: 1 }),
+    }));
   });
 });

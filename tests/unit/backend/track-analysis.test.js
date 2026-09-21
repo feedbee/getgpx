@@ -63,6 +63,64 @@ describe('server track analysis', () => {
     }]);
   });
 
+  it('fills missing elevations from DEM data and recalculates elevation metrics', async () => {
+    const base = analyzeGpxSource(`
+      <gpx><trk><trkseg>
+        <trkpt lat="50" lon="19"/><trkpt lat="50.01" lon="19.01"/><trkpt lat="50.02" lon="19.02"/>
+      </trkseg></trk></gpx>
+    `, { filename: 'ride.gpx' });
+    const matches = base.points.map((_, pointIndex) => ({
+      pointIndex, surface: 'paved', roadClass: 'residential', use: 'road', matchType: 'matched', wayId: null,
+    }));
+
+    const result = await enrichTrackAnalysis(base, {
+      fetchElevations: vi.fn().mockResolvedValue([100, 130, 115]),
+      matchTrack: vi.fn().mockResolvedValue(matches),
+      fetchWayTags: vi.fn().mockImplementation(async (value) => value),
+    });
+
+    expect(result.points.map(({ ele }) => ele)).toEqual([100, 130, 115]);
+    expect(result).toMatchObject({ hasElevation: true, ascentM: 30, descentM: 15, elevationSource: 'VALHALLA_DEM' });
+  });
+
+  it('preserves GPX elevations without requesting DEM data', async () => {
+    const base = analyzeGpxSource(unnamedGpx, { filename: 'ride.gpx' });
+    const fetchElevations = vi.fn();
+    const matches = base.points.map((_, pointIndex) => ({
+      pointIndex, surface: 'paved', roadClass: 'residential', use: 'road', matchType: 'matched', wayId: null,
+    }));
+
+    const result = await enrichTrackAnalysis(base, {
+      fetchElevations,
+      matchTrack: vi.fn().mockResolvedValue(matches),
+      fetchWayTags: vi.fn().mockImplementation(async (value) => value),
+    });
+
+    expect(fetchElevations).not.toHaveBeenCalled();
+    expect(result.elevationSource).toBe('GPX');
+    expect(result.points.map(({ ele }) => ele)).toEqual([100, 150]);
+  });
+
+  it('keeps available GPX elevations and tolerates unavailable DEM data', async () => {
+    const base = analyzeGpxSource(`
+      <gpx><trk><trkseg>
+        <trkpt lat="50" lon="19"><ele>95</ele></trkpt><trkpt lat="50.01" lon="19.01"/>
+      </trkseg></trk></gpx>
+    `, { filename: 'ride.gpx' });
+    const matches = base.points.map((_, pointIndex) => ({
+      pointIndex, surface: 'paved', roadClass: 'residential', use: 'road', matchType: 'matched', wayId: null,
+    }));
+
+    const result = await enrichTrackAnalysis(base, {
+      fetchElevations: vi.fn().mockRejectedValue(new Error('height unavailable')),
+      matchTrack: vi.fn().mockResolvedValue(matches),
+      fetchWayTags: vi.fn().mockImplementation(async (value) => value),
+    });
+
+    expect(result.points.map(({ ele }) => ele)).toEqual([95, null]);
+    expect(result).toMatchObject({ hasElevation: false, elevationSource: 'GPX_PARTIAL' });
+  });
+
   it('caches external matches and persists derived display data', async () => {
     const base = analyzeGpxSource(unnamedGpx, { filename: 'ride.gpx' });
     const matches = [
