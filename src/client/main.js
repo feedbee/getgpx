@@ -4,10 +4,11 @@ import './style.css';
 import { renderAuthControl } from './auth-ui.js';
 import { HOME_EXAMPLE_TRACK_ID, renderHomePage } from './home-page-ui.js';
 import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, createTrackCard } from './my-tracks-ui.js';
-import { closeOverflowMenuOnOutsideClick } from './route-actions-ui.js';
+import { closeOverflowMenuOnOutsideClick, renderOwnerTrackActions } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js';
-import { availableExternalTrackLinks, renderExternalTrackLinks } from './external-track-links-ui.js';
+import { renderTrackUploadDialogs, uploadMetadataHint, uploadMetadataPayload } from './track-upload-ui.js';
+import { availableExternalTrackLinks, renderExternalLinkFields, renderExternalTrackLinks } from './external-track-links-ui.js';
 import { analyzeTrack } from './domain/gpx.js';
 import { createDemoTrack } from './domain/demo.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
@@ -45,6 +46,7 @@ let hoveredRange = null;
 let pinnedRange = null;
 let currentUser = null;
 let activeUploadTrackId = null;
+let activeUploadMetadata = null;
 const isMyTracksPage = window.location.pathname === '/my-tracks';
 const isHomePage = window.location.pathname === '/';
 let myTracksCursor = null;
@@ -69,14 +71,14 @@ app.innerHTML = `
         <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.6 18a8 8 0 1 1 12.8 0M12 13l4-4"/><path d="M4 18h16"/></svg><b id="compact-speed">— км/ч</b></span>
       </div>
     </section>
-    <div class="topbar-actions"><label class="upload-button" data-auth-upload for="gpx-file" hidden><span aria-hidden="true">↗</span> Загрузить GPX</label><div id="auth-control">${renderAuthControl(null)}</div></div></div>
+    <div class="topbar-actions"><button class="upload-button" data-auth-upload type="button" hidden><span aria-hidden="true">＋</span> Загрузить GPX</button><div id="auth-control">${renderAuthControl(null)}</div></div></div>
     <input id="gpx-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden />
   </header>
   ${isHomePage ? renderHomePage() : ''}
   <main class="my-tracks-page" id="my-tracks" ${isMyTracksPage ? '' : 'hidden'}>
     <header class="my-tracks-header">
       <div><p class="route-kicker">ЛИЧНАЯ КОЛЛЕКЦИЯ</p><h1>Мои треки</h1><p>Ваши маршруты — от свежих загрузок к старым.</p></div>
-      <label class="my-tracks-upload" data-auth-upload for="gpx-file" hidden><span aria-hidden="true">＋</span> Загрузить GPX</label>
+      <button class="my-tracks-upload" data-auth-upload type="button" hidden><span aria-hidden="true">＋</span> Загрузить GPX</button>
     </header>
     <form class="track-search" id="track-search" role="search"><label for="track-query">Поиск по названию</label><div class="track-search-controls"><span class="track-search-input"><input id="track-query" name="query" type="search" maxlength="100" placeholder="Например, вечерний гравий" autocomplete="off" /><button class="track-search-clear" id="track-search-clear" type="button" aria-label="Отменить поиск" title="Отменить поиск" hidden>×</button></span><button class="track-search-submit" type="submit">Найти</button></div></form>
     <div class="track-list-toolbar"><button class="select-all-tracks" id="select-all-tracks" type="button" disabled>Выбрать всё</button><button class="bulk-delete-tracks" id="bulk-delete-tracks" type="button" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg><span>Удалить</span></button></div>
@@ -108,7 +110,7 @@ app.innerHTML = `
           <button class="primary-action" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg>Сохранить</button>
           <button type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg>Поделиться</button>
           <a id="download-track" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></svg>Скачать трек</a>
-          <span class="owner-track-actions" id="owner-track-actions" hidden><details class="route-overflow"><summary aria-label="Дополнительные действия"><span aria-hidden="true">•••</span></summary><div><button id="edit-track" type="button">Редактировать</button><button class="danger-button" id="delete-track" type="button">Удалить</button></div></details></span>
+          <span class="owner-track-actions" id="owner-track-actions" hidden><details class="route-overflow"><summary aria-label="Дополнительные действия"><span aria-hidden="true">•••</span></summary><div>${renderOwnerTrackActions()}</div></details></span>
         </div>
       </div>
     </header>
@@ -158,32 +160,14 @@ app.innerHTML = `
       <aside class="map-column"><section class="map-shell" aria-label="Карта маршрута"><div id="map"></div><div class="map-mode segmented-control" aria-label="Цвет маршрута на карте"><button class="active" type="button" data-color-scope="map" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="map" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="map" data-color-mode="waytype">Тип дороги</button><button type="button" data-color-scope="map" data-color-mode="quality">Качество</button></div><div class="map-note" id="map-note"></div><div class="hover-readout" id="hover-readout" aria-live="polite"><b>Наведите на маршрут</b></div></section></aside>
     </div>
   </main>
-  <div class="drop-overlay" id="drop-overlay"><strong>Отпустите GPX здесь</strong><span>Маршрут будет загружен и обработан</span></div>
-  <div class="processing-overlay" id="processing-overlay" hidden>
-    <section class="processing-card" role="dialog" aria-modal="true" aria-labelledby="processing-title">
-      <p class="route-kicker">GPX PROCESSING</p><h2 id="processing-title">Создаём трек</h2>
-      <ol class="processing-steps" aria-live="polite">
-        <li data-processing-step="UPLOADING">Загружаем файл</li><li data-processing-step="QUEUED">Ставим в обработку</li>
-        <li data-processing-step="PARSING">Разбираем GPX и считаем маршрут</li><li data-processing-step="ENRICHING">Определяем дороги и покрытия</li>
-        <li data-processing-step="COMPLETE">Трек готов</li>
-      </ol>
-      <p class="processing-error" id="processing-error" hidden></p>
-      <details class="processing-details" id="processing-details" hidden><summary>Техническая информация</summary><code id="processing-code"></code></details>
-      <div class="processing-actions"><button id="retry-processing" type="button" hidden>Повторить анализ</button><button id="close-processing" type="button">Закрыть</button></div>
-    </section>
-  </div>
+  ${renderTrackUploadDialogs()}
   <input id="replacement-gpx" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden />
   <dialog class="edit-track-dialog" id="edit-track-dialog">
     <form id="edit-track-form">
       <p class="route-kicker">РЕДАКТИРОВАНИЕ</p><h2>Параметры трека</h2>
       <label>Название<input id="edit-track-title" name="title" required maxlength="200" /></label>
       <label>Расчётная скорость, км/ч<input id="edit-track-speed" name="speedKmh" type="number" min="1" max="50" step="0.1" required /></label>
-      <fieldset class="external-links-fields"><legend>Ссылки на трек в других сервисах</legend>
-        <label>Komoot<input id="edit-track-komoot" name="komoot" type="url" inputmode="url" placeholder="https://www.komoot.com/tour/…" /></label>
-        <label>Strava<input id="edit-track-strava" name="strava" type="url" inputmode="url" placeholder="https://www.strava.com/routes/…" /></label>
-        <label>Garmin<input id="edit-track-garmin" name="garmin" type="url" inputmode="url" placeholder="https://connect.garmin.com/modern/course/…" /></label>
-        <label>Ride with GPS<input id="edit-track-ride-with-gps" name="rideWithGps" type="url" inputmode="url" placeholder="https://ridewithgps.com/routes/…" /></label>
-      </fieldset>
+      ${renderExternalLinkFields('edit-track')}
       <label class="replace-gpx-control" for="replacement-gpx">Заменить исходный GPX…</label>
       <p class="form-error" id="edit-track-error" hidden></p>
       <div><button type="button" id="cancel-track-edit">Отмена</button><button type="submit">Сохранить</button></div>
@@ -1095,17 +1079,63 @@ function showProcessingError(error) {
   details.hidden = false;
   document.querySelector('#processing-code').textContent = error.code;
   document.querySelector('#retry-processing').hidden = error.code !== 'ENRICHMENT_UNAVAILABLE';
+  document.querySelector('#close-processing').hidden = false;
+  const status = document.querySelector('#processing-status');
+  status.classList.add('is-failed');
+  status.querySelector('strong').textContent = 'Обработка остановлена';
+  document.querySelector('#processing-status-copy').textContent = 'Исправьте ошибку или закройте окно';
+}
+
+function renderUploadMetadata() {
+  if (!activeUploadMetadata) return;
+  document.querySelector('#upload-metadata').hidden = false;
+  document.querySelector('#upload-track-title-value').textContent = activeUploadMetadata.title;
+  document.querySelector('#upload-track-title').value = activeUploadMetadata.title;
+  const links = availableExternalTrackLinks(activeUploadMetadata.externalLinks);
+  const linksValue = document.querySelector('#upload-links-value');
+  if (links.length) renderExternalTrackLinks(linksValue, activeUploadMetadata.externalLinks, null, { inline: true });
+  else {
+    linksValue.replaceChildren('Не добавлены');
+    linksValue.hidden = false;
+  }
+  const linksForm = document.querySelector('#upload-links-form');
+  [...linksForm.elements].forEach((field) => {
+    if (field instanceof HTMLInputElement) field.value = activeUploadMetadata.externalLinks[field.name] || '';
+  });
+}
+
+function setUploadMetadataEditing(rowSelector, editing) {
+  const row = document.querySelector(rowSelector);
+  row.classList.toggle('is-editing', editing);
+  row.querySelector('.upload-metadata-view').hidden = editing;
+  row.querySelector('form').hidden = !editing;
+}
+
+async function loadUploadMetadata(trackId) {
+  if (activeUploadMetadata?.id === trackId) return;
+  const response = await fetch(`/api/tracks/${trackId}/manage`, { headers: { accept: 'application/json' } });
+  if (!response.ok) return;
+  const { data } = await response.json();
+  if (activeUploadTrackId !== trackId) return;
+  activeUploadMetadata = {
+    id: trackId,
+    title: data.title,
+    speedKmh: data.speedKmh || 20,
+    externalLinks: data.externalLinks || {},
+  };
+  renderUploadMetadata();
 }
 
 function showTrackCreated(trackId) {
-  const toast = document.querySelector('#toast');
-  toast.replaceChildren('Трек успешно создан. ');
-  const link = document.createElement('a');
-  link.href = `/tracks/${trackId}`;
-  link.textContent = 'Открыть трек';
-  toast.append(link);
-  toast.classList.add('visible');
-  setTimeout(() => window.location.assign(`/tracks/${trackId}`), 900);
+  const status = document.querySelector('#processing-status');
+  status.classList.add('is-complete');
+  status.querySelector('strong').textContent = 'Обработка завершена';
+  document.querySelector('#processing-status-copy').textContent = 'Трек готов к просмотру';
+  document.querySelector('#upload-metadata-hint').textContent = uploadMetadataHint(true);
+  document.querySelector('#open-uploaded-track').hidden = false;
+  document.querySelector('#finish-processing').hidden = false;
+  document.querySelector('#close-processing').hidden = false;
+  document.querySelector('#open-uploaded-track').dataset.trackId = trackId;
 }
 
 async function pollTrackStatus(trackId) {
@@ -1115,6 +1145,7 @@ async function pollTrackStatus(trackId) {
     if (!response.ok) throw new Error('Не удалось получить статус обработки.');
     const { data } = await response.json();
     updateProcessing(data.step);
+    if (data.step === 'ENRICHING' || data.status === 'READY') await loadUploadMetadata(trackId);
     if (data.status === 'READY') {
       activeUploadTrackId = null;
       updateProcessing('COMPLETE');
@@ -1137,6 +1168,15 @@ async function uploadFile(file) {
   error.hidden = true;
   details.hidden = true;
   document.querySelector('#retry-processing').hidden = true;
+  document.querySelector('#open-uploaded-track').hidden = true;
+  document.querySelector('#finish-processing').hidden = true;
+  document.querySelector('#close-processing').hidden = true;
+  document.querySelector('#upload-metadata').hidden = true;
+  document.querySelector('#processing-status').classList.remove('is-complete', 'is-failed');
+  document.querySelector('#processing-status').querySelector('strong').textContent = 'Обрабатываем трек';
+  document.querySelector('#processing-status-copy').textContent = 'Это может занять некоторое время';
+  document.querySelector('#upload-metadata-hint').textContent = uploadMetadataHint(false);
+  activeUploadMetadata = null;
   processing.hidden = false;
   updateProcessing('UPLOADING');
   try {
@@ -1428,20 +1468,94 @@ document.addEventListener('keydown', (event) => {
   refreshRouteFocus();
 });
 document.querySelector('#gpx-file').addEventListener('change', (event) => {
-  if (event.target.files[0]) uploadFile(event.target.files[0]);
+  if (event.target.files[0]) {
+    document.querySelector('#upload-dialog').hidden = true;
+    uploadFile(event.target.files[0]);
+  }
   event.target.value = '';
 });
-const overlay = document.querySelector('#drop-overlay');
-window.addEventListener('dragover', (event) => { event.preventDefault(); if (currentUser) overlay.classList.add('visible'); });
-window.addEventListener('dragleave', (event) => { if (!event.relatedTarget) overlay.classList.remove('visible'); });
-window.addEventListener('drop', (event) => {
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('[data-auth-upload]') || !currentUser) return;
+  document.querySelector('#upload-dialog').hidden = false;
+  document.querySelector('#upload-dropzone').focus();
+});
+document.querySelector('#close-upload-dialog').addEventListener('click', () => {
+  document.querySelector('#upload-dialog').hidden = true;
+});
+const uploadDropzone = document.querySelector('#upload-dropzone');
+uploadDropzone.addEventListener('dragover', (event) => { event.preventDefault(); uploadDropzone.classList.add('is-dragging'); });
+uploadDropzone.addEventListener('dragleave', () => uploadDropzone.classList.remove('is-dragging'));
+uploadDropzone.addEventListener('drop', (event) => {
   event.preventDefault();
-  overlay.classList.remove('visible');
-  if (currentUser && event.dataTransfer.files[0]) uploadFile(event.dataTransfer.files[0]);
+  uploadDropzone.classList.remove('is-dragging');
+  if (currentUser && event.dataTransfer.files[0]) {
+    document.querySelector('#upload-dialog').hidden = true;
+    uploadFile(event.dataTransfer.files[0]);
+  }
 });
 document.querySelector('#close-processing').addEventListener('click', () => {
   activeUploadTrackId = null;
   document.querySelector('#processing-overlay').hidden = true;
+});
+document.querySelector('#finish-processing').addEventListener('click', async () => {
+  document.querySelector('#processing-overlay').hidden = true;
+  if (isMyTracksPage) await loadMyTracks({ reset: true });
+});
+document.querySelector('#open-uploaded-track').addEventListener('click', (event) => {
+  window.location.assign(`/tracks/${event.currentTarget.dataset.trackId}`);
+});
+document.querySelector('#edit-upload-title').addEventListener('click', () => {
+  setUploadMetadataEditing('#upload-title-row', true);
+  document.querySelector('#upload-track-title').focus();
+});
+document.querySelector('#cancel-upload-title').addEventListener('click', () => {
+  setUploadMetadataEditing('#upload-title-row', false);
+  renderUploadMetadata();
+});
+document.querySelector('#edit-upload-links').addEventListener('click', () => {
+  setUploadMetadataEditing('#upload-links-row', true);
+  document.querySelector('#upload-links-form input').focus();
+});
+document.querySelector('#cancel-upload-links').addEventListener('click', () => {
+  setUploadMetadataEditing('#upload-links-row', false);
+  renderUploadMetadata();
+});
+
+async function saveUploadMetadata({ title, links }) {
+  if (!activeUploadMetadata) return false;
+  const payload = uploadMetadataPayload({
+    title: title ?? activeUploadMetadata.title,
+    speedKmh: activeUploadMetadata.speedKmh,
+    links: links ?? activeUploadMetadata.externalLinks,
+  });
+  const error = document.querySelector('#upload-metadata-error');
+  error.hidden = true;
+  const response = await fetch(`/api/tracks/${activeUploadMetadata.id}`, {
+    method: 'PATCH',
+    headers: { accept: 'application/json', 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const responsePayload = await response.json();
+  if (!response.ok) {
+    error.textContent = responsePayload?.error?.message || 'Не удалось сохранить изменения.';
+    error.hidden = false;
+    return false;
+  }
+  activeUploadMetadata.title = responsePayload.data.title;
+  activeUploadMetadata.externalLinks = responsePayload.data.externalLinks || {};
+  renderUploadMetadata();
+  return true;
+}
+
+document.querySelector('#upload-title-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (await saveUploadMetadata({ title: document.querySelector('#upload-track-title').value })) setUploadMetadataEditing('#upload-title-row', false);
+});
+document.querySelector('#upload-links-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const links = Object.fromEntries(['komoot', 'strava', 'garmin', 'rideWithGps'].map((service) => [service, formData.get(service)]));
+  if (await saveUploadMetadata({ links })) setUploadMetadataEditing('#upload-links-row', false);
 });
 document.querySelector('#retry-processing').addEventListener('click', async () => {
   if (!activeUploadTrackId) return;
@@ -1454,6 +1568,10 @@ document.querySelector('#retry-processing').addEventListener('click', async () =
   document.querySelector('#processing-error').hidden = true;
   document.querySelector('#processing-details').hidden = true;
   document.querySelector('#retry-processing').hidden = true;
+  document.querySelector('#close-processing').hidden = true;
+  document.querySelector('#processing-status').classList.remove('is-failed');
+  document.querySelector('#processing-status').querySelector('strong').textContent = 'Обрабатываем трек';
+  document.querySelector('#processing-status-copy').textContent = 'Это может занять некоторое время';
   updateProcessing(payload.data.step);
   await pollTrackStatus(activeUploadTrackId);
 });

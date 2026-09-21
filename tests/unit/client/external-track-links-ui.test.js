@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { availableExternalTrackLinks, renderExternalTrackLinks } from '../../../src/client/external-track-links-ui.js';
+import { availableExternalTrackLinks, renderExternalLinkFields, renderExternalTrackLinks } from '../../../src/client/external-track-links-ui.js';
 
 describe('external track links', () => {
   it('keeps configured services in a stable display order and omits empty links', () => {
@@ -77,5 +77,36 @@ describe('external track links', () => {
       rel: 'noopener noreferrer',
       title: 'Открыть трек в Komoot',
     });
+  });
+
+  it('renders consistently labelled editor fields with compact service icons', () => {
+    const markup = renderExternalLinkFields('edit-track');
+
+    expect(markup).toContain('Ссылки на трек в других сервисах');
+    expect(markup.match(/service-field-icon/g)).toHaveLength(4);
+    expect(markup).toContain('id="edit-track-komoot"');
+    expect(markup).toContain('id="edit-track-ride-with-gps"');
+  });
+
+  it('renders inline icon-and-label links that open in a new tab', () => {
+    const container = { hidden: true, replaceChildren: (...children) => { container.children = children; } };
+    const documentRef = {
+      createElement: (tagName) => ({
+        tagName,
+        attributes: {},
+        setAttribute(name, value) { this.attributes[name] = value; },
+        append(...children) { this.children = children; },
+      }),
+    };
+
+    renderExternalTrackLinks(container, { strava: 'https://www.strava.com/routes/2' }, documentRef, { inline: true });
+
+    expect(container.children[0]).toMatchObject({
+      href: 'https://www.strava.com/routes/2',
+      target: '_blank',
+      rel: 'noopener noreferrer',
+    });
+    expect(container.children[0].className).toContain('external-track-link-inline');
+    expect(container.children[0].children[1].textContent).toBe('Strava');
   });
 });

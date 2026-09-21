@@ -28,7 +28,7 @@ export function renderHomePage() {
           <p class="home-note">Получатель открывает и скачивает трек без регистрации в Track Hub.</p>
           <div class="home-actions">
             <a class="home-primary" data-home-guest href="/api/auth/google">Войти и опубликовать GPX <span aria-hidden="true">↗</span></a>
-            <label class="home-primary" data-home-author for="gpx-file" hidden>Загрузить GPX <span aria-hidden="true">↗</span></label>
+            <button class="home-primary" data-home-author data-auth-upload type="button" hidden>Загрузить GPX <span aria-hidden="true">＋</span></button>
             <a class="home-secondary" href="/tracks/${HOME_EXAMPLE_TRACK_ID}">Открыть реальный трек</a>
           </div>
         </div>
@@ -59,6 +59,6 @@ export function renderHomePage() {
       <section class="home-section home-tracks" id="public-tracks" aria-labelledby="public-tracks-title"><div class="home-section-heading"><p class="route-kicker">03 · ПРИМЕРЫ</p><div><h2 id="public-tracks-title">Откройте настоящие публичные треки</h2><p>Просмотр и загрузка GPX доступны сразу. Авторизация понадобится только для публикации собственного маршрута.</p></div></div><div class="home-track-links">${renderPublicTracks()}</div></section>
 
       <section class="home-library" aria-labelledby="library-title"><div><p class="route-kicker">ЛИЧНАЯ БИБЛИОТЕКА</p><h2 id="library-title">Свои маршруты всегда под рукой</h2><p>Поиск уже доступен. Коллекции и теги появятся дальше.</p></div><span class="home-soon">КОЛЛЕКЦИИ И ТЕГИ · СКОРО</span></section>
-      <section class="home-final" aria-labelledby="home-final-title"><p class="route-kicker">ГОТОВЫЙ GPX УЖЕ ЕСТЬ?</p><h2 id="home-final-title">Дайте маршруту одну хорошую ссылку</h2><a class="home-primary" data-home-guest href="/api/auth/google">Войти и опубликовать GPX <span aria-hidden="true">↗</span></a><label class="home-primary" data-home-author for="gpx-file" hidden>Загрузить GPX <span aria-hidden="true">↗</span></label></section>
+      <section class="home-final" aria-labelledby="home-final-title"><p class="route-kicker">ГОТОВЫЙ GPX УЖЕ ЕСТЬ?</p><h2 id="home-final-title">Дайте маршруту одну хорошую ссылку</h2><a class="home-primary" data-home-guest href="/api/auth/google">Войти и опубликовать GPX <span aria-hidden="true">↗</span></a><button class="home-primary" data-home-author data-auth-upload type="button" hidden>Загрузить GPX <span aria-hidden="true">＋</span></button></section>
     </main>`;
 }

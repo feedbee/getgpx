@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { closeOverflowMenuOnOutsideClick } from '../../../src/client/route-actions-ui.js';
+import { closeOverflowMenuOnOutsideClick, renderOwnerTrackActions } from '../../../src/client/route-actions-ui.js';
 
 describe('route action overflow menu', () => {
   it('closes an open menu when the click is outside', () => {
@@ -16,5 +16,18 @@ describe('route action overflow menu', () => {
 
     expect(closeOverflowMenuOnOutsideClick(menu, insideTarget)).toBe(false);
     expect(menu.open).toBe(true);
+  });
+});
+
+describe('owner track action menu', () => {
+  it('keeps both actions and gives each one a matching icon', () => {
+    const markup = renderOwnerTrackActions();
+
+    expect(markup).toContain('id="edit-track"');
+    expect(markup).toContain('Редактировать');
+    expect(markup).toContain('data-action-icon="edit"');
+    expect(markup).toContain('id="delete-track"');
+    expect(markup).toContain('Удалить');
+    expect(markup).toContain('data-action-icon="delete"');
   });
 });

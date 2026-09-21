@@ -22,7 +22,8 @@ describe('renderHomePage', () => {
     expect(markup).toContain('data-home-guest');
     expect(markup).toContain('href="/api/auth/google"');
     expect(markup).toContain('data-home-author');
-    expect(markup).toContain('for="gpx-file"');
+    expect(markup).toContain('data-auth-upload');
+    expect(markup).toContain('type="button"');
   });
 
   it('provides section and preview navigation without scripting', () => {

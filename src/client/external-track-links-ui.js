@@ -26,13 +26,28 @@ const SERVICES = Object.freeze([
   },
 ]);
 
+const SERVICE_FIELD_DETAILS = Object.freeze({
+  komoot: { suffix: 'komoot', placeholder: 'https://www.komoot.com/tour/…' },
+  strava: { suffix: 'strava', placeholder: 'https://www.strava.com/routes/…' },
+  garmin: { suffix: 'garmin', placeholder: 'https://connect.garmin.com/modern/course/…' },
+  rideWithGps: { suffix: 'ride-with-gps', placeholder: 'https://ridewithgps.com/routes/…' },
+});
+
+export function renderExternalLinkFields(idPrefix, { legend = true } = {}) {
+  const fields = SERVICES.map((service) => {
+    const details = SERVICE_FIELD_DETAILS[service.id];
+    return `<label class="service-link-field" for="${idPrefix}-${details.suffix}"><span><img class="service-field-icon" src="${service.logo}" alt="" width="18" height="18" />${service.label}</span><input id="${idPrefix}-${details.suffix}" name="${service.id}" type="url" inputmode="url" placeholder="${details.placeholder}" /></label>`;
+  }).join('');
+  return `<fieldset class="external-links-fields">${legend ? '<legend>Ссылки на трек в других сервисах</legend>' : ''}${fields}</fieldset>`;
+}
+
 export function availableExternalTrackLinks(links = {}) {
   return SERVICES.flatMap((service) => links[service.id]
     ? [{ ...service, url: links[service.id] }]
     : []);
 }
 
-export function renderExternalTrackLinks(container, links, documentRef = null, { compact = false } = {}) {
+export function renderExternalTrackLinks(container, links, documentRef = null, { compact = false, inline = false } = {}) {
   const available = availableExternalTrackLinks(links);
   if (!available.length) {
     container.replaceChildren();
@@ -42,7 +57,7 @@ export function renderExternalTrackLinks(container, links, documentRef = null, {
   const ownerDocument = documentRef || document;
   const anchors = available.map((service) => {
     const anchor = ownerDocument.createElement('a');
-    anchor.className = `external-track-link external-track-link-${service.id}${compact ? ' external-track-link-compact' : ''}`;
+    anchor.className = `external-track-link external-track-link-${service.id}${compact ? ' external-track-link-compact' : ''}${inline ? ' external-track-link-inline' : ''}`;
     anchor.href = service.url;
     anchor.target = '_blank';
     anchor.rel = 'noopener noreferrer';
