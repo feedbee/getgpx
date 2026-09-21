@@ -203,6 +203,7 @@ describe('track service', () => {
     expect(track).toEqual({
       id: 'track-1',
       title: 'Ride',
+      routeType: 'other',
       status: 'FAILED',
       analysisLevel: 'BASIC',
       analysisNote: 'Источники: GPX — маршрут, высоты и основные показатели. Дорожные данные недоступны.',
@@ -310,9 +311,9 @@ describe('track service', () => {
     }));
 
     const externalLinks = { komoot: 'https://www.komoot.com/tour/123' };
-    const result = await service.updateDetails({ trackId: 'track-1', ownerId: 'owner-1', title: 'New title', speedKmh: 25, externalLinks });
+    const result = await service.updateDetails({ trackId: 'track-1', ownerId: 'owner-1', title: 'New title', speedKmh: 25, routeType: 'road-cycling', externalLinks });
 
-    expect(trackRepository.updateDetails).toHaveBeenCalledWith(expect.objectContaining({ estimatedDurationMs: 3_600_000, externalLinks }));
+    expect(trackRepository.updateDetails).toHaveBeenCalledWith(expect.objectContaining({ estimatedDurationMs: 3_600_000, routeType: 'road-cycling', externalLinks }));
     expect(result.title).toBe('New title');
     expect(analyzeSource).not.toHaveBeenCalled();
     expect(enrichAnalysis).not.toHaveBeenCalled();

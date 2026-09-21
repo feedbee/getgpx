@@ -1,4 +1,5 @@
 import { renderExternalTrackLinks } from './external-track-links-ui.js';
+import { routeTypeDefinition, routeTypeIcon } from './route-type-ui.js';
 
 const STATUS_LABELS = {
   READY: 'Готов',
@@ -52,7 +53,9 @@ function metric(value, suffix, digits = 0) {
 }
 
 export function formatTrackMetrics(track) {
+  const routeType = routeTypeDefinition(track.routeType);
   return [
+    routeType.shortLabel,
     metric(track.distanceKm, 'км', 1),
     `↗ ${metric(track.ascentM, 'м')}`,
     `↘ ${metric(track.descentM, 'м')}`,
@@ -88,7 +91,8 @@ export function createTrackCard(track, documentRef = document) {
   title.textContent = track.title;
   const metrics = documentRef.createElement('p');
   metrics.className = 'track-card-metrics';
-  metrics.textContent = formatTrackMetrics(track);
+  const routeType = routeTypeDefinition(track.routeType);
+  metrics.innerHTML = `${routeTypeIcon(routeType.id)}<span>${formatTrackMetrics(track)}</span>`;
   const date = documentRef.createElement('time');
   date.className = 'track-card-date';
   date.dateTime = track.createdAt;

@@ -56,13 +56,14 @@ describe('track HTTP handlers', () => {
         'content-type': 'application/gpx+xml',
         'content-length': '7',
         'x-gpx-filename': encodeURIComponent('Заезд.gpx'),
+        'x-track-type': 'gravel-cycling',
       },
     });
     const result = response();
 
     await handlers.upload(source, result);
 
-    expect(trackService.upload).toHaveBeenCalledWith({ ownerId, tier: 'BASIC', filename: 'Заезд.gpx', source });
+    expect(trackService.upload).toHaveBeenCalledWith({ ownerId, tier: 'BASIC', filename: 'Заезд.gpx', routeType: 'gravel-cycling', source });
     expect(result.statusCode).toBe(202);
     expect(result.headers.location).toBe('/api/tracks/track-1/status');
   });
@@ -71,13 +72,29 @@ describe('track HTTP handlers', () => {
     const ownerId = new ObjectId();
     const trackService = { upload: vi.fn().mockRejectedValue(new TrackLimitReachedError(100)) };
     const handlers = createTrackHandlers(trackService, { getUser: vi.fn().mockResolvedValue({ id: ownerId.toString(), tier: 'BASIC' }) });
-    const source = request({ headers: { 'content-type': 'application/gpx+xml', 'x-gpx-filename': 'ride.gpx' } });
+    const source = request({ headers: { 'content-type': 'application/gpx+xml', 'x-gpx-filename': 'ride.gpx', 'x-track-type': 'cycling' } });
     const result = response();
 
     await handlers.upload(source, result);
 
     expect(result.statusCode).toBe(409);
     expect(result.body.error.code).toBe('TRACK_LIMIT_REACHED');
+  });
+
+  it('rejects an absent or unknown route type before storing an upload', async () => {
+    const ownerId = new ObjectId();
+    const trackService = { upload: vi.fn() };
+    const handlers = createTrackHandlers(trackService, { getUser: vi.fn().mockResolvedValue({ id: ownerId.toString() }) });
+
+    for (const routeType of ['', 'e-bike', 'bike-commuting']) {
+      const result = response();
+      await handlers.upload(request({ headers: {
+        'content-type': 'application/gpx+xml', 'x-gpx-filename': 'ride.gpx', 'x-track-type': routeType,
+      } }), result);
+      expect(result.statusCode).toBe(422);
+      expect(result.body.error.code).toBe('INVALID_ROUTE_TYPE');
+    }
+    expect(trackService.upload).not.toHaveBeenCalled();
   });
 
   it('rejects unsupported content and declared oversized uploads', async () => {
@@ -92,6 +109,7 @@ describe('track HTTP handlers', () => {
       'content-type': 'application/gpx+xml',
       'content-length': String(25 * 1024 * 1024 + 1),
       'x-gpx-filename': 'ride.gpx',
+      'x-track-type': 'cycling',
     } }), tooLarge);
 
     expect(wrongType.statusCode).toBe(415);
@@ -152,6 +170,7 @@ describe('track HTTP handlers', () => {
     valid.body = {
       title: ' Renamed ',
       speedKmh: 32.5,
+      routeType: 'road-cycling',
       externalLinks: {
         komoot: ' https://www.komoot.com/tour/123 ',
         strava: '',
@@ -172,6 +191,7 @@ describe('track HTTP handlers', () => {
       ownerId,
       title: 'Renamed',
       speedKmh: 32.5,
+      routeType: 'road-cycling',
       externalLinks: {
         komoot: 'https://www.komoot.com/tour/123',
         garmin: 'https://connect.garmin.com/modern/course/456',
@@ -194,7 +214,7 @@ describe('track HTTP handlers', () => {
       { unknown: 'https://example.com' },
     ]) {
       const source = request({ params: { id: trackId.toString() } });
-      source.body = { title: 'Ride', speedKmh: 20, externalLinks };
+      source.body = { title: 'Ride', speedKmh: 20, routeType: 'cycling', externalLinks };
       const result = response();
       await handlers.update(source, result);
       expect(result.statusCode).toBe(422);

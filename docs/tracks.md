@@ -34,7 +34,7 @@ edit flow. The user menu links to `/my-tracks`.
 
 Use a `tracks` collection for searchable metadata and derived analysis. Every track
 has a schema version, immutable owner id, public Mongo ObjectId, original filename,
-editable title, optional HTTPS links to Komoot, Strava, Garmin, and Ride with GPS,
+editable title, one editable route type, optional HTTPS links to Komoot, Strava, Garmin, and Ride with GPS,
 timestamps, analysis status/error, processing revision, effective
 speed, metrics, normalized preview path, route points, and derived road, surface,
 gradient, climb, and descent data. Named GPX waypoints are retained as points of
@@ -103,15 +103,17 @@ The parser must be bounded and must not permit XML external entities.
 - `GET /api/tracks/mine?query=&cursor=` — authenticated owner list, newest first.
 - `GET /api/tracks/:id` — public track at any processing outcome, including the
   deepest completed analysis and a human-readable provenance note.
-- `PATCH /api/tracks/:id` — owner-only title, speed, and external-service links update.
+- `PATCH /api/tracks/:id` — owner-only route type, title, speed, and external-service links update.
 - `PUT /api/tracks/:id/file` — owner-only GPX replacement and reprocessing.
 - `POST /api/tracks/:id/retry-analysis` — owner-only retry after enrichment failure.
 - `GET /api/tracks/:id/download` — public original GPX download with its filename.
 - `DELETE /api/tracks/:id` — owner-only permanent deletion after UI confirmation.
 - `DELETE /api/tracks` — owner-only bulk deletion of 1–100 track ids after a single UI confirmation.
 
-The upload request uses `application/gpx+xml` and a percent-encoded `X-GPX-Filename`
-header. `GET /api/tracks/:id/status` is owner-only and exposes the `QUEUED`, `PARSING`,
+The upload request uses `application/gpx+xml`, a percent-encoded `X-GPX-Filename`
+header, and an allowlisted `X-Track-Type` header. The browser initially sends
+`cycling`; after the file is accepted, the processing metadata view lets the owner
+change it with the same icon dropdown used by track editing. `GET /api/tracks/:id/status` is owner-only and exposes the `QUEUED`, `PARSING`,
 and `ENRICHING` phases for polling. The owner list uses an opaque cursor over
 `(createdAt, _id)`, returns 24 items per page, and performs a case-insensitive
 normalized substring search over the title.

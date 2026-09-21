@@ -5,6 +5,7 @@ import { GpxFileTooLargeError } from './gpx-file-store.js';
 import { TRACK_UPLOAD_LIMITS } from './track-repository.js';
 import { InvalidTrackCursorError, TrackLimitReachedError } from './track-service.js';
 import { normalizeExternalTrackLinks } from './external-track-links.js';
+import { isRouteType } from '../route-types.js';
 
 const GPX_CONTENT_TYPES = new Set(['application/gpx+xml', 'application/xml', 'text/xml']);
 
@@ -102,11 +103,13 @@ export function createTrackHandlers(trackService, authService) {
       if (!trackId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
       const title = typeof request.body?.title === 'string' ? request.body.title.normalize('NFKC').trim() : '';
       const speedKmh = Number(request.body?.speedKmh);
+      const routeType = request.body?.routeType;
       const externalLinks = normalizeExternalTrackLinks(request.body?.externalLinks);
       if (!title || title.length > 200) return error(response, 422, 'INVALID_TRACK_TITLE', 'Название должно содержать от 1 до 200 символов.');
       if (!Number.isFinite(speedKmh) || speedKmh < 1 || speedKmh > 50) return error(response, 422, 'INVALID_TRACK_SPEED', 'Скорость должна быть от 1 до 50 км/ч.');
+      if (!isRouteType(routeType)) return error(response, 422, 'INVALID_ROUTE_TYPE', 'Выберите тип маршрута.');
       if (!externalLinks) return error(response, 422, 'INVALID_EXTERNAL_LINKS', 'Проверьте ссылки на внешние сервисы. Допустимы только HTTPS-ссылки на соответствующий сервис.');
-      const track = await trackService.updateDetails({ trackId, ownerId, title, speedKmh, externalLinks });
+      const track = await trackService.updateDetails({ trackId, ownerId, title, speedKmh, routeType, externalLinks });
       return track ? send(response, 200, { data: track }) : error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
     },
 
@@ -180,13 +183,18 @@ export function createTrackHandlers(trackService, authService) {
         error(response, 422, 'INVALID_GPX_FILENAME', 'Имя файла должно оканчиваться на .gpx.');
         return;
       }
+      const routeType = String(request.headers['x-track-type'] || '');
+      if (!isRouteType(routeType)) {
+        error(response, 422, 'INVALID_ROUTE_TYPE', 'Выберите тип маршрута.');
+        return;
+      }
       const declaredBytes = Number(request.headers['content-length']);
       if (Number.isFinite(declaredBytes) && declaredBytes > TRACK_UPLOAD_LIMITS.maxBytes) {
         error(response, 413, 'GPX_FILE_TOO_LARGE', 'GPX-файл должен быть не больше 25 MiB.');
         return;
       }
       try {
-        const status = await trackService.upload({ ownerId, tier, filename, source: request });
+        const status = await trackService.upload({ ownerId, tier, filename, routeType, source: request });
         response.setHeader('Location', `/api/tracks/${status.id}/status`);
         send(response, 202, { data: status });
       } catch (uploadError) {

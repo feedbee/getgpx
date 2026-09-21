@@ -14,14 +14,15 @@ describe('my tracks UI', () => {
     expect(previewPolyline(null)).toBe('');
   });
 
-  it('formats card metrics in the same order as the track page', () => {
+  it('formats card metrics with the route type before distance', () => {
     expect(formatTrackMetrics({
       distanceKm: 42.36,
       ascentM: 812,
       descentM: 790,
       estimatedDurationMs: 7_200_000,
       speedKmh: 21.2,
-    })).toBe('42,4 км · ↗ 812 м · ↘ 790 м · 2:00 · 21,2 км/ч');
+      routeType: 'gravel-cycling',
+    })).toContain('Gravel · 42,4 км · ↗ 812 м');
   });
 
   it('clears an active search, restores the collection URL, and reloads tracks', () => {

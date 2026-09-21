@@ -9,12 +9,17 @@ describe('track upload dialogs', () => {
     expect(markup).toContain('Перетащите GPX-файл сюда');
     expect(markup).toContain('for="gpx-file"');
     expect(markup).toContain('Выбрать файл вручную');
+    expect(markup.indexOf('Перетащите GPX-файл сюда')).toBeLessThan(markup.indexOf('Тип маршрута'));
+    expect(markup).toContain('id="upload-route-type"');
+    expect(markup).toContain('name="routeType"');
+    expect(markup).toContain('value="gravel-cycling"');
   });
 
   it('keeps processing, metadata editing, and completion actions in one dialog', () => {
     const markup = renderTrackUploadDialogs();
 
     expect(markup).toContain('id="upload-track-title"');
+    expect(markup.indexOf('Тип маршрута')).toBeLessThan(markup.indexOf('Название'));
     expect(markup).toContain('Ссылки на трек в других сервисах');
     expect(markup).toContain('name="komoot"');
     expect(markup).toContain('name="strava"');
@@ -38,10 +43,12 @@ describe('track upload dialogs', () => {
     expect(uploadMetadataPayload({
       title: '  Лесной круг  ',
       speedKmh: 20,
+      routeType: 'gravel-cycling',
       links: { komoot: ' https://www.komoot.com/tour/1 ', strava: ' ' },
     })).toEqual({
       title: 'Лесной круг',
       speedKmh: 20,
+      routeType: 'gravel-cycling',
       externalLinks: { komoot: 'https://www.komoot.com/tour/1' },
     });
   });

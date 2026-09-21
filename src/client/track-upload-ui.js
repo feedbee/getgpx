@@ -1,4 +1,5 @@
 import { renderExternalLinkFields } from './external-track-links-ui.js';
+import { renderRouteTypeDropdown } from './route-type-ui.js';
 
 export function uploadMetadataHint(complete) {
   return complete
@@ -6,11 +7,11 @@ export function uploadMetadataHint(complete) {
     : 'Можно изменить, пока идёт обработка';
 }
 
-export function uploadMetadataPayload({ title, speedKmh, links }) {
+export function uploadMetadataPayload({ title, speedKmh, routeType, links }) {
   const externalLinks = Object.fromEntries(Object.entries(links)
     .map(([service, url]) => [service, String(url || '').trim()])
     .filter(([, url]) => url));
-  return { title: String(title || '').normalize('NFKC').trim(), speedKmh, externalLinks };
+  return { title: String(title || '').normalize('NFKC').trim(), speedKmh, routeType, externalLinks };
 }
 
 export function renderTrackUploadDialogs() {
@@ -37,6 +38,7 @@ export function renderTrackUploadDialogs() {
         </div>
         <section class="upload-metadata" id="upload-metadata" aria-labelledby="upload-metadata-title" hidden>
           <div class="upload-metadata-heading"><h3 id="upload-metadata-title">Информация о треке</h3><span id="upload-metadata-hint">${uploadMetadataHint(false)}</span></div>
+          <div class="upload-metadata-row upload-route-type-row">${renderRouteTypeDropdown({ id: 'upload-route-type', name: 'routeType', selected: 'cycling' })}</div>
           <div class="upload-metadata-row" id="upload-title-row">
             <div class="upload-metadata-view"><div><span>Название</span><strong id="upload-track-title-value">—</strong></div><button class="metadata-edit-button" id="edit-upload-title" type="button" aria-label="Изменить название" title="Изменить название">✎</button></div>
             <form class="upload-inline-editor" id="upload-title-form" hidden>

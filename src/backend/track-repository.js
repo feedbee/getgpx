@@ -1,3 +1,5 @@
+import { normalizeRouteType } from '../route-types.js';
+
 export const TRACK_SCHEMA_VERSION = 1;
 export const TRACK_UPLOAD_LIMITS = Object.freeze({
   maxBytes: 25 * 1024 * 1024,
@@ -31,13 +33,14 @@ export function createTrackRepository(tracks) {
       ]);
     },
 
-    async createProcessing({ ownerId, sourceFileId, originalFilename, title }, now = new Date()) {
+    async createProcessing({ ownerId, sourceFileId, originalFilename, title, routeType }, now = new Date()) {
       const track = {
         schemaVersion: TRACK_SCHEMA_VERSION,
         ownerId,
         sourceFileId,
         originalFilename,
         title,
+        routeType: normalizeRouteType(routeType),
         normalizedName: normalizeTrackName(title),
         analysisStatus: TRACK_ANALYSIS_STATUS.processing,
         analysisStep: 'QUEUED',
@@ -75,7 +78,7 @@ export function createTrackRepository(tracks) {
       }
       return tracks.find(filter, {
         projection: {
-          title: 1, createdAt: 1, externalLinks: 1, analysisStatus: 1, analysisStep: 1,
+          title: 1, routeType: 1, createdAt: 1, externalLinks: 1, analysisStatus: 1, analysisStep: 1,
           'analysis.distanceKm': 1, 'analysis.ascentM': 1, 'analysis.descentM': 1,
           'analysis.effectiveSpeedKmh': 1,
           'analysis.estimatedDurationMs': 1, 'analysis.preview': 1,
@@ -182,12 +185,13 @@ export function createTrackRepository(tracks) {
       );
     },
 
-    updateDetails({ trackId, ownerId, title, speedKmh, estimatedDurationMs, externalLinks }, now = new Date()) {
+    updateDetails({ trackId, ownerId, title, speedKmh, estimatedDurationMs, routeType, externalLinks }, now = new Date()) {
       return tracks.findOneAndUpdate(
         { _id: trackId, ownerId },
         {
           $set: {
             title,
+            routeType: normalizeRouteType(routeType),
             normalizedName: normalizeTrackName(title),
             'analysis.effectiveSpeedKmh': speedKmh,
             'analysis.estimatedDurationMs': estimatedDurationMs,

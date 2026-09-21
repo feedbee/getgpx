@@ -57,6 +57,7 @@ describe('track repository', () => {
       sourceFileId,
       originalFilename: 'Weekend Ride.gpx',
       title: 'Weekend Ride',
+      routeType: 'gravel-cycling',
     }, now);
 
     expect(track).toMatchObject({
@@ -65,6 +66,7 @@ describe('track repository', () => {
       sourceFileId,
       originalFilename: 'Weekend Ride.gpx',
       title: 'Weekend Ride',
+      routeType: 'gravel-cycling',
       normalizedName: 'weekend ride',
       analysisStatus: 'PROCESSING',
       analysisStep: 'QUEUED',
@@ -111,7 +113,7 @@ describe('track repository', () => {
 
     expect(collection.find).toHaveBeenCalledWith({ ownerId, normalizedName: { $regex: 'вечер\\.\\*' }, $or: [
       { createdAt: { $lt: before.createdAt } }, { createdAt: before.createdAt, _id: { $lt: before.id } },
-    ] }, expect.objectContaining({ projection: expect.objectContaining({ title: 1, externalLinks: 1, 'analysis.preview': 1 }) }));
+    ] }, expect.objectContaining({ projection: expect.objectContaining({ title: 1, routeType: 1, externalLinks: 1, 'analysis.preview': 1 }) }));
     const cursor = collection.find.mock.results[0].value;
     expect(cursor.sort).toHaveBeenCalledWith({ createdAt: -1, _id: -1 });
     expect(cursor.limit).toHaveBeenCalledWith(25);
@@ -203,7 +205,7 @@ describe('track repository', () => {
     });
   });
 
-  it('stores external service links together with editable track details', async () => {
+  it('stores route type and external service links together with editable track details', async () => {
     const repository = createTrackRepository(createTracksCollection());
     const ownerId = new ObjectId();
     const track = await repository.createProcessing({
@@ -220,9 +222,11 @@ describe('track repository', () => {
       title: 'Ride',
       speedKmh: 20,
       estimatedDurationMs: 3_600_000,
+      routeType: 'road-cycling',
       externalLinks,
     });
 
     expect(updated.externalLinks).toEqual(externalLinks);
+    expect(updated.routeType).toBe('road-cycling');
   });
 });

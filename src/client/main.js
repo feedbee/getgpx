@@ -8,6 +8,7 @@ import { closeOverflowMenuOnOutsideClick, renderOwnerTrackActions } from './rout
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js';
 import { renderTrackUploadDialogs, uploadMetadataHint, uploadMetadataPayload } from './track-upload-ui.js';
+import { closeRouteTypeDropdownOnEscape, closeRouteTypeDropdownsOutside, renderRouteTypeDropdown, routeTypeDefinition, routeTypeIcon, selectedRouteType, setRouteTypeDropdown } from './route-type-ui.js';
 import { availableExternalTrackLinks, renderExternalLinkFields, renderExternalTrackLinks } from './external-track-links-ui.js';
 import { analyzeTrack } from './domain/gpx.js';
 import { createDemoTrack } from './domain/demo.js';
@@ -64,9 +65,10 @@ app.innerHTML = `
     <section class="compact-route-header" aria-label="Текущий маршрут" aria-hidden="true">
       <strong id="compact-track-name">Загрузка маршрута…</strong>
       <div class="compact-route-metrics" aria-label="Краткие показатели маршрута">
-        <span aria-label="Расстояние маршрута"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 9l-3 3 3 3m10-6 3 3-3 3"/></svg><b id="compact-distance">—</b> км</span>
-        <span aria-label="Набор высоты"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17 17 5m-7 0h7v7"/></svg><b id="compact-ascent">—</b> м <small>набор</small></span>
-        <span aria-label="Спуск по высоте"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 12 12m0-7v7h-7"/></svg><b id="compact-descent">—</b> м <small>спуск</small></span>
+        <span class="route-type-metric" id="compact-route-type-metric" aria-label="Тип маршрута">${routeTypeIcon('other')}<b>Other</b></span>
+        <span class="distance-metric" aria-label="Расстояние маршрута"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 9l-3 3 3 3m10-6 3 3-3 3"/></svg><b id="compact-distance">—</b> км</span>
+        <span class="elevation-metric" aria-label="Набор высоты"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17 17 5m-7 0h7v7"/></svg><b id="compact-ascent">—</b> м <small>набор</small></span>
+        <span class="elevation-metric" aria-label="Спуск по высоте"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 12 12m0-7v7h-7"/></svg><b id="compact-descent">—</b> м <small>спуск</small></span>
         <span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><b id="compact-duration">—</b> <i id="compact-duration-unit"></i></span>
         <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.6 18a8 8 0 1 1 12.8 0M12 13l4-4"/><path d="M4 18h16"/></svg><b id="compact-speed">— км/ч</b></span>
       </div>
@@ -100,9 +102,10 @@ app.innerHTML = `
       </div>
       <div class="route-summary-row">
         <div class="route-metrics" aria-label="Показатели маршрута">
-          <span aria-label="Расстояние маршрута"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 9l-3 3 3 3m10-6 3 3-3 3"/></svg><b id="distance">—</b> км</span>
-          <span aria-label="Набор высоты"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17 17 5m-7 0h7v7"/></svg><b id="ascent">—</b> м <small>набор</small></span>
-          <span aria-label="Спуск по высоте"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 12 12m0-7v7h-7"/></svg><b id="descent">—</b> м <small>спуск</small></span>
+          <span class="route-type-metric" id="route-type-metric" aria-label="Тип маршрута">${routeTypeIcon('other')}<b>Other</b></span>
+          <span class="distance-metric" aria-label="Расстояние маршрута"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 9l-3 3 3 3m10-6 3 3-3 3"/></svg><b id="distance">—</b> км</span>
+          <span class="elevation-metric" aria-label="Набор высоты"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17 17 5m-7 0h7v7"/></svg><b id="ascent">—</b> м <small>набор</small></span>
+          <span class="elevation-metric" aria-label="Спуск по высоте"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 12 12m0-7v7h-7"/></svg><b id="descent">—</b> м <small>спуск</small></span>
           <span class="moving-metric"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><b id="duration">—</b> <i id="duration-unit"></i></span>
           <span class="moving-metric"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.6 18a8 8 0 1 1 12.8 0M12 13l4-4"/><path d="M4 18h16"/></svg><abbr id="average-speed-badge" title="Средняя скорость движения по данным GPX">— км/ч</abbr></span>
         </div>
@@ -165,6 +168,7 @@ app.innerHTML = `
   <dialog class="edit-track-dialog" id="edit-track-dialog">
     <form id="edit-track-form">
       <p class="route-kicker">РЕДАКТИРОВАНИЕ</p><h2>Параметры трека</h2>
+      ${renderRouteTypeDropdown({ id: 'edit-track-route-type', name: 'routeType' })}
       <label>Название<input id="edit-track-title" name="title" required maxlength="200" /></label>
       <label>Расчётная скорость, км/ч<input id="edit-track-speed" name="speedKmh" type="number" min="1" max="50" step="0.1" required /></label>
       ${renderExternalLinkFields('edit-track')}
@@ -235,6 +239,7 @@ async function loadTrackManagement(trackId) {
   document.querySelector('#owner-track-actions').hidden = false;
   document.querySelector('#edit-track-title').value = data.title;
   document.querySelector('#edit-track-speed').value = data.speedKmh || 20;
+  setRouteTypeDropdown(document.querySelector('#edit-track-route-type'), data.routeType);
   setExternalLinkFields(data.externalLinks);
   document.querySelectorAll('.source-retry').forEach((button) => {
     button.hidden = !data.canRetry || button.dataset.retrySource !== data.retrySource;
@@ -302,11 +307,12 @@ function externalLinksFromEditor() {
   };
 }
 
-function openTrackEditor({ id, title, speedKmh, externalLinks }) {
+function openTrackEditor({ id, title, speedKmh, routeType, externalLinks }) {
   managedTrackId = id;
   managedTrackTitle = title;
   document.querySelector('#edit-track-title').value = title;
   document.querySelector('#edit-track-speed').value = speedKmh || 20;
+  setRouteTypeDropdown(document.querySelector('#edit-track-route-type'), routeType);
   setExternalLinkFields(externalLinks);
   document.querySelector('#edit-track-error').hidden = true;
   document.querySelector('#edit-track-dialog').showModal();
@@ -955,7 +961,7 @@ function setActivePoint(index, { showContext = false } = {}) {
   setPointContext(showContext ? point : null);
 }
 
-function renderTrack(rawTrack, { persisted = false, analysisSources } = {}) {
+function renderTrack(rawTrack, { persisted = false, analysisSources, routeType = 'other' } = {}) {
   enrichmentRun += 1;
   clearRangeFocus();
   hoveredSurfaceId = null;
@@ -985,6 +991,13 @@ function renderTrack(rawTrack, { persisted = false, analysisSources } = {}) {
   currentViewMetrics = null;
   document.querySelector('#track-name').textContent = currentTrack.name;
   document.querySelector('#compact-track-name').textContent = currentTrack.name;
+  const type = routeTypeDefinition(routeType);
+  const typeMetric = document.querySelector('#route-type-metric');
+  typeMetric.innerHTML = `${routeTypeIcon(type.id)}<b>${type.shortLabel}</b>`;
+  typeMetric.setAttribute('aria-label', `Тип маршрута: ${type.label}`);
+  const compactTypeMetric = document.querySelector('#compact-route-type-metric');
+  compactTypeMetric.innerHTML = `${routeTypeIcon(type.id)}<b>${type.shortLabel}</b>`;
+  compactTypeMetric.setAttribute('aria-label', `Тип маршрута: ${type.label}`);
   document.querySelector('#distance').textContent = currentTrack.distanceKm.toFixed(1);
   document.querySelector('#compact-distance').textContent = currentTrack.distanceKm.toFixed(1);
   document.querySelector('#ascent').textContent = currentTrack.hasElevation ? currentTrack.ascentM.toLocaleString('ru-RU') : '—';
@@ -1055,7 +1068,7 @@ async function loadPublicTrack(trackId) {
     return;
   }
   data.analysis.name = data.title;
-  renderTrack(data.analysis, { persisted: true, analysisSources: data.analysisSources });
+  renderTrack(data.analysis, { persisted: true, analysisSources: data.analysisSources, routeType: data.routeType });
 }
 
 const processingOrder = ['UPLOADING', 'QUEUED', 'PARSING', 'ENRICHING', 'COMPLETE'];
@@ -1091,6 +1104,7 @@ function renderUploadMetadata() {
   document.querySelector('#upload-metadata').hidden = false;
   document.querySelector('#upload-track-title-value').textContent = activeUploadMetadata.title;
   document.querySelector('#upload-track-title').value = activeUploadMetadata.title;
+  setRouteTypeDropdown(document.querySelector('#upload-route-type'), activeUploadMetadata.routeType);
   const links = availableExternalTrackLinks(activeUploadMetadata.externalLinks);
   const linksValue = document.querySelector('#upload-links-value');
   if (links.length) renderExternalTrackLinks(linksValue, activeUploadMetadata.externalLinks, null, { inline: true });
@@ -1121,6 +1135,7 @@ async function loadUploadMetadata(trackId) {
     id: trackId,
     title: data.title,
     speedKmh: data.speedKmh || 20,
+    routeType: data.routeType,
     externalLinks: data.externalLinks || {},
   };
   renderUploadMetadata();
@@ -1186,6 +1201,7 @@ async function uploadFile(file) {
         accept: 'application/json',
         'content-type': 'application/gpx+xml',
         'x-gpx-filename': encodeURIComponent(file.name),
+        'x-track-type': 'cycling',
       },
       body: file,
     });
@@ -1521,11 +1537,28 @@ document.querySelector('#cancel-upload-links').addEventListener('click', () => {
   renderUploadMetadata();
 });
 
-async function saveUploadMetadata({ title, links }) {
+document.addEventListener('change', async (event) => {
+  const input = event.target.closest('.route-type-dropdown input[type="radio"]');
+  if (!input) return;
+  const dropdown = input.closest('.route-type-dropdown');
+  setRouteTypeDropdown(dropdown, input.value);
+  dropdown.open = false;
+  if (dropdown.id === 'upload-route-type') await saveUploadMetadata({ routeType: input.value });
+});
+
+document.addEventListener('pointerdown', (event) => {
+  closeRouteTypeDropdownsOutside(event.target);
+});
+document.addEventListener('keydown', (event) => {
+  closeRouteTypeDropdownOnEscape(event);
+}, true);
+
+async function saveUploadMetadata({ title, routeType, links }) {
   if (!activeUploadMetadata) return false;
   const payload = uploadMetadataPayload({
     title: title ?? activeUploadMetadata.title,
     speedKmh: activeUploadMetadata.speedKmh,
+    routeType: routeType ?? activeUploadMetadata.routeType,
     links: links ?? activeUploadMetadata.externalLinks,
   });
   const error = document.querySelector('#upload-metadata-error');
@@ -1542,6 +1575,7 @@ async function saveUploadMetadata({ title, links }) {
     return false;
   }
   activeUploadMetadata.title = responsePayload.data.title;
+  activeUploadMetadata.routeType = responsePayload.data.routeType;
   activeUploadMetadata.externalLinks = responsePayload.data.externalLinks || {};
   renderUploadMetadata();
   return true;
@@ -1608,6 +1642,7 @@ document.querySelector('#edit-track').addEventListener('click', () => openTrackE
   id: publicTrackId,
   title: document.querySelector('#edit-track-title').value,
   speedKmh: Number(document.querySelector('#edit-track-speed').value),
+  routeType: publicTrackData?.routeType,
   externalLinks: publicTrackData?.externalLinks,
 }));
 document.querySelector('#cancel-track-edit').addEventListener('click', () => document.querySelector('#edit-track-dialog').close());
@@ -1621,6 +1656,7 @@ document.querySelector('#edit-track-form').addEventListener('submit', async (eve
     body: JSON.stringify({
       title: document.querySelector('#edit-track-title').value,
       speedKmh: Number(document.querySelector('#edit-track-speed').value),
+      routeType: selectedRouteType(document.querySelector('#edit-track-route-type')),
       externalLinks: externalLinksFromEditor(),
     }),
   });
@@ -1641,7 +1677,7 @@ document.querySelector('#edit-track-form').addEventListener('submit', async (eve
     linksSection.hidden = availableExternalTrackLinks(payload.data.externalLinks).length === 0;
     document.querySelector('#external-track-links-nav').hidden = linksSection.hidden;
     payload.data.analysis.name = payload.data.title;
-    renderTrack(payload.data.analysis, { persisted: true, analysisSources: payload.data.analysisSources });
+    renderTrack(payload.data.analysis, { persisted: true, analysisSources: payload.data.analysisSources, routeType: payload.data.routeType });
   }
 });
 document.querySelector('#replacement-gpx').addEventListener('change', (event) => {
@@ -1716,4 +1752,4 @@ if (isHomePage) initHomeExampleMap();
 restoreSession();
 const publicTrackMatch = window.location.pathname.match(/^\/tracks\/([a-f\d]{24})$/i);
 if (publicTrackMatch) loadPublicTrack(publicTrackMatch[1]);
-else if (!isMyTracksPage && !isHomePage) renderTrack(createDemoTrack());
+else if (!isMyTracksPage && !isHomePage) renderTrack(createDemoTrack(), { routeType: 'hiking' });

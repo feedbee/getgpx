@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb';
 import { DEFAULT_USER_TIERS } from './configuration.js';
 import { normalizeTrackName } from './track-repository.js';
+import { normalizeRouteType } from '../route-types.js';
 
 const ERROR_MESSAGES = {
   INVALID_GPX: 'Не удалось прочитать GPX-файл. Проверьте файл и попробуйте снова.',
@@ -95,6 +96,7 @@ function publicTrack(track, uploader = null) {
   return {
     id,
     title: track.title,
+    routeType: normalizeRouteType(track.routeType),
     status: track.analysisStatus,
     analysisLevel,
     analysisNote,
@@ -110,7 +112,7 @@ function publicTrack(track, uploader = null) {
 function trackCard(track) {
   const id = track._id.toString();
   return {
-    id, title: track.title, createdAt: track.createdAt.toISOString(),
+    id, title: track.title, routeType: normalizeRouteType(track.routeType), createdAt: track.createdAt.toISOString(),
     status: track.analysisStatus, step: track.analysisStep,
     distanceKm: track.analysis?.distanceKm ?? null,
     ascentM: track.analysis?.ascentM ?? null,
@@ -240,7 +242,7 @@ export function createTrackService({
   }
 
   return {
-    async upload({ ownerId, tier = 'BASIC', filename, source }) {
+    async upload({ ownerId, tier = 'BASIC', filename, routeType, source }) {
       const limit = configuration.userTiers[tier]?.limits?.tracks
         ?? configuration.userTiers.BASIC.limits.tracks;
       if (await trackRepository.countOwned(ownerId) >= limit) throw new TrackLimitReachedError(limit);
@@ -252,6 +254,7 @@ export function createTrackService({
           sourceFileId,
           originalFilename: filename,
           title: filenameTitle(filename),
+          routeType,
         });
       } catch (error) {
         await gpxFileStore.delete(sourceFileId).catch(() => undefined);
@@ -269,7 +272,7 @@ export function createTrackService({
       const track = await trackRepository.findOwnedById(trackId, ownerId);
       if (!track) return null;
       return {
-        id: track._id.toString(), title: track.title,
+        id: track._id.toString(), title: track.title, routeType: normalizeRouteType(track.routeType),
         speedKmh: track.analysis?.effectiveSpeedKmh ?? null,
         externalLinks: track.externalLinks || {},
         analysis: statusOf(track),
@@ -284,11 +287,11 @@ export function createTrackService({
       };
     },
 
-    async updateDetails({ trackId, ownerId, title, speedKmh, externalLinks }) {
+    async updateDetails({ trackId, ownerId, title, speedKmh, routeType, externalLinks }) {
       const track = await trackRepository.findOwnedById(trackId, ownerId);
       if (!track?.analysis) return null;
       const updated = await trackRepository.updateDetails({
-        trackId, ownerId, title, speedKmh, externalLinks,
+        trackId, ownerId, title, speedKmh, routeType, externalLinks,
         estimatedDurationMs: (track.analysis.distanceKm / speedKmh) * 3_600_000,
       });
       if (!updated) return null;
