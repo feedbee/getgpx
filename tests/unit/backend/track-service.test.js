@@ -11,6 +11,7 @@ function dependencies() {
   };
   const trackRepository = {
     createProcessing: vi.fn().mockResolvedValue(track),
+    countOwned: vi.fn().mockResolvedValue(0),
     findById: vi.fn().mockResolvedValue(track),
     findOwnedById: vi.fn().mockResolvedValue(track),
     setAnalysisStep: vi.fn().mockResolvedValue(track),
@@ -45,6 +46,7 @@ function dependencies() {
     userRepository,
     analyzeSource,
     enrichAnalysis,
+    configuration: { userTiers: { BASIC: { limits: { tracks: 100 } }, PREMIUM: { limits: { tracks: 1000 } } } },
     schedule: (job) => scheduled.push(job),
   });
   return { service, scheduled, trackRepository, gpxFileStore, userRepository, analyzeSource, enrichAnalysis };
@@ -81,6 +83,27 @@ describe('track service', () => {
     expect(trackRepository.createProcessing).toHaveBeenCalledWith(expect.objectContaining({ title: 'Weekend Ride', sourceFileId: 'file-1' }));
     expect(status).toEqual({ id: 'track-1', status: 'PROCESSING', step: 'QUEUED', error: null });
     expect(scheduled).toHaveLength(1);
+  });
+
+  it('rejects a basic user at the configured track limit before storing the source', async () => {
+    const { service, trackRepository, gpxFileStore } = dependencies();
+    trackRepository.countOwned.mockResolvedValue(100);
+
+    await expect(service.upload({
+      ownerId: 'owner-1', tier: 'BASIC', filename: 'ride.gpx', source: Readable.from('<gpx />'),
+    })).rejects.toMatchObject({ code: 'TRACK_LIMIT_REACHED', limit: 100 });
+    expect(gpxFileStore.save).not.toHaveBeenCalled();
+  });
+
+  it('uses the premium limit and defaults a missing tier to basic', async () => {
+    const premium = dependencies();
+    premium.trackRepository.countOwned.mockResolvedValue(999);
+    await expect(premium.service.upload({ ownerId: 'owner-1', tier: 'PREMIUM', filename: 'ride.gpx', source: Readable.from('<gpx />') })).resolves.toBeTruthy();
+
+    const legacy = dependencies();
+    legacy.trackRepository.countOwned.mockResolvedValue(100);
+    await expect(legacy.service.upload({ ownerId: 'owner-1', filename: 'ride.gpx', source: Readable.from('<gpx />') }))
+      .rejects.toMatchObject({ code: 'TRACK_LIMIT_REACHED', limit: 100 });
   });
 
   it('parses, persists the base result, enriches it and completes processing', async () => {

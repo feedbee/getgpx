@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../../src/backend/database.js';
+import { loadConfiguration } from '../../src/backend/configuration.js';
 import { createTrackPersistence } from '../../src/backend/track-persistence.js';
 import { createTrackRepository } from '../../src/backend/track-repository.js';
 import { createUserRepository } from '../../src/backend/user-repository.js';
@@ -36,7 +37,24 @@ describeWithMongo('MongoDB integration', () => {
     expect(user.registeredAt).toEqual(registeredAt);
     expect(user.lastLoginAt).toEqual(lastLoginAt);
     expect(user.profileUpdatedAt).toEqual(registeredAt);
+    expect(user.tier).toBe('BASIC');
     await users.deleteOne({ googleSubject: 'integration-google-user' });
+  });
+
+  it('initializes and loads user tier limits from application configuration', async () => {
+    const configurationCollection = await database.collection('configuration');
+    await configurationCollection.deleteOne({ key: 'userTiers' });
+
+    const configuration = await loadConfiguration(database);
+
+    expect(configuration.userTiers).toEqual({
+      BASIC: { limits: { tracks: 100 } },
+      PREMIUM: { limits: { tracks: 1000 } },
+    });
+    await expect(configurationCollection.findOne({ key: 'userTiers' })).resolves.toMatchObject({
+      key: 'userTiers',
+      value: configuration.userTiers,
+    });
   });
 
   it('uses MongoDB GridFS for GPX source files and creates track indexes', async () => {

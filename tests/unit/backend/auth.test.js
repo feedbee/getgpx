@@ -6,7 +6,13 @@ describe('authentication service', () => {
     expect(publicUser({
       _id: { toString: () => 'user-1' }, googleSubject: 'secret-subject', email: 'rider@example.com',
       displayName: 'Rider', avatarUrl: null, registeredAt: new Date(), lastLoginAt: new Date(),
-    })).toEqual({ id: 'user-1', email: 'rider@example.com', displayName: 'Rider', avatarUrl: null });
+    })).toEqual({ id: 'user-1', email: 'rider@example.com', displayName: 'Rider', avatarUrl: null, tier: 'BASIC' });
+  });
+
+  it('exposes an explicitly assigned premium tier', () => {
+    expect(publicUser({
+      _id: { toString: () => 'user-1' }, email: 'rider@example.com', displayName: 'Rider', avatarUrl: null, tier: 'PREMIUM',
+    }).tier).toBe('PREMIUM');
   });
 
   it('creates a signed PKCE login URL and accepts a matching callback', async () => {

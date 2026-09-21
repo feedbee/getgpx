@@ -1,4 +1,5 @@
 import { ObjectId } from 'mongodb';
+import { DEFAULT_USER_TIERS } from './configuration.js';
 import { normalizeTrackName } from './track-repository.js';
 
 const ERROR_MESSAGES = {
@@ -13,6 +14,14 @@ export class InvalidTrackCursorError extends Error {
   constructor() {
     super('Invalid track cursor.');
     this.code = 'INVALID_CURSOR';
+  }
+}
+
+export class TrackLimitReachedError extends Error {
+  constructor(limit) {
+    super(`Track limit of ${limit} reached.`);
+    this.code = 'TRACK_LIMIT_REACHED';
+    this.limit = limit;
   }
 }
 
@@ -120,6 +129,7 @@ export function createTrackService({
   userRepository,
   analyzeSource,
   enrichAnalysis,
+  configuration = { userTiers: DEFAULT_USER_TIERS },
   enrichmentTimeoutMs = EXTERNAL_ANALYSIS_TIMEOUT_MS,
   schedule = (job) => setImmediate(job),
 }) {
@@ -228,7 +238,10 @@ export function createTrackService({
   }
 
   return {
-    async upload({ ownerId, filename, source }) {
+    async upload({ ownerId, tier = 'BASIC', filename, source }) {
+      const limit = configuration.userTiers[tier]?.limits?.tracks
+        ?? configuration.userTiers.BASIC.limits.tracks;
+      if (await trackRepository.countOwned(ownerId) >= limit) throw new TrackLimitReachedError(limit);
       const sourceFileId = await gpxFileStore.save({ filename, ownerId, source });
       let track;
       try {

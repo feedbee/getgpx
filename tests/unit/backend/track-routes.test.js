@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 import { ObjectId } from 'mongodb';
 import { describe, expect, it, vi } from 'vitest';
 import { createTrackHandlers } from '../../../src/backend/track-routes.js';
+import { TrackLimitReachedError } from '../../../src/backend/track-service.js';
 
 function response() {
   return {
@@ -61,9 +62,22 @@ describe('track HTTP handlers', () => {
 
     await handlers.upload(source, result);
 
-    expect(trackService.upload).toHaveBeenCalledWith({ ownerId, filename: 'Заезд.gpx', source });
+    expect(trackService.upload).toHaveBeenCalledWith({ ownerId, tier: 'BASIC', filename: 'Заезд.gpx', source });
     expect(result.statusCode).toBe(202);
     expect(result.headers.location).toBe('/api/tracks/track-1/status');
+  });
+
+  it('returns a conflict when the user has reached the configured track limit', async () => {
+    const ownerId = new ObjectId();
+    const trackService = { upload: vi.fn().mockRejectedValue(new TrackLimitReachedError(100)) };
+    const handlers = createTrackHandlers(trackService, { getUser: vi.fn().mockResolvedValue({ id: ownerId.toString(), tier: 'BASIC' }) });
+    const source = request({ headers: { 'content-type': 'application/gpx+xml', 'x-gpx-filename': 'ride.gpx' } });
+    const result = response();
+
+    await handlers.upload(source, result);
+
+    expect(result.statusCode).toBe(409);
+    expect(result.body.error.code).toBe('TRACK_LIMIT_REACHED');
   });
 
   it('rejects unsupported content and declared oversized uploads', async () => {

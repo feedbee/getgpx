@@ -16,10 +16,15 @@ Node.js / Express
   ├─ calls Valhalla and enriches matches from Overpass
   ├─ serves the static production bundle
   ├─ owns MongoDB lifecycle and readiness
-  └─ initializes saved-track, GridFS, and enrichment-cache persistence
+  └─ initializes saved-track, GridFS, enrichment-cache, and application configuration persistence
               │
 MongoDB (users, sessions, tracks, GPX GridFS files, and enrichment cache)
 ```
+
+At startup the backend creates the `configuration` collection entry keyed by
+`userTiers` when it is missing, then loads that entry into memory once. Configuration
+changes take effect only after an application restart. New users receive the `BASIC`
+tier; users whose older records omit `tier` are also treated as `BASIC`.
 
 Authenticated uploads are parsed and analysed by the backend, which stores owner-bound track records and source GPX files through MongoDB GridFS. Public track views read the persisted analysis, while a shared 30-day enrichment cache keeps successful Valhalla checkpoints and fully enriched OpenStreetMap results. MongoDB also stores Google-linked users and hashed opaque sessions; Google OAuth tokens are discarded after profile lookup.
 

@@ -59,6 +59,10 @@ export function createTrackRepository(tracks) {
       return tracks.findOne({ _id: trackId });
     },
 
+    countOwned(ownerId) {
+      return tracks.countDocuments({ ownerId });
+    },
+
     async listOwned({ ownerId, query = '', before = null, limit = 24 }) {
       const filter = { ownerId };
       const normalizedQuery = normalizeTrackName(query);

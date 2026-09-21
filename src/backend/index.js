@@ -1,5 +1,6 @@
 import { createApp } from './app.js';
 import { createAuthentication } from './authentication.js';
+import { loadConfiguration } from './configuration.js';
 import { createDatabase } from './database.js';
 import { analyzeGpxSource, enrichTrackAnalysis } from './track-analysis.js';
 import { createTrackPersistence } from './track-persistence.js';
@@ -11,15 +12,17 @@ const port = Number(process.env.PORT || 3000);
 const database = createDatabase();
 
 await database.connect();
-const [authentication, trackPersistence] = await Promise.all([
+const [authentication, trackPersistence, configuration] = await Promise.all([
   createAuthentication(database),
   createTrackPersistence(database),
+  loadConfiguration(database),
 ]);
 const trackService = createTrackService({
   ...trackPersistence,
   userRepository: authentication.userRepository,
   analyzeSource: analyzeGpxSource,
   enrichAnalysis: enrichTrackAnalysis,
+  configuration,
 });
 const trackRouter = createTrackRouter(trackService, authentication.service);
 const server = createApp({ database, authRouter: authentication.middleware, trackRouter }).listen(port, host, () => {

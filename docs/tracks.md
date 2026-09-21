@@ -84,6 +84,14 @@ processing revision and recomputes all derived values atomically on success.
 Initial safety limits are 25 MiB per source GPX and 500,000 route points. They support
 representative 10–20 hour and multi-day routes and can be revisited with production
 evidence.
+
+The number of saved tracks is limited by the user's tier from the startup-loaded
+`configuration.userTiers` entry: `BASIC` permits 100 tracks and `PREMIUM` permits
+1,000 tracks by default. Every new registration is `BASIC`; an omitted tier on a
+legacy user record also resolves to `BASIC`, while `PREMIUM` is assigned manually.
+Uploads are rejected before their GPX source is stored when the current saved-track
+count is already at the configured limit. Replacing an existing track does not consume
+an additional quota slot.
 The parser must be bounded and must not permit XML external entities.
 
 ## API outline

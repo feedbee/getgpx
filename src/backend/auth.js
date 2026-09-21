@@ -55,6 +55,7 @@ export function publicUser(user) {
     email: user.email,
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
+    tier: user.tier || 'BASIC',
   };
 }
 

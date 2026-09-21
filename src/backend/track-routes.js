@@ -3,7 +3,7 @@ import { ObjectId } from 'mongodb';
 import { sessionTokenFromRequest } from './auth.js';
 import { GpxFileTooLargeError } from './gpx-file-store.js';
 import { TRACK_UPLOAD_LIMITS } from './track-repository.js';
-import { InvalidTrackCursorError } from './track-service.js';
+import { InvalidTrackCursorError, TrackLimitReachedError } from './track-service.js';
 
 const GPX_CONTENT_TYPES = new Set(['application/gpx+xml', 'application/xml', 'text/xml']);
 
@@ -55,13 +55,14 @@ export function createTrackHandlers(trackService, authService) {
       error(response, 401, 'INVALID_SESSION', 'Сессия недействительна. Войдите снова.');
       return null;
     }
-    return ownerId;
+    return { ownerId, tier: user.tier || 'BASIC' };
   }
 
   return {
     async mine(request, response) {
-      const ownerId = await authenticatedOwner(request, response);
-      if (!ownerId) return;
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      const { ownerId } = identity;
       const query = typeof request.query?.query === 'string' ? request.query.query.trim() : '';
       const cursor = typeof request.query?.cursor === 'string' ? request.query.cursor : '';
       if (query.length > 100) return error(response, 422, 'INVALID_SEARCH_QUERY', 'Поисковый запрос должен быть не длиннее 100 символов.');
@@ -83,8 +84,9 @@ export function createTrackHandlers(trackService, authService) {
     },
 
     async management(request, response) {
-      const ownerId = await authenticatedOwner(request, response);
-      if (!ownerId) return;
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      const { ownerId } = identity;
       const trackId = objectId(request.params.id);
       if (!trackId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
       const track = await trackService.getManagement({ trackId, ownerId });
@@ -92,8 +94,9 @@ export function createTrackHandlers(trackService, authService) {
     },
 
     async update(request, response) {
-      const ownerId = await authenticatedOwner(request, response);
-      if (!ownerId) return;
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      const { ownerId } = identity;
       const trackId = objectId(request.params.id);
       if (!trackId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
       const title = typeof request.body?.title === 'string' ? request.body.title.normalize('NFKC').trim() : '';
@@ -105,8 +108,9 @@ export function createTrackHandlers(trackService, authService) {
     },
 
     async replace(request, response) {
-      const ownerId = await authenticatedOwner(request, response);
-      if (!ownerId) return;
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      const { ownerId } = identity;
       const trackId = objectId(request.params.id);
       if (!trackId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
       const contentType = String(request.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
@@ -122,8 +126,9 @@ export function createTrackHandlers(trackService, authService) {
     },
 
     async remove(request, response) {
-      const ownerId = await authenticatedOwner(request, response);
-      if (!ownerId) return;
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      const { ownerId } = identity;
       const trackId = objectId(request.params.id);
       if (!trackId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
       const deleted = await trackService.deleteTrack({ trackId, ownerId });
@@ -131,8 +136,9 @@ export function createTrackHandlers(trackService, authService) {
     },
 
     async removeMany(request, response) {
-      const ownerId = await authenticatedOwner(request, response);
-      if (!ownerId) return;
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      const { ownerId } = identity;
       if (!Array.isArray(request.body?.ids) || request.body.ids.length < 1 || request.body.ids.length > 100) {
         return error(response, 422, 'INVALID_TRACK_IDS', 'Выберите от 1 до 100 треков.');
       }
@@ -158,8 +164,9 @@ export function createTrackHandlers(trackService, authService) {
     },
 
     async upload(request, response) {
-      const ownerId = await authenticatedOwner(request, response);
-      if (!ownerId) return;
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      const { ownerId, tier } = identity;
       const contentType = String(request.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
       if (!GPX_CONTENT_TYPES.has(contentType)) {
         error(response, 415, 'UNSUPPORTED_GPX_TYPE', 'Выберите GPX-файл.');
@@ -176,7 +183,7 @@ export function createTrackHandlers(trackService, authService) {
         return;
       }
       try {
-        const status = await trackService.upload({ ownerId, filename, source: request });
+        const status = await trackService.upload({ ownerId, tier, filename, source: request });
         response.setHeader('Location', `/api/tracks/${status.id}/status`);
         send(response, 202, { data: status });
       } catch (uploadError) {
@@ -184,13 +191,18 @@ export function createTrackHandlers(trackService, authService) {
           error(response, 413, uploadError.code, 'GPX-файл должен быть не больше 25 MiB.');
           return;
         }
+        if (uploadError instanceof TrackLimitReachedError) {
+          error(response, 409, uploadError.code, `Достигнут лимит: ${uploadError.limit} треков.`);
+          return;
+        }
         error(response, 500, 'UPLOAD_FAILED', 'Не удалось сохранить GPX-файл. Попробуйте снова.');
       }
     },
 
     async status(request, response) {
-      const ownerId = await authenticatedOwner(request, response);
-      if (!ownerId) return;
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      const { ownerId } = identity;
       const trackId = objectId(request.params.id);
       if (!trackId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
       const status = await trackService.getStatus({ trackId, ownerId });
@@ -200,8 +212,9 @@ export function createTrackHandlers(trackService, authService) {
     },
 
     async retry(request, response) {
-      const ownerId = await authenticatedOwner(request, response);
-      if (!ownerId) return;
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      const { ownerId } = identity;
       const trackId = objectId(request.params.id);
       if (!trackId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
       const status = await trackService.retryAnalysis({ trackId, ownerId });

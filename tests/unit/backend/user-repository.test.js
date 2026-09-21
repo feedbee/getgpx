@@ -4,6 +4,7 @@ import { createUserRepository } from '../../../src/backend/user-repository.js';
 function createUsersCollection() {
   const documents = new Map();
   return {
+    documents,
     async findOne(query) {
       return [...documents.values()].find((document) => (
         query._id ? document._id === query._id : document.googleSubject === query.googleSubject
@@ -30,8 +31,18 @@ describe('user repository', () => {
     }, now);
 
     expect(user).toMatchObject({
-      googleSubject: 'google-123', email: 'rider@example.com', registeredAt: now, lastLoginAt: now, profileUpdatedAt: now,
+      googleSubject: 'google-123', email: 'rider@example.com', tier: 'BASIC', registeredAt: now, lastLoginAt: now, profileUpdatedAt: now,
     });
+  });
+
+  it('keeps a manually assigned premium tier on later logins', async () => {
+    const users = createUsersCollection();
+    const repository = createUserRepository(users);
+    const profile = { googleSubject: 'google-123', email: 'rider@example.com', displayName: 'Rider', avatarUrl: null };
+    const user = await repository.loginWithGoogle(profile);
+    users.documents.get(user.googleSubject).tier = 'PREMIUM';
+
+    await expect(repository.loginWithGoogle(profile)).resolves.toMatchObject({ tier: 'PREMIUM' });
   });
 
   it('preserves registration and profile dates when only the login time changes', async () => {

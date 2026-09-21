@@ -28,6 +28,7 @@ export function createUserRepository(users) {
           $set: updatedProfile,
           $setOnInsert: {
             googleSubject: profile.googleSubject,
+            tier: 'BASIC',
             registeredAt: now,
             profileUpdatedAt: now,
           },

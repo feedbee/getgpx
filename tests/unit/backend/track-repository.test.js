@@ -74,6 +74,16 @@ describe('track repository', () => {
     });
   });
 
+  it('counts all tracks owned by a user', async () => {
+    const collection = createTracksCollection();
+    collection.countDocuments = vi.fn().mockResolvedValue(17);
+    const repository = createTrackRepository(collection);
+    const ownerId = new ObjectId();
+
+    await expect(repository.countOwned(ownerId)).resolves.toBe(17);
+    expect(collection.countDocuments).toHaveBeenCalledWith({ ownerId });
+  });
+
   it('only returns a track when both id and owner match', async () => {
     const collection = createTracksCollection();
     const repository = createTrackRepository(collection);
