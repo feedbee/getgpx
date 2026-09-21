@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cancelTrackSearch, formatTrackDuration, previewPolyline, trackStatusLabel } from '../../../src/client/my-tracks-ui.js';
+import { cancelTrackSearch, formatTrackDuration, formatTrackMetrics, previewPolyline, trackStatusLabel } from '../../../src/client/my-tracks-ui.js';
 
 describe('my tracks UI', () => {
   it('formats processing and terminal statuses in friendly Russian', () => {
@@ -12,6 +12,16 @@ describe('my tracks UI', () => {
     expect(formatTrackDuration(5_430_000)).toBe('1:31');
     expect(previewPolyline({ points: [[0, 12.345], [100, 99]] })).toBe('0.00,12.35 100.00,99.00');
     expect(previewPolyline(null)).toBe('');
+  });
+
+  it('formats card metrics in the same order as the track page', () => {
+    expect(formatTrackMetrics({
+      distanceKm: 42.36,
+      ascentM: 812,
+      descentM: 790,
+      estimatedDurationMs: 7_200_000,
+      speedKmh: 21.2,
+    })).toBe('42,4 км · ↗ 812 м · ↘ 790 м · 2:00 · 21,2 км/ч');
   });
 
   it('clears an active search, restores the collection URL, and reloads tracks', () => {

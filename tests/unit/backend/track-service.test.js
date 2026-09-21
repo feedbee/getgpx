@@ -238,14 +238,14 @@ describe('track service', () => {
     trackRepository.listOwned.mockResolvedValue(Array.from({ length: 25 }, (_, index) => ({
       _id: new ObjectId((index + 1).toString(16).padStart(24, '0')), title: `Ride ${index}`,
       createdAt: new Date(Date.UTC(2026, 8, 17, 12, 0, 25 - index)), analysisStatus: 'READY', analysisStep: 'COMPLETE',
-      analysis: { distanceKm: index, ascentM: 100, estimatedDurationMs: 3_600_000, preview: { points: [[0, 0], [100, 100]] }, points: [{ secret: true }] },
+      analysis: { distanceKm: index, ascentM: 100, descentM: 90, effectiveSpeedKmh: 21, estimatedDurationMs: 3_600_000, preview: { points: [[0, 0], [100, 100]] }, points: [{ secret: true }] },
     })));
 
     const result = await service.listMyTracks({ ownerId: 'owner-1', query: 'ride' });
 
     expect(result.items).toHaveLength(24);
     expect(result.items[0]).not.toHaveProperty('analysis');
-    expect(result.items[0]).toMatchObject({ title: 'Ride 0', distanceKm: 0, url: '/tracks/000000000000000000000001' });
+    expect(result.items[0]).toMatchObject({ title: 'Ride 0', distanceKm: 0, ascentM: 100, descentM: 90, speedKmh: 21, url: '/tracks/000000000000000000000001' });
     expect(result.nextCursor).toEqual(expect.any(String));
   });
 

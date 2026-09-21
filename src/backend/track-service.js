@@ -96,6 +96,8 @@ function trackCard(track) {
     status: track.analysisStatus, step: track.analysisStep,
     distanceKm: track.analysis?.distanceKm ?? null,
     ascentM: track.analysis?.ascentM ?? null,
+    descentM: track.analysis?.descentM ?? null,
+    speedKmh: track.analysis?.effectiveSpeedKmh ?? null,
     estimatedDurationMs: track.analysis?.estimatedDurationMs ?? null,
     preview: track.analysis?.preview ?? null,
     url: `/tracks/${id}`,

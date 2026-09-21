@@ -51,6 +51,8 @@ let myTracksLoading = false;
 let publicTrackId = null;
 let publicTrackData = null;
 let publicTrackOwnershipVerified = false;
+let managedTrackId = null;
+let managedTrackTitle = '';
 
 app.innerHTML = `
   <header class="topbar">
@@ -174,6 +176,15 @@ app.innerHTML = `
       <div><button type="button" id="cancel-track-edit">Отмена</button><button type="submit">Сохранить</button></div>
     </form>
   </dialog>
+  <dialog class="confirm-delete-dialog" id="confirm-delete-dialog">
+    <form method="dialog">
+      <div class="confirm-delete-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg></div>
+      <div><p class="route-kicker">УДАЛЕНИЕ ТРЕКА</p><h2>Удалить трек?</h2></div>
+      <p>«<strong id="delete-track-name"></strong>» и исходный GPX будут удалены без возможности восстановления.</p>
+      <p class="form-error" id="delete-track-error" hidden></p>
+      <div class="confirm-delete-actions"><button type="button" id="cancel-track-delete">Отмена</button><button class="confirm-delete-button" type="button" id="confirm-track-delete">Удалить</button></div>
+    </form>
+  </dialog>
   <div class="toast" id="toast" role="alert"></div>
 `;
 
@@ -272,6 +283,24 @@ async function loadMyTracks({ reset = false } = {}) {
     myTracksLoading = false;
     more.disabled = false;
   }
+}
+
+function openTrackEditor({ id, title, speedKmh }) {
+  managedTrackId = id;
+  managedTrackTitle = title;
+  document.querySelector('#edit-track-title').value = title;
+  document.querySelector('#edit-track-speed').value = speedKmh || 20;
+  document.querySelector('#edit-track-error').hidden = true;
+  document.querySelector('#edit-track-dialog').showModal();
+}
+
+function openTrackDeleteConfirmation({ id, title }) {
+  managedTrackId = id;
+  managedTrackTitle = title;
+  document.querySelector('#delete-track-name').textContent = title;
+  document.querySelector('#delete-track-error').hidden = true;
+  document.querySelector('#confirm-track-delete').disabled = false;
+  document.querySelector('#confirm-delete-dialog').showModal();
 }
 
 async function restoreSession() {
@@ -1043,24 +1072,24 @@ async function uploadFile(file) {
   }
 }
 
-async function replaceTrackFile(file) {
-  if (!currentUser || !publicTrackId) return;
+async function replaceTrackFile(file, trackId = publicTrackId) {
+  if (!currentUser || !trackId) return;
   const processing = document.querySelector('#processing-overlay');
   document.querySelector('#processing-error').hidden = true;
   document.querySelector('#processing-details').hidden = true;
   processing.hidden = false;
   updateProcessing('UPLOADING');
   try {
-    const response = await fetch(`/api/tracks/${publicTrackId}/file`, {
+    const response = await fetch(`/api/tracks/${trackId}/file`, {
       method: 'PUT',
       headers: { accept: 'application/json', 'content-type': 'application/gpx+xml', 'x-gpx-filename': encodeURIComponent(file.name) },
       body: file,
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload?.error?.message || 'Не удалось заменить GPX-файл.');
-    activeUploadTrackId = publicTrackId;
+    activeUploadTrackId = trackId;
     updateProcessing(payload.data.step);
-    await pollTrackStatus(publicTrackId);
+    await pollTrackStatus(trackId);
   } catch (replaceError) {
     showProcessingError({ message: replaceError.message, code: 'REPLACEMENT_FAILED' });
   }
@@ -1358,13 +1387,17 @@ trackSearchClear.addEventListener('click', () => {
   trackQueryInput.focus();
 });
 document.querySelector('#load-more-tracks').addEventListener('click', () => loadMyTracks());
-document.querySelector('#edit-track').addEventListener('click', () => document.querySelector('#edit-track-dialog').showModal());
+document.querySelector('#edit-track').addEventListener('click', () => openTrackEditor({
+  id: publicTrackId,
+  title: document.querySelector('#edit-track-title').value,
+  speedKmh: Number(document.querySelector('#edit-track-speed').value),
+}));
 document.querySelector('#cancel-track-edit').addEventListener('click', () => document.querySelector('#edit-track-dialog').close());
 document.querySelector('#edit-track-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const error = document.querySelector('#edit-track-error');
   error.hidden = true;
-  const response = await fetch(`/api/tracks/${publicTrackId}`, {
+  const response = await fetch(`/api/tracks/${managedTrackId}`, {
     method: 'PATCH',
     headers: { accept: 'application/json', 'content-type': 'application/json' },
     body: JSON.stringify({ title: document.querySelector('#edit-track-title').value, speedKmh: Number(document.querySelector('#edit-track-speed').value) }),
@@ -1376,13 +1409,18 @@ document.querySelector('#edit-track-form').addEventListener('submit', async (eve
     return;
   }
   document.querySelector('#edit-track-dialog').close();
-  payload.data.analysis.name = payload.data.title;
-  renderTrack(payload.data.analysis, { persisted: true, analysisSources: payload.data.analysisSources });
+  if (isMyTracksPage) {
+    await loadMyTracks({ reset: true });
+  } else {
+    managedTrackTitle = payload.data.title;
+    payload.data.analysis.name = payload.data.title;
+    renderTrack(payload.data.analysis, { persisted: true, analysisSources: payload.data.analysisSources });
+  }
 });
 document.querySelector('#replacement-gpx').addEventListener('change', (event) => {
   if (event.target.files[0]) {
     document.querySelector('#edit-track-dialog').close();
-    replaceTrackFile(event.target.files[0]);
+    replaceTrackFile(event.target.files[0], managedTrackId);
   }
   event.target.value = '';
 });
@@ -1396,10 +1434,36 @@ document.querySelector('.source-popover').addEventListener('click', async (event
   updateProcessing(payload.data.step);
   await pollTrackStatus(publicTrackId);
 });
-document.querySelector('#delete-track').addEventListener('click', async () => {
-  if (!window.confirm('Удалить этот трек и исходный GPX без возможности восстановления?')) return;
-  const response = await fetch(`/api/tracks/${publicTrackId}`, { method: 'DELETE', headers: { accept: 'application/json' } });
-  if (response.ok) window.location.assign('/my-tracks');
+document.querySelector('#delete-track').addEventListener('click', () => openTrackDeleteConfirmation({
+  id: publicTrackId,
+  title: managedTrackTitle || currentTrack?.name || 'Этот трек',
+}));
+document.querySelector('#cancel-track-delete').addEventListener('click', () => document.querySelector('#confirm-delete-dialog').close());
+document.querySelector('#confirm-track-delete').addEventListener('click', async () => {
+  const button = document.querySelector('#confirm-track-delete');
+  const error = document.querySelector('#delete-track-error');
+  button.disabled = true;
+  error.hidden = true;
+  const response = await fetch(`/api/tracks/${managedTrackId}`, { method: 'DELETE', headers: { accept: 'application/json' } });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    error.textContent = payload?.error?.message || 'Не удалось удалить трек.';
+    error.hidden = false;
+    button.disabled = false;
+    return;
+  }
+  document.querySelector('#confirm-delete-dialog').close();
+  if (isMyTracksPage) await loadMyTracks({ reset: true });
+  else window.location.assign('/my-tracks');
+});
+
+document.querySelector('#track-list').addEventListener('click', (event) => {
+  const action = event.target.closest('[data-track-action]');
+  if (!action) return;
+  const card = action.closest('.track-card');
+  const track = { id: card.dataset.trackId, title: card.dataset.trackTitle, speedKmh: Number(card.dataset.trackSpeed) };
+  if (action.dataset.trackAction === 'edit') openTrackEditor(track);
+  if (action.dataset.trackAction === 'delete') openTrackDeleteConfirmation(track);
 });
 
 if (isMyTracksPage) {
