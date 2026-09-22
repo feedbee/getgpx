@@ -33,6 +33,12 @@ the homepage uses the first three tracks by ascending `createdAt`, with `_id` as
 stable tie-breaker. Like other startup configuration, changes require an application
 restart.
 
+Track documents keep MongoDB `_id` values for persistence and configuration references.
+Public track URLs use the separately indexed `publicId`; changing the generation format
+does not invalidate ids already stored on tracks.
+Unmigrated records can still be opened through their legacy MongoDB id during a rolling
+deployment, but migrated records are addressed only by `publicId`.
+
 Authenticated uploads are parsed and analysed by the backend, which stores owner-bound track records and source GPX files through MongoDB GridFS. Public track views read the persisted analysis, while a shared 30-day enrichment cache keeps successful Valhalla checkpoints and fully enriched OpenStreetMap results. MongoDB also stores Google-linked users and hashed opaque sessions; Google OAuth tokens are discarded after profile lookup.
 
 The production process fails startup when MongoDB configuration or connectivity is absent. Liveness deliberately avoids dependencies; readiness performs a MongoDB ping so an orchestrator can stop routing traffic to an unhealthy instance.

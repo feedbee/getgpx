@@ -18,7 +18,7 @@ describe('track persistence', () => {
     expect(database.collection).toHaveBeenCalledWith('tracks');
     expect(database.collection).toHaveBeenCalledWith('enrichmentCache');
     expect(createBucket).toHaveBeenCalledWith(mongoDatabase, { bucketName: 'gpxSourceFiles' });
-    expect(tracks.createIndex).toHaveBeenCalledTimes(4);
+    expect(tracks.createIndex).toHaveBeenCalledTimes(5);
     expect(enrichmentCache.createIndex).toHaveBeenCalledTimes(2);
     expect(persistence.trackRepository).toBeDefined();
     expect(persistence.enrichmentCacheRepository).toBeDefined();

@@ -6,14 +6,18 @@ import { createTrackService } from '../../../src/backend/track-service.js';
 function dependencies() {
   const scheduled = [];
   const track = {
-    _id: 'track-1', ownerId: 'owner-1', sourceFileId: 'file-1', originalFilename: 'ride.gpx',
+    _id: 'track-1', publicId: 'publicTrackId00000001', ownerId: 'owner-1', sourceFileId: 'file-1', originalFilename: 'ride.gpx',
     analysisStatus: 'PROCESSING', analysisStep: 'QUEUED', analysisRevision: 1,
   };
+  const findById = vi.fn().mockResolvedValue(track);
+  const findOwnedById = vi.fn().mockResolvedValue(track);
   const trackRepository = {
     createProcessing: vi.fn().mockResolvedValue(track),
     countOwned: vi.fn().mockResolvedValue(0),
-    findById: vi.fn().mockResolvedValue(track),
-    findOwnedById: vi.fn().mockResolvedValue(track),
+    findById,
+    findOwnedById,
+    findByPublicId: findById,
+    findOwnedByPublicId: findOwnedById,
     setAnalysisStep: vi.fn().mockResolvedValue(track),
     saveBaseAnalysis: vi.fn().mockImplementation(async ({ analysis }) => ({ ...track, analysis, analysisStep: 'ENRICHING' })),
     completeAnalysis: vi.fn().mockImplementation(async ({ analysis }) => ({ ...track, analysis, analysisStatus: 'READY', analysisStep: 'COMPLETE' })),
@@ -97,7 +101,7 @@ describe('track service', () => {
 
     expect(gpxFileStore.save).toHaveBeenCalledWith(expect.objectContaining({ filename: 'Weekend Ride.gpx', ownerId: 'owner-1' }));
     expect(trackRepository.createProcessing).toHaveBeenCalledWith(expect.objectContaining({ title: 'Weekend Ride', sourceFileId: 'file-1' }));
-    expect(status).toEqual({ id: 'track-1', status: 'PROCESSING', step: 'QUEUED', error: null });
+    expect(status).toEqual({ id: 'publicTrackId00000001', status: 'PROCESSING', step: 'QUEUED', error: null });
     expect(scheduled).toHaveLength(1);
   });
 
@@ -176,7 +180,7 @@ describe('track service', () => {
   it('retries only enrichment from the persisted base analysis', async () => {
     const { service, scheduled, gpxFileStore, analyzeSource, enrichAnalysis } = dependencies();
 
-    const status = await service.retryAnalysis({ trackId: 'track-1', ownerId: 'owner-1' });
+    const status = await service.retryAnalysis({ publicId: 'track-1', ownerId: 'owner-1' });
     await scheduled[0]();
 
     expect(status.step).toBe('ENRICHING');
@@ -194,8 +198,8 @@ describe('track service', () => {
     trackRepository.findOwnedById.mockResolvedValue(partial);
     trackRepository.restartEnrichment.mockResolvedValue({ ...partial, analysisStatus: 'PROCESSING', analysisStep: 'ENRICHING' });
 
-    const management = await service.getManagement({ trackId: 'track-1', ownerId: 'owner-1' });
-    const status = await service.retryAnalysis({ trackId: 'track-1', ownerId: 'owner-1' });
+    const management = await service.getManagement({ publicId: 'track-1', ownerId: 'owner-1' });
+    const status = await service.retryAnalysis({ publicId: 'track-1', ownerId: 'owner-1' });
 
     expect(management).toMatchObject({ canRetry: true, missingOsmTags: true, retrySource: 'openStreetMap' });
     expect(status).toMatchObject({ status: 'PROCESSING', step: 'ENRICHING' });
@@ -327,7 +331,7 @@ describe('track service', () => {
     }));
 
     const externalLinks = { komoot: 'https://www.komoot.com/tour/123' };
-    const result = await service.updateDetails({ trackId: 'track-1', ownerId: 'owner-1', title: 'New title', speedKmh: 25, routeType: 'road-cycling', externalLinks });
+    const result = await service.updateDetails({ publicId: 'track-1', ownerId: 'owner-1', title: 'New title', speedKmh: 25, routeType: 'road-cycling', externalLinks });
 
     expect(trackRepository.updateDetails).toHaveBeenCalledWith(expect.objectContaining({ estimatedDurationMs: 3_600_000, routeType: 'road-cycling', externalLinks }));
     expect(result.title).toBe('New title');
@@ -347,7 +351,7 @@ describe('track service', () => {
     });
 
     await expect(service.getPublicTrack('track-1')).resolves.toMatchObject({ externalLinks });
-    await expect(service.getManagement({ trackId: 'track-1', ownerId: 'owner-1' })).resolves.toMatchObject({ externalLinks });
+    await expect(service.getManagement({ publicId: 'track-1', ownerId: 'owner-1' })).resolves.toMatchObject({ externalLinks });
   });
 
   it('keeps the active source while a replacement is processed, then deletes the old file', async () => {
@@ -364,7 +368,7 @@ describe('track service', () => {
     deps.trackRepository.saveReplacementBase.mockImplementation(async ({ analysis, title }) => ({ ...replacementTrack, replacement: { ...replacementTrack.replacement, analysis, title, step: 'ENRICHING' } }));
     deps.trackRepository.completeReplacement.mockResolvedValue({ sourceFileId: 'old-file' });
 
-    const status = await deps.service.replaceFile({ trackId: 'track-1', ownerId: 'owner-1', filename: 'new.gpx', source: Readable.from('<gpx />') });
+    const status = await deps.service.replaceFile({ publicId: 'track-1', ownerId: 'owner-1', filename: 'new.gpx', source: Readable.from('<gpx />') });
     await deps.scheduled[0]();
 
     expect(status).toMatchObject({ status: 'PROCESSING', step: 'QUEUED' });
@@ -376,7 +380,7 @@ describe('track service', () => {
     const { service, trackRepository, gpxFileStore } = dependencies();
     trackRepository.deleteOwned.mockResolvedValue({ sourceFileId: 'active', replacement: { sourceFileId: 'pending' } });
 
-    await expect(service.deleteTrack({ trackId: 'track-1', ownerId: 'owner-1' })).resolves.toBe(true);
+    await expect(service.deleteTrack({ publicId: 'track-1', ownerId: 'owner-1' })).resolves.toBe(true);
 
     expect(gpxFileStore.delete).toHaveBeenCalledWith('active');
     expect(gpxFileStore.delete).toHaveBeenCalledWith('pending');
@@ -389,7 +393,7 @@ describe('track service', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ sourceFileId: 'active-3', replacement: { sourceFileId: 'pending-3' } });
 
-    await expect(service.deleteTracks({ trackIds: ['track-1', 'track-2', 'track-3'], ownerId: 'owner-1' }))
+    await expect(service.deleteTracks({ publicIds: ['track-1', 'track-2', 'track-3'], ownerId: 'owner-1' }))
       .resolves.toEqual(['track-1', 'track-3']);
 
     expect(gpxFileStore.delete).toHaveBeenCalledWith('active-1');

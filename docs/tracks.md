@@ -33,7 +33,7 @@ edit flow. The user menu links to `/my-tracks`.
 ## Data and storage
 
 Use a `tracks` collection for searchable metadata and derived analysis. Every track
-has a schema version, immutable owner id, public Mongo ObjectId, original filename,
+has a schema version, immutable owner id, unique public id, internal Mongo ObjectId, original filename,
 editable title, one editable route type, optional HTTPS links to Komoot, Strava, Garmin, and Ride with GPS,
 timestamps, analysis status/error, processing revision, effective
 speed, metrics, normalized preview path, route points, and derived road, surface,
@@ -60,6 +60,8 @@ the storage access must sit behind a backend adapter so it can be replaced.
 
 Indexes:
 
+- `{ publicId: 1 }`, unique for public links and API lookup. The current format is a
+  21-character, case-sensitive Nano ID-style value using letters, digits, and `_`.
 - `{ ownerId: 1, createdAt: -1 }` for `/my-tracks` ordering.
 - `{ ownerId: 1, normalizedName: 1, createdAt: -1 }` for owner-scoped name search.
 - `{ analysisStatus: 1, updatedAt: 1 }` for retry/operations visibility.

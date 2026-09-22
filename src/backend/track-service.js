@@ -26,6 +26,10 @@ export class TrackLimitReachedError extends Error {
   }
 }
 
+function publicIdOf(track) {
+  return track.publicId ?? track._id.toString();
+}
+
 function encodeCursor(track) {
   return Buffer.from(JSON.stringify({ createdAt: track.createdAt.toISOString(), id: track._id.toString() })).toString('base64url');
 }
@@ -57,7 +61,7 @@ function statusOf(track) {
   const active = track.replacement || track;
   const code = active.error?.code || active.analysisError?.code || null;
   return {
-    id: track._id.toString(),
+    id: publicIdOf(track),
     status: active.status || active.analysisStatus,
     step: active.step || active.analysisStep,
     error: code ? { message: ERROR_MESSAGES[code] || 'Не удалось обработать трек.', code } : null,
@@ -92,7 +96,7 @@ function publicTrack(track, uploader = null) {
   } else if (analysisLevel === 'FULL') {
     analysisNote = `Источники: ${elevationAttribution}; Valhalla — сопоставление с дорогами; OpenStreetMap — покрытия и качество дорог.`;
   }
-  const id = track._id.toString();
+  const id = publicIdOf(track);
   return {
     id,
     title: track.title,
@@ -110,7 +114,7 @@ function publicTrack(track, uploader = null) {
 }
 
 function trackCard(track) {
-  const id = track._id.toString();
+  const id = publicIdOf(track);
   return {
     id, title: track.title, routeType: normalizeRouteType(track.routeType), createdAt: track.createdAt.toISOString(),
     status: track.analysisStatus, step: track.analysisStep,
@@ -127,7 +131,7 @@ function trackCard(track) {
 }
 
 function homepageTrack(track, includeAnalysis) {
-  const id = track._id.toString();
+  const id = publicIdOf(track);
   const result = {
     id,
     title: track.title,
@@ -285,15 +289,15 @@ export function createTrackService({
       return statusOf(track);
     },
 
-    async getStatus({ trackId, ownerId }) {
-      return statusOf(await trackRepository.findOwnedById(trackId, ownerId));
+    async getStatus({ publicId, ownerId }) {
+      return statusOf(await trackRepository.findOwnedByPublicId(publicId, ownerId));
     },
 
-    async getManagement({ trackId, ownerId }) {
-      const track = await trackRepository.findOwnedById(trackId, ownerId);
+    async getManagement({ publicId, ownerId }) {
+      const track = await trackRepository.findOwnedByPublicId(publicId, ownerId);
       if (!track) return null;
       return {
-        id: track._id.toString(), title: track.title, routeType: normalizeRouteType(track.routeType),
+        id: publicIdOf(track), title: track.title, routeType: normalizeRouteType(track.routeType),
         speedKmh: track.analysis?.effectiveSpeedKmh ?? null,
         externalLinks: track.externalLinks || {},
         analysis: statusOf(track),
@@ -308,11 +312,11 @@ export function createTrackService({
       };
     },
 
-    async updateDetails({ trackId, ownerId, title, speedKmh, routeType, externalLinks }) {
-      const track = await trackRepository.findOwnedById(trackId, ownerId);
+    async updateDetails({ publicId, ownerId, title, speedKmh, routeType, externalLinks }) {
+      const track = await trackRepository.findOwnedByPublicId(publicId, ownerId);
       if (!track?.analysis) return null;
       const updated = await trackRepository.updateDetails({
-        trackId, ownerId, title, speedKmh, routeType, externalLinks,
+        trackId: track._id, ownerId, title, speedKmh, routeType, externalLinks,
         estimatedDurationMs: (track.analysis.distanceKm / speedKmh) * 3_600_000,
       });
       if (!updated) return null;
@@ -322,14 +326,14 @@ export function createTrackService({
       return publicTrack(updated, uploader);
     },
 
-    async replaceFile({ trackId, ownerId, filename, source }) {
+    async replaceFile({ publicId, ownerId, filename, source }) {
       const sourceFileId = await gpxFileStore.save({ filename, ownerId, source });
-      const existing = await trackRepository.findOwnedById(trackId, ownerId);
+      const existing = await trackRepository.findOwnedByPublicId(publicId, ownerId);
       if (!existing || existing.replacement?.status === 'PROCESSING') {
         await gpxFileStore.delete(sourceFileId).catch(() => undefined);
         return null;
       }
-      const track = await trackRepository.beginReplacement({ trackId, ownerId, sourceFileId, originalFilename: filename });
+      const track = await trackRepository.beginReplacement({ trackId: existing._id, ownerId, sourceFileId, originalFilename: filename });
       if (!track) {
         await gpxFileStore.delete(sourceFileId).catch(() => undefined);
         return null;
@@ -339,8 +343,9 @@ export function createTrackService({
       return statusOf(track);
     },
 
-    async deleteTrack({ trackId, ownerId }) {
-      const track = await trackRepository.deleteOwned(trackId, ownerId);
+    async deleteTrack({ publicId, ownerId }) {
+      const existing = await trackRepository.findOwnedByPublicId(publicId, ownerId);
+      const track = existing ? await trackRepository.deleteOwned(existing._id, ownerId) : null;
       if (!track) return false;
       await Promise.allSettled([
         gpxFileStore.delete(track.sourceFileId),
@@ -349,16 +354,17 @@ export function createTrackService({
       return true;
     },
 
-    async deleteTracks({ trackIds, ownerId }) {
+    async deleteTracks({ publicIds, ownerId }) {
       const deletedIds = [];
-      for (const trackId of trackIds) {
-        const track = await trackRepository.deleteOwned(trackId, ownerId);
+      for (const publicId of publicIds) {
+        const existing = await trackRepository.findOwnedByPublicId(publicId, ownerId);
+        const track = existing ? await trackRepository.deleteOwned(existing._id, ownerId) : null;
         if (!track) continue;
         await Promise.allSettled([
           gpxFileStore.delete(track.sourceFileId),
           track.replacement?.sourceFileId ? gpxFileStore.delete(track.replacement.sourceFileId) : Promise.resolve(),
         ]);
-        deletedIds.push(trackId);
+        deletedIds.push(publicId);
       }
       return deletedIds;
     },
@@ -370,8 +376,8 @@ export function createTrackService({
       return { items: page.map(trackCard), nextCursor: hasMore ? encodeCursor(page.at(-1)) : null };
     },
 
-    async getPublicTrack(trackId) {
-      const track = await trackRepository.findById(trackId);
+    async getPublicTrack(publicId) {
+      const track = await trackRepository.findByPublicId(publicId);
       if (!track) return null;
       const uploader = userRepository?.findPublicProfileById
         ? await userRepository.findPublicProfileById(track.ownerId)
@@ -379,8 +385,8 @@ export function createTrackService({
       return publicTrack(track, uploader);
     },
 
-    async getPublicDownload(trackId) {
-      const track = await trackRepository.findById(trackId);
+    async getPublicDownload(publicId) {
+      const track = await trackRepository.findByPublicId(publicId);
       if (!track) return null;
       return {
         filename: track.originalFilename,
@@ -388,8 +394,10 @@ export function createTrackService({
       };
     },
 
-    async retryAnalysis({ trackId, ownerId }) {
-      const existing = await trackRepository.findOwnedById(trackId, ownerId);
+    async retryAnalysis({ publicId, ownerId }) {
+      const existing = await trackRepository.findOwnedByPublicId(publicId, ownerId);
+      if (!existing) return null;
+      const trackId = existing._id;
       if (existing?.replacement) {
         const track = await trackRepository.restartReplacementEnrichment({ trackId, ownerId });
         if (!track) return null;

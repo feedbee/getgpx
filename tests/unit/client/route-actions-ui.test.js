@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { closeOverflowMenuOnOutsideClick, renderOwnerTrackActions } from '../../../src/client/route-actions-ui.js';
+import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, publicTrackIdFromPath, renderOwnerTrackActions } from '../../../src/client/route-actions-ui.js';
 
 describe('route action overflow menu', () => {
   it('closes an open menu when the click is outside', () => {
@@ -29,5 +29,27 @@ describe('owner track action menu', () => {
     expect(markup).toContain('id="delete-track"');
     expect(markup).toContain('Удалить');
     expect(markup).toContain('data-action-icon="delete"');
+  });
+});
+
+describe('public track sharing', () => {
+  it('recognizes case-sensitive public ids in track paths', () => {
+    expect(publicTrackIdFromPath('/tracks/AxoslgzL_iLHv88P5AYoe')).toBe('AxoslgzL_iLHv88P5AYoe');
+    expect(publicTrackIdFromPath('/tracks/with-hyphen')).toBeNull();
+    expect(publicTrackIdFromPath('/my-tracks')).toBeNull();
+  });
+
+  it('copies the full public track URL', async () => {
+    const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
+
+    await copyPublicTrackLink({
+      trackId: '507f1f77bcf86cd799439011',
+      origin: 'https://getgpx.example',
+      clipboard,
+    });
+
+    expect(clipboard.writeText).toHaveBeenCalledWith(
+      'https://getgpx.example/tracks/507f1f77bcf86cd799439011',
+    );
   });
 });

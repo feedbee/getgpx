@@ -4,7 +4,7 @@ import './style.css';
 import { renderAuthControl } from './auth-ui.js';
 import { renderHomePage } from './home-page-ui.js';
 import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, createTrackCard } from './my-tracks-ui.js';
-import { closeOverflowMenuOnOutsideClick, renderOwnerTrackActions } from './route-actions-ui.js';
+import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, publicTrackIdFromPath, renderOwnerTrackActions } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js';
 import { renderTrackUploadDialogs, uploadMetadataHint, uploadMetadataPayload } from './track-upload-ui.js';
@@ -121,7 +121,7 @@ app.innerHTML = `
         </div>
         <div class="route-actions" aria-label="Действия с маршрутом">
           <button class="primary-action" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg>Сохранить</button>
-          <button type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg>Поделиться</button>
+          <button id="share-track" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg>Поделиться</button>
           <a id="download-track" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></svg>Скачать трек</a>
           <span class="owner-track-actions" id="owner-track-actions" hidden><details class="route-overflow"><summary aria-label="Дополнительные действия"><span aria-hidden="true">•••</span></summary><div>${renderOwnerTrackActions()}</div></details></span>
         </div>
@@ -1747,6 +1747,19 @@ document.querySelector('#track-list').addEventListener('change', (event) => {
   if (event.target.matches('[data-track-select]')) updateBulkDeleteButton();
 });
 
+document.querySelector('#share-track')?.addEventListener('click', async () => {
+  if (!publicTrackId) return;
+  const toast = document.querySelector('#toast');
+  try {
+    await copyPublicTrackLink({ trackId: publicTrackId, origin: window.location.origin, clipboard: navigator.clipboard });
+    toast.textContent = 'Ссылка скопирована в буфер обмена';
+  } catch {
+    toast.textContent = 'Не удалось скопировать ссылку';
+  }
+  toast.classList.add('visible');
+  setTimeout(() => toast.classList.remove('visible'), 2500);
+});
+
 if (isMyTracksPage) {
   trackQueryInput.value = new URLSearchParams(window.location.search).get('query') || '';
   trackSearchClear.hidden = !trackQueryInput.value;
@@ -1758,6 +1771,6 @@ if (!isMyTracksPage && !isHomePage) {
 }
 if (isHomePage) initHomeExampleMap();
 restoreSession();
-const publicTrackMatch = window.location.pathname.match(/^\/tracks\/([a-f\d]{24})$/i);
-if (publicTrackMatch) loadPublicTrack(publicTrackMatch[1]);
+const pathPublicTrackId = publicTrackIdFromPath(window.location.pathname);
+if (pathPublicTrackId) loadPublicTrack(pathPublicTrackId);
 else if (!isMyTracksPage && !isHomePage) renderTrack(createDemoTrack(), { routeType: 'hiking' });

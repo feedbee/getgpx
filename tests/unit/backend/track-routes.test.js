@@ -133,17 +133,18 @@ describe('track HTTP handlers', () => {
   });
 
   it('returns a track publicly without checking a session', async () => {
-    const trackId = new ObjectId();
-    const trackService = { getPublicTrack: vi.fn().mockResolvedValue({ id: trackId.toString(), analysisLevel: 'BASIC' }) };
+    const publicId = 'Abcdef_1234567890XYZ';
+    const trackService = { getPublicTrack: vi.fn().mockResolvedValue({ id: publicId, analysisLevel: 'BASIC' }) };
     const authService = { getUser: vi.fn() };
     const handlers = createTrackHandlers(trackService, authService);
     const result = response();
 
-    await handlers.publicTrack(request({ params: { id: trackId.toString() } }), result);
+    await handlers.publicTrack(request({ params: { id: publicId } }), result);
 
     expect(result.statusCode).toBe(200);
     expect(result.body.data.analysisLevel).toBe('BASIC');
     expect(authService.getUser).not.toHaveBeenCalled();
+    expect(trackService.getPublicTrack).toHaveBeenCalledWith(publicId);
   });
 
   it('returns homepage tracks publicly without checking a session', async () => {
@@ -199,7 +200,7 @@ describe('track HTTP handlers', () => {
     await handlers.update(invalid, invalidResponse);
 
     expect(trackService.updateDetails).toHaveBeenCalledWith({
-      trackId,
+      publicId: trackId.toString(),
       ownerId,
       title: 'Renamed',
       speedKmh: 32.5,
@@ -247,7 +248,7 @@ describe('track HTTP handlers', () => {
 
     await handlers.removeMany(source, result);
 
-    expect(trackService.deleteTracks).toHaveBeenCalledWith({ ownerId, trackIds: [firstId, secondId] });
+    expect(trackService.deleteTracks).toHaveBeenCalledWith({ ownerId, publicIds: [firstId.toString(), secondId.toString()] });
     expect(result.body).toEqual({ data: { deletedIds: [firstId.toString(), secondId.toString()] } });
   });
 

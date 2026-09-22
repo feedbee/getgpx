@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "start": "node --env-file-if-exists=.env src/backend/index.js",
+    "migrate:track-public-ids": "node --env-file-if-exists=.env scripts/migrate-track-public-ids.js",
     "preview": "vite preview",
     "test": "npm run test:fast",
     "test:fast": "vitest run tests/unit",

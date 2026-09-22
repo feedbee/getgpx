@@ -77,6 +77,7 @@ describeWithMongo('MongoDB integration', () => {
     expect(indexes).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: { ownerId: 1, createdAt: -1 } }),
       expect.objectContaining({ key: { sourceFileId: 1 }, unique: true }),
+      expect.objectContaining({ key: { publicId: 1 }, unique: true }),
     ]));
     expect(cacheIndexes).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: { key: 1 }, unique: true }),
@@ -143,6 +144,7 @@ describeWithMongo('MongoDB integration', () => {
     expect(beforeCommit).toMatchObject({ sourceFileId: 'integration-original-file', title: 'Old route', analysis: { distanceKm: 10 } });
     expect(previous.sourceFileId).toBe('integration-original-file');
     expect(committed).toMatchObject({ sourceFileId: 'integration-new-file', title: 'New route', analysisRevision: 2, analysis: { distanceKm: 20 } });
+    expect(committed.publicId).toBe(original.publicId);
     expect(committed).not.toHaveProperty('replacement');
     await tracks.deleteOne({ _id: original._id });
   });

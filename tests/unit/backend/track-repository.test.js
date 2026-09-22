@@ -44,6 +44,29 @@ describe('track repository', () => {
     expect(tracks.createIndex).toHaveBeenCalledWith({ ownerId: 1, normalizedName: 1, createdAt: -1 });
     expect(tracks.createIndex).toHaveBeenCalledWith({ analysisStatus: 1, updatedAt: 1 });
     expect(tracks.createIndex).toHaveBeenCalledWith({ sourceFileId: 1 }, { unique: true });
+    expect(tracks.createIndex).toHaveBeenCalledWith(
+      { publicId: 1 },
+      { unique: true, partialFilterExpression: { publicId: { $type: 'string' } } },
+    );
+  });
+
+  it('stores a generated public id and retries only public-id collisions', async () => {
+    const tracks = createTracksCollection();
+    const duplicate = Object.assign(new Error('duplicate'), { code: 11000, keyPattern: { publicId: 1 } });
+    const insert = tracks.insertOne.bind(tracks);
+    tracks.insertOne = vi.fn()
+      .mockRejectedValueOnce(duplicate)
+      .mockImplementation(insert);
+    const createPublicId = vi.fn().mockReturnValueOnce('first_public_id_00001').mockReturnValueOnce('secondPublicId000002');
+    const repository = createTrackRepository(tracks, { createPublicId });
+
+    const track = await repository.createProcessing({
+      ownerId: new ObjectId(), sourceFileId: new ObjectId(), originalFilename: 'ride.gpx', title: 'Ride',
+    });
+
+    expect(track.publicId).toBe('secondPublicId000002');
+    expect(createPublicId).toHaveBeenCalledTimes(2);
+    await expect(repository.findByPublicId(track.publicId)).resolves.toMatchObject({ _id: track._id });
   });
 
   it('creates an owner-bound processing track with an immutable first revision', async () => {
@@ -61,7 +84,7 @@ describe('track repository', () => {
     }, now);
 
     expect(track).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       ownerId,
       sourceFileId,
       originalFilename: 'Weekend Ride.gpx',
@@ -101,6 +124,20 @@ describe('track repository', () => {
     await expect(repository.findOwnedById(track._id, ownerId)).resolves.toMatchObject({ _id: track._id });
     await expect(repository.findOwnedById(track._id, otherOwnerId)).resolves.toBeNull();
     await expect(repository.findById(track._id)).resolves.toMatchObject({ _id: track._id });
+  });
+
+  it('resolves an unmigrated Mongo id only when the document has no public id', async () => {
+    const collection = createTracksCollection();
+    const repository = createTrackRepository(collection);
+    const ownerId = new ObjectId();
+    const legacyId = new ObjectId();
+    collection.documents.push({ _id: legacyId, ownerId, title: 'Legacy' });
+
+    await expect(repository.findByPublicId(legacyId.toString())).resolves.toMatchObject({ title: 'Legacy' });
+    await expect(repository.findOwnedByPublicId(legacyId.toString(), ownerId)).resolves.toMatchObject({ title: 'Legacy' });
+
+    collection.documents[0].publicId = 'newPublicId_123456789';
+    await expect(repository.findByPublicId(legacyId.toString())).resolves.toBeNull();
   });
 
   it('lists one extra owner track with escaped substring search and a stable cursor', async () => {

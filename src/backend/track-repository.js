@@ -1,6 +1,8 @@
+import { ObjectId } from 'mongodb';
 import { normalizeRouteType } from '../route-types.js';
+import { createPublicId as generatePublicId } from './public-id.js';
 
-export const TRACK_SCHEMA_VERSION = 1;
+export const TRACK_SCHEMA_VERSION = 2;
 export const TRACK_UPLOAD_LIMITS = Object.freeze({
   maxBytes: 25 * 1024 * 1024,
   maxPoints: 500_000,
@@ -20,7 +22,11 @@ function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export function createTrackRepository(tracks) {
+function isPublicIdCollision(error) {
+  return error?.code === 11000 && (error.keyPattern?.publicId === 1 || error.keyValue?.publicId);
+}
+
+export function createTrackRepository(tracks, { createPublicId = generatePublicId } = {}) {
   if (!tracks) throw new Error('A tracks collection is required.');
 
   return {
@@ -30,6 +36,10 @@ export function createTrackRepository(tracks) {
         tracks.createIndex({ ownerId: 1, normalizedName: 1, createdAt: -1 }),
         tracks.createIndex({ analysisStatus: 1, updatedAt: 1 }),
         tracks.createIndex({ sourceFileId: 1 }, { unique: true }),
+        tracks.createIndex(
+          { publicId: 1 },
+          { unique: true, partialFilterExpression: { publicId: { $type: 'string' } } },
+        ),
       ]);
     },
 
@@ -50,8 +60,15 @@ export function createTrackRepository(tracks) {
         createdAt: now,
         updatedAt: now,
       };
-      const result = await tracks.insertOne(track);
-      return { ...track, _id: result.insertedId };
+      for (;;) {
+        track.publicId = createPublicId();
+        try {
+          const result = await tracks.insertOne(track);
+          return { ...track, _id: result.insertedId };
+        } catch (error) {
+          if (!isPublicIdCollision(error)) throw error;
+        }
+      }
     },
 
     findOwnedById(trackId, ownerId) {
@@ -60,6 +77,18 @@ export function createTrackRepository(tracks) {
 
     findById(trackId) {
       return tracks.findOne({ _id: trackId });
+    },
+
+    async findOwnedByPublicId(publicId, ownerId) {
+      const track = await tracks.findOne({ publicId, ownerId });
+      if (track || !/^[a-f\d]{24}$/i.test(publicId)) return track;
+      return tracks.findOne({ _id: ObjectId.createFromHexString(publicId), ownerId, publicId: { $exists: false } });
+    },
+
+    async findByPublicId(publicId) {
+      const track = await tracks.findOne({ publicId });
+      if (track || !/^[a-f\d]{24}$/i.test(publicId)) return track;
+      return tracks.findOne({ _id: ObjectId.createFromHexString(publicId), publicId: { $exists: false } });
     },
 
     countOwned(ownerId) {
@@ -87,7 +116,7 @@ export function createTrackRepository(tracks) {
       }
       return tracks.find(filter, {
         projection: {
-          title: 1, routeType: 1, createdAt: 1, externalLinks: 1, analysisStatus: 1, analysisStep: 1,
+          publicId: 1, title: 1, routeType: 1, createdAt: 1, externalLinks: 1, analysisStatus: 1, analysisStep: 1,
           'analysis.distanceKm': 1, 'analysis.ascentM': 1, 'analysis.descentM': 1,
           'analysis.effectiveSpeedKmh': 1,
           'analysis.estimatedDurationMs': 1, 'analysis.preview': 1,
