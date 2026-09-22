@@ -46,6 +46,22 @@ function decodeCursor(cursor) {
   }
 }
 
+function encodeSavedCursor(relation) {
+  return Buffer.from(JSON.stringify({ savedAt: relation.savedAt.toISOString(), id: relation._id.toString() })).toString('base64url');
+}
+
+function decodeSavedCursor(cursor) {
+  if (!cursor) return null;
+  try {
+    const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    const savedAt = new Date(value.savedAt);
+    if (!/^[a-f\d]{24}$/i.test(value.id) || Number.isNaN(savedAt.getTime())) throw new Error();
+    return { savedAt, id: ObjectId.createFromHexString(value.id) };
+  } catch {
+    throw new InvalidTrackCursorError();
+  }
+}
+
 function filenameTitle(filename) {
   return String(filename || '').split(/[\\/]/).at(-1).replace(/\.gpx$/i, '').trim() || 'Маршрут без названия';
 }
@@ -130,6 +146,16 @@ function trackCard(track) {
   };
 }
 
+function savedTrackCard(relation) {
+  return {
+    ...trackCard(relation.track),
+    savedAt: relation.savedAt.toISOString(),
+    author: relation.author?.displayName
+      ? { displayName: relation.author.displayName, avatarUrl: relation.author.avatarUrl || null }
+      : null,
+  };
+}
+
 function homepageTrack(track, includeAnalysis) {
   const id = publicIdOf(track);
   const result = {
@@ -149,6 +175,7 @@ export function createTrackService({
   trackRepository,
   gpxFileStore,
   enrichmentCacheRepository,
+  savedTrackRepository,
   userRepository,
   analyzeSource,
   enrichAnalysis,
@@ -350,6 +377,7 @@ export function createTrackService({
       await Promise.allSettled([
         gpxFileStore.delete(track.sourceFileId),
         track.replacement?.sourceFileId ? gpxFileStore.delete(track.replacement.sourceFileId) : Promise.resolve(),
+        savedTrackRepository.removeForTrack(track._id),
       ]);
       return true;
     },
@@ -363,6 +391,7 @@ export function createTrackService({
         await Promise.allSettled([
           gpxFileStore.delete(track.sourceFileId),
           track.replacement?.sourceFileId ? gpxFileStore.delete(track.replacement.sourceFileId) : Promise.resolve(),
+          savedTrackRepository.removeForTrack(track._id),
         ]);
         deletedIds.push(publicId);
       }
@@ -373,7 +402,46 @@ export function createTrackService({
       const tracks = await trackRepository.listOwned({ ownerId, query, before: decodeCursor(cursor), limit: MY_TRACKS_PAGE_SIZE });
       const hasMore = tracks.length > MY_TRACKS_PAGE_SIZE;
       const page = tracks.slice(0, MY_TRACKS_PAGE_SIZE);
-      return { items: page.map(trackCard), nextCursor: hasMore ? encodeCursor(page.at(-1)) : null };
+      const favoriteIds = new Set((await savedTrackRepository.savedTrackIds({ userId: ownerId, trackIds: page.map((track) => track._id) })).map(String));
+      return { items: page.map((track) => ({ ...trackCard(track), isFavorite: favoriteIds.has(String(track._id)) })), nextCursor: hasMore ? encodeCursor(page.at(-1)) : null };
+    },
+
+    async listSavedTracks({ userId, query = '', cursor = '' }) {
+      const relations = await savedTrackRepository.list({ userId, query, before: decodeSavedCursor(cursor), limit: MY_TRACKS_PAGE_SIZE });
+      const hasMore = relations.length > MY_TRACKS_PAGE_SIZE;
+      const page = relations.slice(0, MY_TRACKS_PAGE_SIZE);
+      return { items: page.map(savedTrackCard), nextCursor: hasMore ? encodeSavedCursor(page.at(-1)) : null };
+    },
+
+    async getSavedState({ publicId, userId }) {
+      const track = await trackRepository.findByPublicId(publicId);
+      if (!track) return false;
+      return savedTrackRepository.isSaved({ userId, trackId: track._id });
+    },
+
+    async saveTrack({ publicId, userId }) {
+      const track = await trackRepository.findByPublicId(publicId);
+      if (!track) return false;
+      await savedTrackRepository.save({ userId, trackId: track._id });
+      return true;
+    },
+
+    async unsaveTrack({ publicId, userId }) {
+      const track = await trackRepository.findByPublicId(publicId);
+      if (!track) return false;
+      await savedTrackRepository.remove({ userId, trackId: track._id });
+      return true;
+    },
+
+    async unsaveTracks({ publicIds, userId }) {
+      const found = await Promise.all(publicIds.map(async (publicId) => ({
+        publicId, track: await trackRepository.findByPublicId(publicId),
+      })));
+      const existing = found.filter(({ track }) => track);
+      const savedIds = new Set((await savedTrackRepository.savedTrackIds({ userId, trackIds: existing.map(({ track }) => track._id) })).map(String));
+      const favorites = existing.filter(({ track }) => savedIds.has(String(track._id)));
+      if (favorites.length) await savedTrackRepository.removeMany({ userId, trackIds: favorites.map(({ track }) => track._id) });
+      return favorites.map(({ publicId }) => publicId);
     },
 
     async getPublicTrack(publicId) {

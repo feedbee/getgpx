@@ -13,6 +13,8 @@ describe('authentication header control', () => {
     expect(markup).toContain('https://example.com/avatar.jpg');
     expect(markup).toContain('/my-tracks');
     expect(markup).toContain('Мои треки');
+    expect(markup).toContain('/favorite-tracks');
+    expect(markup).toContain('Избранные треки');
     expect(markup).toContain('Выйти');
   });
 });

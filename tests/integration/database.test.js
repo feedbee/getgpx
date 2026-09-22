@@ -1,10 +1,12 @@
 import { Readable } from 'node:stream';
+import { ObjectId } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../../src/backend/database.js';
 import { loadConfiguration } from '../../src/backend/configuration.js';
 import { createTrackPersistence } from '../../src/backend/track-persistence.js';
 import { createTrackRepository } from '../../src/backend/track-repository.js';
 import { createUserRepository } from '../../src/backend/user-repository.js';
+import { createSavedTrackRepository } from '../../src/backend/saved-track-repository.js';
 
 const uri = process.env.MONGODB_URI;
 const describeWithMongo = uri ? describe : describe.skip;
@@ -61,6 +63,7 @@ describeWithMongo('MongoDB integration', () => {
     const { gpxFileStore } = await createTrackPersistence(database);
     const tracks = await database.collection('tracks');
     const enrichmentCache = await database.collection('enrichmentCache');
+    const savedTracks = await database.collection('savedTracks');
     const ownerId = 'integration-gridfs-owner';
     const filename = 'integration-route.gpx';
     const fileId = await gpxFileStore.save({
@@ -72,6 +75,7 @@ describeWithMongo('MongoDB integration', () => {
     for await (const chunk of gpxFileStore.openDownload(fileId)) chunks.push(chunk);
     const indexes = await tracks.indexes();
     const cacheIndexes = await enrichmentCache.indexes();
+    const savedTrackIndexes = await savedTracks.indexes();
 
     expect(Buffer.concat(chunks).toString()).toBe('<gpx version="1.1"></gpx>');
     expect(indexes).toEqual(expect.arrayContaining([
@@ -83,8 +87,38 @@ describeWithMongo('MongoDB integration', () => {
       expect.objectContaining({ key: { key: 1 }, unique: true }),
       expect.objectContaining({ key: { expiresAt: 1 }, expireAfterSeconds: 0 }),
     ]));
+    expect(savedTrackIndexes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: { userId: 1, trackId: 1 }, unique: true }),
+      expect.objectContaining({ key: { userId: 1, savedAt: -1, _id: -1 } }),
+    ]));
 
     await gpxFileStore.delete(fileId);
+  });
+
+  it('stores one saved relation and lists it with the track author', async () => {
+    const savedTracks = await database.collection('savedTracks');
+    const tracks = await database.collection('tracks');
+    const users = await database.collection('users');
+    const repository = createSavedTrackRepository(savedTracks, tracks, users);
+    const userId = new ObjectId();
+    const authorId = new ObjectId();
+    const trackId = new ObjectId();
+    await savedTracks.deleteMany({ userId });
+    await users.insertOne({ _id: authorId, displayName: 'Мария', googleSubject: `saved-author-${authorId}`, email: `${authorId}@example.com` });
+    await tracks.insertOne({ _id: trackId, ownerId: authorId, publicId: 'SavedTrack_1234567890A', title: 'Лесной круг', normalizedName: 'лесной круг', routeType: 'gravel-cycling', createdAt: new Date(), analysisStatus: 'READY', analysisStep: 'COMPLETE' });
+
+    await repository.save({ userId, trackId }, new Date('2026-09-22T10:00:00Z'));
+    await repository.save({ userId, trackId }, new Date('2026-09-22T11:00:00Z'));
+    const result = await repository.list({ userId, query: 'ЛЕС', limit: 24 });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ track: { title: 'Лесной круг' }, author: { displayName: 'Мария' } });
+    expect(await repository.savedTrackIds({ userId, trackIds: [trackId] })).toEqual([trackId]);
+    await repository.removeMany({ userId, trackIds: [trackId] });
+    expect(await repository.isSaved({ userId, trackId })).toBe(false);
+    await savedTracks.deleteMany({ userId });
+    await tracks.deleteOne({ _id: trackId });
+    await users.deleteOne({ _id: authorId });
   });
 
   it('lists only owner tracks newest first with substring search and cursor paging', async () => {

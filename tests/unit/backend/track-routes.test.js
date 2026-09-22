@@ -47,6 +47,54 @@ describe('track HTTP handlers', () => {
     expect(result.body).toEqual({ data: { items: [], nextCursor: null } });
   });
 
+  it('lists and toggles favorite tracks for the authenticated user', async () => {
+    const userId = new ObjectId();
+    const publicId = 'Abcdef_1234567890XYZ';
+    const trackService = {
+      listSavedTracks: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+      getSavedState: vi.fn().mockResolvedValue(true),
+      saveTrack: vi.fn().mockResolvedValue(true),
+      unsaveTrack: vi.fn().mockResolvedValue(true),
+    };
+    const handlers = createTrackHandlers(trackService, { getUser: vi.fn().mockResolvedValue({ id: userId.toString() }) });
+    const listRequest = request();
+    listRequest.query = { query: ' лес ', cursor: 'cursor' };
+
+    await handlers.saved(listRequest, response());
+    const stateResponse = response();
+    await handlers.savedState(request({ params: { id: publicId } }), stateResponse);
+    const saveResponse = response();
+    await handlers.save(request({ params: { id: publicId } }), saveResponse);
+    const removeResponse = response();
+    await handlers.unsave(request({ params: { id: publicId } }), removeResponse);
+
+    expect(trackService.listSavedTracks).toHaveBeenCalledWith({ userId, query: 'лес', cursor: 'cursor' });
+    expect(stateResponse.body).toEqual({ data: { saved: true } });
+    expect(saveResponse.body).toEqual({ data: { saved: true } });
+    expect(removeResponse.body).toEqual({ data: { saved: false } });
+  });
+
+  it('validates bulk removal from the authenticated user favorites', async () => {
+    const userId = new ObjectId();
+    const publicId = 'Abcdef_1234567890XYZ';
+    const trackService = { unsaveTracks: vi.fn().mockResolvedValue([publicId]) };
+    const handlers = createTrackHandlers(trackService, { getUser: vi.fn().mockResolvedValue({ id: userId.toString() }) });
+    const source = request();
+    source.body = { ids: [publicId, publicId] };
+    const result = response();
+
+    await handlers.unsaveMany(source, result);
+
+    expect(trackService.unsaveTracks).toHaveBeenCalledWith({ publicIds: [publicId], userId });
+    expect(result.body).toEqual({ data: { removedIds: [publicId] } });
+    const invalid = request();
+    invalid.body = { ids: ['bad-id'] };
+    const invalidResult = response();
+    await handlers.unsaveMany(invalid, invalidResult);
+    expect(invalidResult.statusCode).toBe(422);
+    expect(trackService.unsaveTracks).toHaveBeenCalledTimes(1);
+  });
+
   it('accepts a raw GPX stream and returns a polling resource', async () => {
     const ownerId = new ObjectId();
     const trackService = { upload: vi.fn().mockResolvedValue({ id: 'track-1', status: 'PROCESSING', step: 'QUEUED', error: null }) };

@@ -44,20 +44,83 @@ function dependencies() {
   const userRepository = {
     findPublicProfileById: vi.fn().mockResolvedValue({ displayName: 'Jan Kowalski', avatarUrl: 'https://example.com/jan.jpg' }),
   };
+  const savedTrackRepository = {
+    save: vi.fn().mockResolvedValue(undefined),
+    remove: vi.fn().mockResolvedValue({ deletedCount: 1 }),
+    removeForTrack: vi.fn().mockResolvedValue({ deletedCount: 0 }),
+    isSaved: vi.fn().mockResolvedValue(false),
+    savedTrackIds: vi.fn().mockResolvedValue([]),
+    removeMany: vi.fn().mockResolvedValue({ deletedCount: 2 }),
+    list: vi.fn().mockResolvedValue([]),
+  };
   const service = createTrackService({
     trackRepository,
     gpxFileStore,
     enrichmentCacheRepository: { get: vi.fn(), put: vi.fn() },
     userRepository,
+    savedTrackRepository,
     analyzeSource,
     enrichAnalysis,
     configuration: { userTiers: { BASIC: { limits: { tracks: 100 } }, PREMIUM: { limits: { tracks: 1000 } } } },
     schedule: (job) => scheduled.push(job),
   });
-  return { service, scheduled, trackRepository, gpxFileStore, userRepository, analyzeSource, enrichAnalysis };
+  return { service, scheduled, trackRepository, savedTrackRepository, gpxFileStore, userRepository, analyzeSource, enrichAnalysis };
 }
 
 describe('track service', () => {
+  it('adds an existing track to favorites and exposes persisted state', async () => {
+    const { service, trackRepository, savedTrackRepository } = dependencies();
+    const ownerId = new ObjectId();
+    const userId = new ObjectId();
+    const trackId = new ObjectId();
+    trackRepository.findByPublicId.mockResolvedValue({ _id: trackId, ownerId });
+    savedTrackRepository.isSaved.mockResolvedValue(true);
+
+    await expect(service.saveTrack({ publicId: 'track-1', userId })).resolves.toBe(true);
+    await expect(service.getSavedState({ publicId: 'track-1', userId })).resolves.toBe(true);
+
+    expect(savedTrackRepository.save).toHaveBeenCalledWith({ userId, trackId });
+  });
+
+  it('allows the current user to add their own track to favorites', async () => {
+    const { service, trackRepository, savedTrackRepository } = dependencies();
+    const userId = new ObjectId();
+    trackRepository.findByPublicId.mockResolvedValue({ _id: new ObjectId(), ownerId: userId });
+
+    await expect(service.saveTrack({ publicId: 'track-1', userId })).resolves.toBe(true);
+    expect(savedTrackRepository.save).toHaveBeenCalled();
+  });
+  it('marks owned list cards that are in favorites without checking each card separately', async () => {
+    const { service, trackRepository, savedTrackRepository } = dependencies();
+    const ownerId = new ObjectId();
+    const favoriteId = new ObjectId();
+    const otherId = new ObjectId();
+    trackRepository.listOwned.mockResolvedValue([
+      { _id: favoriteId, ownerId, title: 'Favorite', createdAt: new Date(), analysisStatus: 'READY' },
+      { _id: otherId, ownerId, title: 'Other', createdAt: new Date(), analysisStatus: 'READY' },
+    ]);
+    savedTrackRepository.savedTrackIds.mockResolvedValue([favoriteId]);
+
+    const page = await service.listMyTracks({ ownerId });
+
+    expect(page.items.map((item) => item.isFavorite)).toEqual([true, false]);
+    expect(savedTrackRepository.savedTrackIds).toHaveBeenCalledWith({ userId: ownerId, trackIds: [favoriteId, otherId] });
+  });
+
+  it('removes selected favorites without deleting their tracks', async () => {
+    const { service, trackRepository, savedTrackRepository } = dependencies();
+    const userId = new ObjectId();
+    const first = new ObjectId();
+    const second = new ObjectId();
+    trackRepository.findByPublicId.mockResolvedValueOnce({ _id: first }).mockResolvedValueOnce({ _id: second });
+    savedTrackRepository.savedTrackIds.mockResolvedValue([first, second]);
+
+    const removed = await service.unsaveTracks({ publicIds: ['first', 'second'], userId });
+
+    expect(removed).toEqual(['first', 'second']);
+    expect(savedTrackRepository.removeMany).toHaveBeenCalledWith({ userId, trackIds: [first, second] });
+    expect(trackRepository.deleteOwned).not.toHaveBeenCalled();
+  });
   it('publishes the uploader profile and upload date with a public track', async () => {
     const { service, trackRepository, userRepository } = dependencies();
     const createdAt = new Date('2026-09-17T10:00:00.000Z');

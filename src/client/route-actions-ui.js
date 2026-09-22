@@ -4,6 +4,13 @@ export function closeOverflowMenuOnOutsideClick(menu, target) {
   return true;
 }
 
+export function favoriteButtonState(favorite) {
+  return {
+    pressed: String(favorite),
+    label: favorite ? 'Удалить из избранного' : 'Добавить в избранное',
+  };
+}
+
 export function copyPublicTrackLink({ trackId, origin, clipboard }) {
   return clipboard.writeText(new URL(`/tracks/${trackId}`, origin).href);
 }

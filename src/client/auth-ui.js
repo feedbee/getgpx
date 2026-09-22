@@ -14,6 +14,7 @@ export function renderAuthControl(user) {
       <div class="user-menu-popover" id="user-menu-popover" hidden>
         <div class="user-summary"><strong>${name}</strong><small>${escapeHtml(user.email)}</small></div>
         <a class="user-menu-link" href="/my-tracks">Мои треки</a>
+        <a class="user-menu-link" href="/favorite-tracks">Избранные треки</a>
         <button class="logout-button" type="button">Выйти</button>
       </div>
     </div>`;

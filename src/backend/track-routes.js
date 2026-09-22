@@ -81,6 +81,63 @@ export function createTrackHandlers(trackService, authService) {
       }
     },
 
+    async saved(request, response) {
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      const query = typeof request.query?.query === 'string' ? request.query.query.trim() : '';
+      const cursor = typeof request.query?.cursor === 'string' ? request.query.cursor : '';
+      if (query.length > 100) return error(response, 422, 'INVALID_SEARCH_QUERY', 'Поисковый запрос должен быть не длиннее 100 символов.');
+      try {
+        return send(response, 200, { data: await trackService.listSavedTracks({ userId: identity.ownerId, query, cursor }) });
+      } catch (listError) {
+        if (listError instanceof InvalidTrackCursorError) return error(response, 400, listError.code, 'Не удалось продолжить список. Обновите страницу.');
+        throw listError;
+      }
+    },
+
+    async savedState(request, response) {
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      const publicId = isPublicId(request.params.id) ? request.params.id : null;
+      if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
+      const saved = await trackService.getSavedState({ publicId, userId: identity.ownerId });
+      return send(response, 200, { data: { saved } });
+    },
+
+    async save(request, response) {
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      const publicId = isPublicId(request.params.id) ? request.params.id : null;
+      if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
+      const saved = await trackService.saveTrack({ publicId, userId: identity.ownerId });
+      return saved
+        ? send(response, 200, { data: { saved: true } })
+        : error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
+    },
+
+    async unsave(request, response) {
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      const publicId = isPublicId(request.params.id) ? request.params.id : null;
+      if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
+      await trackService.unsaveTrack({ publicId, userId: identity.ownerId });
+      return send(response, 200, { data: { saved: false } });
+    },
+
+    async unsaveMany(request, response) {
+      const identity = await authenticatedOwner(request, response);
+      if (!identity) return;
+      if (!Array.isArray(request.body?.ids) || request.body.ids.length < 1 || request.body.ids.length > 100) {
+        return error(response, 422, 'INVALID_TRACK_IDS', 'Выберите от 1 до 100 треков.');
+      }
+      const publicIds = [...new Set(request.body.ids)];
+      if (publicIds.some((publicId) => !isPublicId(publicId))) {
+        return error(response, 422, 'INVALID_TRACK_IDS', 'Список треков содержит некорректный идентификатор.');
+      }
+      const removedIds = await trackService.unsaveTracks({ publicIds, userId: identity.ownerId });
+      return send(response, 200, { data: { removedIds } });
+    },
+
     async publicTrack(request, response) {
       const publicId = isPublicId(request.params.id) ? request.params.id : null;
       if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
@@ -246,8 +303,13 @@ export function createTrackRouter(trackService, authService) {
   router.post('/api/tracks', handlers.upload);
   router.get('/api/tracks/homepage', handlers.homepageTracks);
   router.get('/api/tracks/mine', handlers.mine);
+  router.get('/api/tracks/saved', handlers.saved);
+  router.delete('/api/tracks/saved', express.json({ limit: '16kb' }), handlers.unsaveMany);
   router.delete('/api/tracks', express.json({ limit: '16kb' }), handlers.removeMany);
   router.get('/api/tracks/:id/status', handlers.status);
+  router.get('/api/tracks/:id/saved', handlers.savedState);
+  router.put('/api/tracks/:id/saved', handlers.save);
+  router.delete('/api/tracks/:id/saved', handlers.unsave);
   router.get('/api/tracks/:id/manage', handlers.management);
   router.patch('/api/tracks/:id', express.json({ limit: '16kb' }), handlers.update);
   router.put('/api/tracks/:id/file', handlers.replace);

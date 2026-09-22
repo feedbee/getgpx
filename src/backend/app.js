@@ -10,6 +10,7 @@ export const defaultStaticDirectory = path.join(rootDirectory, 'dist');
 export function frontendPageStatus(pathname) {
   return pathname === '/'
     || pathname === '/my-tracks'
+    || pathname === '/favorite-tracks'
     || /^\/tracks\/[A-Za-z0-9_]{1,64}$/.test(pathname)
     ? 200
     : 404;

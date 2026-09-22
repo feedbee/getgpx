@@ -24,9 +24,9 @@ export function previewPolyline(preview) {
   return preview.points.map((point) => `${Number(point[0]).toFixed(2)},${Number(point[1]).toFixed(2)}`).join(' ');
 }
 
-export function cancelTrackSearch({ input, history, reload }) {
+export function cancelTrackSearch({ input, history, reload, pathname = '/my-tracks' }) {
   input.value = '';
-  history.replaceState(null, '', '/my-tracks');
+  history.replaceState(null, '', pathname);
   reload({ reset: true });
 }
 
@@ -38,12 +38,12 @@ export function bulkDeleteSummary(tracks) {
   };
 }
 
-export function bulkSelectionState({ total, selected }) {
+export function bulkSelectionState({ total, selected, actionLabel = 'Удалить' }) {
   const allSelected = total > 0 && selected === total;
   return {
     allSelected,
     selectLabel: allSelected ? 'Отменить выбор' : 'Выбрать всё',
-    deleteLabel: selected ? `Удалить (${selected})` : 'Удалить',
+    deleteLabel: selected ? `${actionLabel} (${selected})` : actionLabel,
     deleteDisabled: selected === 0,
   };
 }
@@ -64,7 +64,7 @@ export function formatTrackMetrics(track) {
   ].join(' · ');
 }
 
-export function createTrackCard(track, documentRef = document) {
+export function createTrackCard(track, documentRef = document, { ownerActions = true } = {}) {
   const article = documentRef.createElement('article');
   article.className = 'track-card';
   article.dataset.trackId = track.id;
@@ -102,7 +102,29 @@ export function createTrackCard(track, documentRef = document) {
   const externalLinks = documentRef.createElement('span');
   externalLinks.className = 'track-card-external-links';
   renderExternalTrackLinks(externalLinks, track.externalLinks, documentRef, { compact: true });
-  dateRow.append(date, externalLinks);
+  if (!ownerActions && track.author?.displayName) {
+    const author = documentRef.createElement('span');
+    author.className = 'track-card-author';
+    const avatar = documentRef.createElement(track.author.avatarUrl ? 'img' : 'span');
+    avatar.className = 'track-card-author-avatar';
+    if (track.author.avatarUrl) {
+      avatar.src = track.author.avatarUrl;
+      avatar.alt = '';
+      avatar.referrerPolicy = 'no-referrer';
+    } else {
+      avatar.setAttribute('aria-hidden', 'true');
+      avatar.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0"/></svg>';
+    }
+    const authorName = documentRef.createElement('span');
+    authorName.textContent = track.author.displayName;
+    author.append(avatar, authorName);
+    const separator = documentRef.createElement('span');
+    separator.className = 'track-card-meta-separator';
+    separator.textContent = '·';
+    dateRow.append(author, separator, date, externalLinks);
+  } else {
+    dateRow.append(date, externalLinks);
+  }
   body.append(badge, title, metrics, dateRow);
 
   const actions = documentRef.createElement('div');
@@ -113,6 +135,16 @@ export function createTrackCard(track, documentRef = document) {
   select.value = track.id;
   select.dataset.trackSelect = '';
   select.setAttribute('aria-label', `Выбрать ${track.title}`);
+  const favorite = documentRef.createElement('button');
+  favorite.className = `track-card-action track-card-favorite${ownerActions && track.isFavorite ? ' is-favorite' : ''}`;
+  favorite.type = 'button';
+  favorite.dataset.trackAction = ownerActions ? 'favorite' : 'unsave';
+  favorite.setAttribute('aria-pressed', String(ownerActions ? Boolean(track.isFavorite) : true));
+  favorite.setAttribute('aria-label', ownerActions
+    ? (track.isFavorite ? `Убрать ${track.title} из избранного` : `Добавить ${track.title} в избранное`)
+    : `Убрать ${track.title} из избранного`);
+  favorite.title = ownerActions && !track.isFavorite ? 'Добавить в избранное' : 'Убрать из избранного';
+  favorite.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg>';
   const edit = documentRef.createElement('button');
   edit.className = 'track-card-action';
   edit.type = 'button';
@@ -133,7 +165,7 @@ export function createTrackCard(track, documentRef = document) {
   download.setAttribute('download', '');
   download.setAttribute('aria-label', `Скачать ${track.title}`);
   download.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4-4 4 4 4-4M5 20h14"/></svg>';
-  actions.append(select, edit, remove, download);
+  actions.append(select, favorite, ...(ownerActions ? [edit, remove] : []), download);
   article.append(previewLink, body, actions);
   return article;
 }

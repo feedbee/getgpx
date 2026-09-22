@@ -568,7 +568,7 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:400; }
 .track-card-title:hover { text-decoration:underline; text-decoration-thickness:1px; text-underline-offset:3px; }
 .track-card-metrics { margin:0; color:var(--muted); font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; }
 .track-card-date { color:var(--muted); font-size:11px; }
-.track-card-date-row { min-height:16px; display:flex; align-items:center; gap:10px; }
+.track-card-date-row { min-width:0; min-height:16px; display:flex; align-items:center; gap:10px; }
 .track-card-external-links { display:flex; align-items:center; gap:5px; }
 .track-card-external-links[hidden] { display:none; }
 .external-track-link-compact { width:16px; min-height:16px; padding:0; border:0; border-radius:4px; }
@@ -617,6 +617,11 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:400; }
 .route-type-metric .route-type-icon { width:21px; height:21px; margin-right:2px; stroke:currentColor; }
 .route-type-metric .route-type-icon--filled { stroke:none; }
 .track-card-metrics { display:flex; align-items:center; gap:6px; }
+.track-card-author { min-width:0; display:inline-flex; align-items:center; gap:7px; color:var(--muted); font-size:12px; }
+.track-card-author > span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.track-card-author-avatar { width:22px; height:22px; display:grid; flex:0 0 auto; place-items:center; overflow:hidden; border-radius:50%; background:#dfe5da; color:#506050; object-fit:cover; }
+.track-card-author-avatar svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.track-card-meta-separator { color:var(--muted); }
 .track-card-metrics .route-type-icon { width:17px; height:17px; flex:0 0 auto; stroke:var(--ink); }
 .track-card-metrics .route-type-icon--filled { stroke:none; }
 
@@ -656,6 +661,10 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:400; }
 .track-card-select:focus-visible { outline:2px solid var(--ink); outline-offset:3px; }
 .track-card-action:hover,.track-card-download:hover { border-color:var(--ink); background:var(--white); }
 .track-card-action:focus-visible,.track-card-download:focus-visible { border-color:var(--ink); background:var(--white); outline:2px solid var(--ink); outline-offset:2px; }
+.track-card-favorite.is-favorite svg,.track-card-favorite[aria-pressed="true"] svg { fill:currentColor; }
+.track-card-favorite:disabled { cursor:wait; opacity:.6; }
+.route-actions .primary-action.is-saved { border-color:var(--primary); background:var(--primary); color:var(--white); }
+.route-actions .primary-action.is-saved svg { fill:currentColor; }
 
 .processing-overlay,.edit-track-dialog::backdrop,.confirm-delete-dialog::backdrop { background:rgba(24,27,22,.54); backdrop-filter:blur(10px); }
 .processing-card,.edit-track-dialog,.confirm-delete-dialog { border:1px solid var(--line); border-radius:14px; background:var(--white); box-shadow:0 24px 80px rgba(24,27,22,.24); }

@@ -17,6 +17,13 @@ edit flow. The user menu links to `/my-tracks`.
   the MVP it may explain the product and offer sign-in.
 - `/my-tracks` requires authentication and shows only the current user's tracks,
   newest first. It has upload and name-search controls.
+- `/favorite-tracks` requires authentication and shows the current user's favorite
+  tracks, newest addition first. It includes both the user's own tracks and tracks by
+  other authors, reuses the My Tracks card layout, adds the author's display
+  name, and offers per-card and selected-card removal from favorites with confirmation.
+  The per-card heart opens the same confirmation dialog used for selected-card removal.
+  `/my-tracks` cards show each track's favorite state as a toggle beside editing;
+  bulk deletion on that page continues to delete tracks rather than change favorites.
 - `/tracks/:id` is publicly readable after initial processing succeeds. Owner-only
   edit, retry, and delete actions are shown when appropriate. Failed analysis still
   has a public page containing every successfully derived GPX metric and a clear
@@ -66,6 +73,8 @@ Indexes:
 - `{ ownerId: 1, normalizedName: 1, createdAt: -1 }` for owner-scoped name search.
 - `{ analysisStatus: 1, updatedAt: 1 }` for retry/operations visibility.
 - A unique GridFS/file reference where repository invariants require it.
+- Saved-track relations live in `savedTracks` with a unique `{ userId: 1, trackId: 1 }`
+  index and `{ userId: 1, savedAt: -1, _id: -1 }` for newest-first pagination.
 
 Use a shared enrichment cache collection keyed by provider, request/schema version,
 and normalized geographic input. Entries have `expiresAt` with a MongoDB TTL index;
@@ -103,6 +112,12 @@ The parser must be bounded and must not permit XML external entities.
 - `POST /api/tracks` — authenticated raw GPX stream; returns `202` and a track id
   after durable file storage, then processing continues asynchronously.
 - `GET /api/tracks/mine?query=&cursor=` — authenticated owner list, newest first.
+- `GET /api/tracks/saved?query=&cursor=` — authenticated saved list with author data.
+- `GET /api/tracks/:id/saved` — authenticated saved state for a public track.
+- `PUT /api/tracks/:id/saved` — idempotently add any public track to favorites,
+  including a track owned by the current user.
+- `DELETE /api/tracks/:id/saved` — idempotently remove it from favorites.
+- `DELETE /api/tracks/saved` — remove 1–100 selected favorites for the signed-in user.
 - `GET /api/tracks/:id` — public track at any processing outcome, including the
   deepest completed analysis and a human-readable provenance note.
 - `PATCH /api/tracks/:id` — owner-only route type, title, speed, and external-service links update.
@@ -165,6 +180,9 @@ are faked in deterministic tests; CI does not depend on live Valhalla or Overpas
   processing, and land on the persisted track without re-running enrichment on view.
 - `/my-tracks` contains only the current user's tracks, newest first, searchable by
   name, with a route preview on every card.
+- A signed-in user can add and remove both their own and other authors' tracks from
+  favorites; the route-page button reflects the persisted state, and
+  `/favorite-tracks` lists those tracks with authors.
 - Owners can rename, change speed, replace GPX without changing the URL, retry failed
   analysis, and permanently delete after confirmation.
 - Provider failure preserves a retryable owner-visible record; persistence and cache

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, publicTrackIdFromPath, renderOwnerTrackActions } from '../../../src/client/route-actions-ui.js';
+import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, favoriteButtonState, publicTrackIdFromPath, renderOwnerTrackActions } from '../../../src/client/route-actions-ui.js';
 
 describe('route action overflow menu', () => {
   it('closes an open menu when the click is outside', () => {
@@ -51,5 +51,12 @@ describe('public track sharing', () => {
     expect(clipboard.writeText).toHaveBeenCalledWith(
       'https://getgpx.example/tracks/507f1f77bcf86cd799439011',
     );
+  });
+});
+
+describe('favorite track action', () => {
+  it('keeps the label stable and exposes accessible on/off state', () => {
+    expect(favoriteButtonState(false)).toEqual({ pressed: 'false', label: 'Добавить в избранное' });
+    expect(favoriteButtonState(true)).toEqual({ pressed: 'true', label: 'Удалить из избранного' });
   });
 });

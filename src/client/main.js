@@ -5,7 +5,7 @@ import { renderAuthControl } from './auth-ui.js';
 import { renderHomePage } from './home-page-ui.js';
 import { renderNotFoundPage } from './not-found-ui.js';
 import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, createTrackCard } from './my-tracks-ui.js';
-import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, publicTrackIdFromPath, renderOwnerTrackActions } from './route-actions-ui.js';
+import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, favoriteButtonState, publicTrackIdFromPath, renderOwnerTrackActions } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js';
 import { renderTrackUploadDialogs, uploadMetadataHint, uploadMetadataPayload } from './track-upload-ui.js';
@@ -49,9 +49,11 @@ let currentUser = null;
 let activeUploadTrackId = null;
 let activeUploadMetadata = null;
 const isMyTracksPage = window.location.pathname === '/my-tracks';
+const isFavoriteTracksPage = window.location.pathname === '/favorite-tracks';
+const isTrackCollectionPage = isMyTracksPage || isFavoriteTracksPage;
 const isHomePage = window.location.pathname === '/';
 const pathPublicTrackId = publicTrackIdFromPath(window.location.pathname);
-const isNotFoundPage = !isHomePage && !isMyTracksPage && !pathPublicTrackId;
+const isNotFoundPage = !isHomePage && !isTrackCollectionPage && !pathPublicTrackId;
 let homepageTracks = [];
 if (isHomePage) {
   try {
@@ -90,18 +92,18 @@ app.innerHTML = `
   </header>
   ${isHomePage ? renderHomePage(homepageTracks) : ''}
   ${isNotFoundPage ? renderNotFoundPage() : ''}
-  <main class="my-tracks-page" id="my-tracks" ${isMyTracksPage ? '' : 'hidden'}>
+  <main class="my-tracks-page" id="my-tracks" ${isTrackCollectionPage ? '' : 'hidden'}>
     <header class="my-tracks-header">
-      <div><p class="route-kicker">ЛИЧНАЯ КОЛЛЕКЦИЯ</p><h1>Мои треки</h1><p>Ваши маршруты — от свежих загрузок к старым.</p></div>
-      <button class="my-tracks-upload" data-auth-upload type="button" hidden><span aria-hidden="true">＋</span> Загрузить GPX</button>
+      <div><p class="route-kicker">ЛИЧНАЯ КОЛЛЕКЦИЯ</p><h1>${isFavoriteTracksPage ? 'Избранные треки' : 'Мои треки'}</h1><p>${isFavoriteTracksPage ? 'Ваши любимые маршруты — свои и других авторов.' : 'Ваши маршруты — от свежих загрузок к старым.'}</p></div>
+      <button class="my-tracks-upload" ${isFavoriteTracksPage ? '' : 'data-auth-upload'} type="button" ${isFavoriteTracksPage ? 'hidden disabled' : 'hidden'}><span aria-hidden="true">＋</span> Загрузить GPX</button>
     </header>
     <form class="track-search" id="track-search" role="search"><label for="track-query">Поиск по названию</label><div class="track-search-controls"><span class="track-search-input"><input id="track-query" name="query" type="search" maxlength="100" placeholder="Например, вечерний гравий" autocomplete="off" /><button class="track-search-clear" id="track-search-clear" type="button" aria-label="Отменить поиск" title="Отменить поиск" hidden>×</button></span><button class="track-search-submit" type="submit">Найти</button></div></form>
-    <div class="track-list-toolbar"><button class="select-all-tracks" id="select-all-tracks" type="button" disabled>Выбрать всё</button><button class="bulk-delete-tracks" id="bulk-delete-tracks" type="button" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg><span>Удалить</span></button></div>
-    <p class="my-tracks-message" id="my-tracks-message" role="status">Войдите, чтобы увидеть свои треки.</p>
+    <div class="track-list-toolbar"><button class="select-all-tracks" id="select-all-tracks" type="button" disabled>Выбрать всё</button><button class="bulk-delete-tracks" id="bulk-delete-tracks" type="button" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg><span>${isFavoriteTracksPage ? 'Убрать' : 'Удалить'}</span></button></div>
+    <p class="my-tracks-message" id="my-tracks-message" role="status">Войдите, чтобы увидеть ${isFavoriteTracksPage ? 'избранные' : 'свои'} треки.</p>
     <section class="track-list" id="track-list" aria-live="polite"></section>
     <button class="load-more-tracks" id="load-more-tracks" type="button" hidden>Показать ещё</button>
   </main>
-  <main class="page" id="route" ${isMyTracksPage || isHomePage || isNotFoundPage ? 'hidden' : ''}>
+  <main class="page" id="route" ${isTrackCollectionPage || isHomePage || isNotFoundPage ? 'hidden' : ''}>
     <header class="route-header">
       <p class="route-state-note" id="route-state-note" hidden></p>
       <div class="route-heading">
@@ -123,7 +125,7 @@ app.innerHTML = `
           <span class="moving-metric"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.6 18a8 8 0 1 1 12.8 0M12 13l4-4"/><path d="M4 18h16"/></svg><abbr id="average-speed-badge" title="Средняя скорость движения по данным GPX">— км/ч</abbr></span>
         </div>
         <div class="route-actions" aria-label="Действия с маршрутом">
-          <button class="primary-action" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg>Сохранить</button>
+          <button class="primary-action" id="save-track" type="button" aria-label="Добавить в избранное" aria-pressed="false" title="Добавить в избранное"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg><span>Избранное</span></button>
           <button id="share-track" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg>Поделиться</button>
           <a id="download-track" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></svg>Скачать трек</a>
           <span class="owner-track-actions" id="owner-track-actions" hidden><details class="route-overflow"><summary aria-label="Дополнительные действия"><span aria-hidden="true">•••</span></summary><div>${renderOwnerTrackActions()}</div></details></span>
@@ -193,7 +195,7 @@ app.innerHTML = `
   <dialog class="confirm-delete-dialog" id="confirm-delete-dialog">
     <form method="dialog">
       <div class="confirm-delete-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg></div>
-      <div><p class="route-kicker">УДАЛЕНИЕ ТРЕКОВ</p><h2 id="delete-dialog-title">Удалить трек?</h2></div>
+      <div><p class="route-kicker" id="delete-dialog-kicker">УДАЛЕНИЕ ТРЕКОВ</p><h2 id="delete-dialog-title">Удалить трек?</h2></div>
       <p id="delete-track-description"></p>
       <ul class="delete-track-list" id="delete-track-list"></ul>
       <p class="form-error" id="delete-track-error" hidden></p>
@@ -232,8 +234,11 @@ function setAuthUser(user) {
   document.querySelectorAll('[data-auth-upload]').forEach((control) => { control.hidden = !user; });
   document.querySelectorAll('[data-home-guest]').forEach((control) => { control.hidden = Boolean(user); });
   document.querySelectorAll('[data-home-author]').forEach((control) => { control.hidden = !user; });
-  if (isMyTracksPage) loadMyTracks({ reset: true });
-  if (publicTrackId && user) loadTrackManagement(publicTrackId);
+  if (isTrackCollectionPage) loadMyTracks({ reset: true });
+  if (publicTrackId && user) {
+    loadTrackManagement(publicTrackId);
+    loadSavedState(publicTrackId);
+  }
   if (!user) {
     publicTrackOwnershipVerified = false;
     renderTrackAttribution();
@@ -259,14 +264,30 @@ async function loadTrackManagement(trackId) {
   });
 }
 
+function setSavedButton(saved) {
+  const button = document.querySelector('#save-track');
+  const state = favoriteButtonState(saved);
+  button.classList.toggle('is-saved', saved);
+  button.setAttribute('aria-pressed', state.pressed);
+  button.setAttribute('aria-label', state.label);
+  button.title = state.label;
+}
+
+async function loadSavedState(trackId) {
+  const response = await fetch(`/api/tracks/${trackId}/saved`, { headers: { accept: 'application/json' } });
+  if (!response.ok || trackId !== publicTrackId) return;
+  const { data } = await response.json();
+  setSavedButton(Boolean(data.saved));
+}
+
 async function loadMyTracks({ reset = false } = {}) {
-  if (!isMyTracksPage || myTracksLoading) return;
+  if (!isTrackCollectionPage || myTracksLoading) return;
   const list = document.querySelector('#track-list');
   const message = document.querySelector('#my-tracks-message');
   const more = document.querySelector('#load-more-tracks');
   if (!currentUser) {
     list.replaceChildren();
-    message.innerHTML = 'Войдите, чтобы увидеть свои треки. <a href="/api/auth/google">Войти</a>';
+    message.innerHTML = `Войдите, чтобы увидеть ${isFavoriteTracksPage ? 'избранные' : 'свои'} треки. <a href="/api/auth/google">Войти</a>`;
     message.hidden = false;
     more.hidden = true;
     return;
@@ -285,13 +306,13 @@ async function loadMyTracks({ reset = false } = {}) {
   if (query) parameters.set('query', query);
   if (myTracksCursor) parameters.set('cursor', myTracksCursor);
   try {
-    const response = await fetch(`/api/tracks/mine?${parameters}`, { headers: { accept: 'application/json' } });
+    const response = await fetch(`/api/tracks/${isFavoriteTracksPage ? 'saved' : 'mine'}?${parameters}`, { headers: { accept: 'application/json' } });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload?.error?.message || 'Не удалось загрузить список треков.');
-    payload.data.items.forEach((track) => list.append(createTrackCard(track)));
+    payload.data.items.forEach((track) => list.append(createTrackCard(track, document, { ownerActions: !isFavoriteTracksPage })));
     updateBulkDeleteButton();
     myTracksCursor = payload.data.nextCursor;
-    message.textContent = list.children.length ? '' : (query ? 'По вашему запросу ничего не найдено.' : 'Здесь пока нет треков. Загрузите первый GPX.');
+    message.textContent = list.children.length ? '' : (query ? 'По вашему запросу ничего не найдено.' : isFavoriteTracksPage ? 'Здесь пока нет избранных треков.' : 'Здесь пока нет треков. Загрузите первый GPX.');
     message.hidden = Boolean(list.children.length);
     more.hidden = !myTracksCursor;
   } catch (listError) {
@@ -354,7 +375,7 @@ function selectedTrackCards() {
 function updateBulkDeleteButton() {
   const checkboxes = [...document.querySelectorAll('[data-track-select]')];
   const selectedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
-  const state = bulkSelectionState({ total: checkboxes.length, selected: selectedCount });
+  const state = bulkSelectionState({ total: checkboxes.length, selected: selectedCount, actionLabel: isFavoriteTracksPage ? 'Убрать' : 'Удалить' });
   const selectAll = document.querySelector('#select-all-tracks');
   const remove = document.querySelector('#bulk-delete-tracks');
   selectAll.disabled = checkboxes.length === 0;
@@ -368,11 +389,16 @@ function updateBulkDeleteButton() {
 function openTracksDeleteConfirmation(tracks) {
   tracksPendingDeletion = tracks;
   const summary = bulkDeleteSummary(tracks);
+  const favoriteRemoval = isFavoriteTracksPage;
+  document.querySelector('#delete-dialog-kicker').textContent = favoriteRemoval ? 'ИЗБРАННЫЕ ТРЕКИ' : 'УДАЛЕНИЕ ТРЕКОВ';
   document.querySelector('#delete-dialog-title').textContent = summary.count === 1
-    ? 'Удалить трек?' : `Удалить ${summary.count} треков?`;
-  document.querySelector('#delete-track-description').textContent = summary.count === 1
-    ? 'Трек и исходный GPX будут удалены без возможности восстановления.'
-    : `${summary.count} треков и их исходные GPX будут удалены без возможности восстановления:`;
+    ? (favoriteRemoval ? 'Убрать трек из избранного?' : 'Удалить трек?')
+    : (favoriteRemoval ? `Убрать ${summary.count} треков из избранного?` : `Удалить ${summary.count} треков?`);
+  document.querySelector('#delete-track-description').textContent = favoriteRemoval
+    ? (summary.count === 1 ? 'Трек останется доступен по своей ссылке.' : 'Треки останутся доступны по своим ссылкам:')
+    : (summary.count === 1 ? 'Трек и исходный GPX будут удалены без возможности восстановления.'
+      : `${summary.count} треков и их исходные GPX будут удалены без возможности восстановления:`);
+  document.querySelector('#confirm-track-delete').textContent = favoriteRemoval ? 'Убрать' : 'Удалить';
   const list = document.querySelector('#delete-track-list');
   list.replaceChildren(...summary.titles.map((trackTitle) => {
     const item = document.createElement('li');
@@ -1624,7 +1650,8 @@ document.querySelector('#retry-processing').addEventListener('click', async () =
 document.querySelector('#track-search').addEventListener('submit', (event) => {
   event.preventDefault();
   const query = document.querySelector('#track-query').value.trim();
-  const nextUrl = query ? `/my-tracks?query=${encodeURIComponent(query)}` : '/my-tracks';
+  const pathname = isFavoriteTracksPage ? '/favorite-tracks' : '/my-tracks';
+  const nextUrl = query ? `${pathname}?query=${encodeURIComponent(query)}` : pathname;
   window.history.replaceState(null, '', nextUrl);
   loadMyTracks({ reset: true });
 });
@@ -1632,7 +1659,7 @@ const trackQueryInput = document.querySelector('#track-query');
 const trackSearchClear = document.querySelector('#track-search-clear');
 trackQueryInput.addEventListener('input', () => { trackSearchClear.hidden = !trackQueryInput.value; });
 trackSearchClear.addEventListener('click', () => {
-  cancelTrackSearch({ input: trackQueryInput, history: window.history, reload: loadMyTracks });
+  cancelTrackSearch({ input: trackQueryInput, history: window.history, reload: loadMyTracks, pathname: isFavoriteTracksPage ? '/favorite-tracks' : '/my-tracks' });
   trackSearchClear.hidden = true;
   trackQueryInput.focus();
 });
@@ -1719,22 +1746,22 @@ document.querySelector('#confirm-track-delete').addEventListener('click', async 
   button.disabled = true;
   error.hidden = true;
   const isBulkDelete = managedTrackId === null;
-  const response = await fetch(isBulkDelete ? '/api/tracks' : `/api/tracks/${managedTrackId}`, {
+  const response = await fetch(isFavoriteTracksPage ? '/api/tracks/saved' : isBulkDelete ? '/api/tracks' : `/api/tracks/${managedTrackId}`, {
     method: 'DELETE',
-    headers: isBulkDelete
+    headers: isBulkDelete || isFavoriteTracksPage
       ? { accept: 'application/json', 'content-type': 'application/json' }
       : { accept: 'application/json' },
-    body: isBulkDelete ? JSON.stringify({ ids: tracksPendingDeletion.map((track) => track.id) }) : undefined,
+    body: isBulkDelete || isFavoriteTracksPage ? JSON.stringify({ ids: tracksPendingDeletion.map((track) => track.id) }) : undefined,
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    error.textContent = payload?.error?.message || 'Не удалось удалить трек.';
+    error.textContent = payload?.error?.message || (isFavoriteTracksPage ? 'Не удалось убрать трек из избранного.' : 'Не удалось удалить трек.');
     error.hidden = false;
     button.disabled = false;
     return;
   }
   document.querySelector('#confirm-delete-dialog').close();
-  if (isMyTracksPage) await loadMyTracks({ reset: true });
+  if (isTrackCollectionPage) await loadMyTracks({ reset: true });
   else window.location.assign('/my-tracks');
 });
 
@@ -1745,7 +1772,32 @@ document.querySelector('#track-list').addEventListener('click', (event) => {
   const track = { id: card.dataset.trackId, title: card.dataset.trackTitle, speedKmh: Number(card.dataset.trackSpeed) };
   if (action.dataset.trackAction === 'edit') openTrackEditorFromList(track);
   if (action.dataset.trackAction === 'delete') openTrackDeleteConfirmation(track);
+  if (action.dataset.trackAction === 'unsave' && isFavoriteTracksPage) {
+    managedTrackId = null;
+    openTracksDeleteConfirmation([track]);
+  }
+  if (action.dataset.trackAction === 'favorite' && isMyTracksPage) toggleCardFavorite(action, track);
 });
+
+async function toggleCardFavorite(button, track) {
+  const wasFavorite = button.getAttribute('aria-pressed') === 'true';
+  button.disabled = true;
+  try {
+    const response = await fetch(`/api/tracks/${track.id}/saved`, { method: wasFavorite ? 'DELETE' : 'PUT', headers: { accept: 'application/json' } });
+    if (!response.ok) throw new Error();
+    button.classList.toggle('is-favorite', !wasFavorite);
+    button.setAttribute('aria-pressed', String(!wasFavorite));
+    button.setAttribute('aria-label', `${wasFavorite ? 'Добавить' : 'Убрать'} ${track.title} ${wasFavorite ? 'в' : 'из'} избранного`);
+    button.title = wasFavorite ? 'Добавить в избранное' : 'Убрать из избранного';
+  } catch {
+    const toast = document.querySelector('#toast');
+    toast.textContent = 'Не удалось изменить избранное';
+    toast.classList.add('visible');
+    setTimeout(() => toast.classList.remove('visible'), 2500);
+  } finally {
+    button.disabled = false;
+  }
+}
 document.querySelector('#track-list').addEventListener('change', (event) => {
   if (event.target.matches('[data-track-select]')) updateBulkDeleteButton();
 });
@@ -1763,7 +1815,33 @@ document.querySelector('#share-track')?.addEventListener('click', async () => {
   setTimeout(() => toast.classList.remove('visible'), 2500);
 });
 
-if (isMyTracksPage) {
+document.querySelector('#save-track')?.addEventListener('click', async () => {
+  if (!currentUser) {
+    window.location.assign('/api/auth/google');
+    return;
+  }
+  if (!publicTrackId) return;
+  const button = document.querySelector('#save-track');
+  const saved = button.getAttribute('aria-pressed') === 'true';
+  button.disabled = true;
+  try {
+    const response = await fetch(`/api/tracks/${publicTrackId}/saved`, {
+      method: saved ? 'DELETE' : 'PUT',
+      headers: { accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error();
+    setSavedButton(!saved);
+  } catch {
+    const toast = document.querySelector('#toast');
+    toast.textContent = 'Не удалось изменить избранное';
+    toast.classList.add('visible');
+    setTimeout(() => toast.classList.remove('visible'), 2500);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+if (isTrackCollectionPage) {
   trackQueryInput.value = new URLSearchParams(window.location.search).get('query') || '';
   trackSearchClear.hidden = !trackQueryInput.value;
 }
