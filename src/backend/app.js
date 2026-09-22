@@ -7,6 +7,14 @@ import { valhallaMiddleware } from './middleware.js';
 const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const defaultStaticDirectory = path.join(rootDirectory, 'dist');
 
+export function frontendPageStatus(pathname) {
+  return pathname === '/'
+    || pathname === '/my-tracks'
+    || /^\/tracks\/[A-Za-z0-9_]{1,64}$/.test(pathname)
+    ? 200
+    : 404;
+}
+
 export function createApp({ database, authRouter, trackRouter, staticDirectory = defaultStaticDirectory }) {
   if (!database) throw new Error('A database adapter is required.');
 
@@ -32,7 +40,9 @@ export function createApp({ database, authRouter, trackRouter, staticDirectory =
   if (trackRouter) app.use(trackRouter);
   app.use(valhallaMiddleware());
   app.use(express.static(staticDirectory, { index: false, maxAge: '1h' }));
-  app.get('*splat', (_request, response) => response.sendFile(path.join(staticDirectory, 'index.html')));
+  app.get('*splat', (request, response) => response
+    .status(frontendPageStatus(request.path))
+    .sendFile(path.join(staticDirectory, 'index.html')));
 
   return app;
 }

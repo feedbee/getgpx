@@ -3,6 +3,7 @@ import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { renderAuthControl } from './auth-ui.js';
 import { renderHomePage } from './home-page-ui.js';
+import { renderNotFoundPage } from './not-found-ui.js';
 import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, createTrackCard } from './my-tracks-ui.js';
 import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, publicTrackIdFromPath, renderOwnerTrackActions } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
@@ -11,7 +12,6 @@ import { renderTrackUploadDialogs, uploadMetadataHint, uploadMetadataPayload } f
 import { closeRouteTypeDropdownOnEscape, closeRouteTypeDropdownsOutside, renderRouteTypeDropdown, routeTypeDefinition, routeTypeIcon, selectedRouteType, setRouteTypeDropdown } from './route-type-ui.js';
 import { availableExternalTrackLinks, renderExternalLinkFields, renderExternalTrackLinks } from './external-track-links-ui.js';
 import { analyzeTrack } from './domain/gpx.js';
-import { createDemoTrack } from './domain/demo.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
 import { calculateSegmentGrades } from './domain/gradient.js';
 import { emptyPoiSelection, updatePoiSelection } from './domain/poi-selection.js';
@@ -50,6 +50,8 @@ let activeUploadTrackId = null;
 let activeUploadMetadata = null;
 const isMyTracksPage = window.location.pathname === '/my-tracks';
 const isHomePage = window.location.pathname === '/';
+const pathPublicTrackId = publicTrackIdFromPath(window.location.pathname);
+const isNotFoundPage = !isHomePage && !isMyTracksPage && !pathPublicTrackId;
 let homepageTracks = [];
 if (isHomePage) {
   try {
@@ -87,6 +89,7 @@ app.innerHTML = `
     <input id="gpx-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden />
   </header>
   ${isHomePage ? renderHomePage(homepageTracks) : ''}
+  ${isNotFoundPage ? renderNotFoundPage() : ''}
   <main class="my-tracks-page" id="my-tracks" ${isMyTracksPage ? '' : 'hidden'}>
     <header class="my-tracks-header">
       <div><p class="route-kicker">ЛИЧНАЯ КОЛЛЕКЦИЯ</p><h1>Мои треки</h1><p>Ваши маршруты — от свежих загрузок к старым.</p></div>
@@ -98,7 +101,7 @@ app.innerHTML = `
     <section class="track-list" id="track-list" aria-live="polite"></section>
     <button class="load-more-tracks" id="load-more-tracks" type="button" hidden>Показать ещё</button>
   </main>
-  <main class="page" id="route" ${isMyTracksPage || isHomePage ? 'hidden' : ''}>
+  <main class="page" id="route" ${isMyTracksPage || isHomePage || isNotFoundPage ? 'hidden' : ''}>
     <header class="route-header">
       <p class="route-state-note" id="route-state-note" hidden></p>
       <div class="route-heading">
@@ -1764,13 +1767,11 @@ if (isMyTracksPage) {
   trackQueryInput.value = new URLSearchParams(window.location.search).get('query') || '';
   trackSearchClear.hidden = !trackQueryInput.value;
 }
-if (!isMyTracksPage && !isHomePage) {
+if (pathPublicTrackId) {
   initMap();
   setColorMode('map', mapColorMode);
   setColorMode('profile', profileColorMode);
 }
 if (isHomePage) initHomeExampleMap();
 restoreSession();
-const pathPublicTrackId = publicTrackIdFromPath(window.location.pathname);
 if (pathPublicTrackId) loadPublicTrack(pathPublicTrackId);
-else if (!isMyTracksPage && !isHomePage) renderTrack(createDemoTrack(), { routeType: 'hiking' });
