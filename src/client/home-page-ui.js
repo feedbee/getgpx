@@ -1,19 +1,25 @@
-export const HOME_EXAMPLE_TRACK_ID = '6ab02471fb28fc3ae79e4d23';
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"]/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
+  })[character]);
+}
 
-const publicTracks = [
-  ['6ab02471fb28fc3ae79e4d23', 'THE TRAKA 200 _2026', '201,7 км · 3 810 м'],
-  ['6ab0249bfb28fc3ae79e4d26', 'Gravel Adventure Ultra Izery', 'Гравий · 120 км'],
-  ['6aafc485fb28fc3ae79e4d17', 'Robinsonada Mazowiecka 2025', 'Маршрут · 148 км'],
-];
+function metric(value, unit) {
+  return Number.isFinite(value) ? `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(value)} ${unit}` : '—';
+}
 
-function renderPublicTracks() {
-  return publicTracks.map(([id, title, detail]) => `
-    <a class="home-track-link" href="/tracks/${id}">
-      <span><strong>${title}</strong><small>${detail}</small></span><b aria-hidden="true">↗</b>
+function renderPublicTracks(publicTracks) {
+  if (!publicTracks.length) return '<p class="home-note">Публичные маршруты пока недоступны.</p>';
+  return publicTracks.map((track) => `
+    <a class="home-track-link" href="${escapeHtml(track.url)}">
+      <span><strong>${escapeHtml(track.title)}</strong><small>Маршрут · ${metric(track.distanceKm, 'км')}</small></span><b aria-hidden="true">↗</b>
     </a>`).join('');
 }
 
-export function renderHomePage() {
+export function renderHomePage(publicTracks = []) {
+  const primary = publicTracks[0];
+  const primaryUrl = primary?.url || '#public-tracks';
+  const primaryTitle = primary?.title || 'Маршрут недоступен';
   return `
     <main class="home-page" id="home">
       <nav class="home-nav" aria-label="Разделы главной страницы">
@@ -29,13 +35,13 @@ export function renderHomePage() {
           <div class="home-actions">
             <a class="home-primary" data-home-guest href="/api/auth/google">Войти и опубликовать GPX <span aria-hidden="true">↗</span></a>
             <button class="home-primary" data-home-author data-auth-upload type="button" hidden>Загрузить GPX <span aria-hidden="true">＋</span></button>
-            <a class="home-secondary" href="/tracks/${HOME_EXAMPLE_TRACK_ID}">Открыть реальный трек</a>
+            <a class="home-secondary" href="${escapeHtml(primaryUrl)}">Открыть реальный трек</a>
           </div>
         </div>
-        <article class="home-route-card" aria-label="Публичный маршрут THE TRAKA 200 2026">
-          <header><div><span>ПУБЛИЧНЫЙ ТРЕК</span><h2>THE TRAKA 200 _2026</h2></div><a href="/tracks/${HOME_EXAMPLE_TRACK_ID}" aria-label="Открыть THE TRAKA 200 2026">↗</a></header>
-          <a class="home-map-link" href="/tracks/${HOME_EXAMPLE_TRACK_ID}" aria-label="Открыть карту маршрута THE TRAKA 200 2026"><div id="home-example-map" aria-hidden="true"></div><span class="home-map-loading" id="home-map-loading">Загружаем карту…</span></a>
-          <dl class="home-route-stats"><div><dt>Дистанция</dt><dd>201,7 км</dd></div><div><dt>Набор</dt><dd>3 810 м</dd></div><div><dt>Точки</dt><dd>25</dd></div></dl>
+        <article class="home-route-card" aria-label="Публичный маршрут ${escapeHtml(primaryTitle)}">
+          <header><div><span>ПУБЛИЧНЫЙ ТРЕК</span><h2>${escapeHtml(primaryTitle)}</h2></div><a href="${escapeHtml(primaryUrl)}" aria-label="Открыть ${escapeHtml(primaryTitle)}">↗</a></header>
+          <a class="home-map-link" href="${escapeHtml(primaryUrl)}" aria-label="Открыть карту маршрута ${escapeHtml(primaryTitle)}"><div id="home-example-map" aria-hidden="true"></div><span class="home-map-loading" id="home-map-loading">Загружаем карту…</span></a>
+          <dl class="home-route-stats"><div><dt>Дистанция</dt><dd>${metric(primary?.distanceKm, 'км')}</dd></div><div><dt>Набор</dt><dd>${metric(primary?.ascentM, 'м')}</dd></div><div><dt>Точки</dt><dd>${Number.isSafeInteger(primary?.pointsOfInterestCount) ? primary.pointsOfInterestCount : '—'}</dd></div></dl>
         </article>
       </section>
 
@@ -56,7 +62,7 @@ export function renderHomePage() {
 
       <section class="home-section home-platforms" id="platforms" aria-labelledby="platforms-title"><div class="home-platform-copy"><p class="route-kicker">02 · НЕЗАВИСИМАЯ СТРАНИЦА</p><h2 id="platforms-title">Маршрут не обязан жить в одном приложении</h2><p>Соберите ссылки на уже опубликованные версии трека в одном месте. GetGPX не переносит и не синхронизирует их автоматически. Ссылки добавляет автор вручную.</p><span class="home-soon">ДОБАВЛЯЮТСЯ ПРИ РЕДАКТИРОВАНИИ</span></div><div class="home-platform-list" aria-label="Поддерживаемые платформы"><span>Komoot <b>↗</b></span><span>Strava <b>↗</b></span><span>Garmin <b>↗</b></span><span>Ride with GPS <b>↗</b></span></div></section>
 
-      <section class="home-section home-tracks" id="public-tracks" aria-labelledby="public-tracks-title"><div class="home-section-heading"><p class="route-kicker">03 · ПРИМЕРЫ</p><div><h2 id="public-tracks-title">Откройте настоящие публичные треки</h2><p>Просмотр и загрузка GPX доступны сразу. Авторизация понадобится только для публикации собственного маршрута.</p></div></div><div class="home-track-links">${renderPublicTracks()}</div></section>
+      <section class="home-section home-tracks" id="public-tracks" aria-labelledby="public-tracks-title"><div class="home-section-heading"><p class="route-kicker">03 · ПРИМЕРЫ</p><div><h2 id="public-tracks-title">Откройте настоящие публичные треки</h2><p>Просмотр и загрузка GPX доступны сразу. Авторизация понадобится только для публикации собственного маршрута.</p></div></div><div class="home-track-links">${renderPublicTracks(publicTracks)}</div></section>
 
       <section class="home-library" aria-labelledby="library-title"><div><p class="route-kicker">ЛИЧНАЯ БИБЛИОТЕКА</p><h2 id="library-title">Свои маршруты всегда под рукой</h2><p>Поиск уже доступен. Коллекции и теги появятся дальше.</p></div><span class="home-soon">КОЛЛЕКЦИИ И ТЕГИ · СКОРО</span></section>
       <section class="home-final" aria-labelledby="home-final-title"><p class="route-kicker">ГОТОВЫЙ GPX УЖЕ ЕСТЬ?</p><h2 id="home-final-title">Дайте маршруту одну хорошую ссылку</h2><a class="home-primary" data-home-guest href="/api/auth/google">Войти и опубликовать GPX <span aria-hidden="true">↗</span></a><button class="home-primary" data-home-author data-auth-upload type="button" hidden>Загрузить GPX <span aria-hidden="true">＋</span></button></section>

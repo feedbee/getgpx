@@ -2,7 +2,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { renderAuthControl } from './auth-ui.js';
-import { HOME_EXAMPLE_TRACK_ID, renderHomePage } from './home-page-ui.js';
+import { renderHomePage } from './home-page-ui.js';
 import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, createTrackCard } from './my-tracks-ui.js';
 import { closeOverflowMenuOnOutsideClick, renderOwnerTrackActions } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
@@ -50,6 +50,16 @@ let activeUploadTrackId = null;
 let activeUploadMetadata = null;
 const isMyTracksPage = window.location.pathname === '/my-tracks';
 const isHomePage = window.location.pathname === '/';
+let homepageTracks = [];
+if (isHomePage) {
+  try {
+    const response = await fetch('/api/tracks/homepage', { headers: { accept: 'application/json' } });
+    const payload = await response.json();
+    if (response.ok && Array.isArray(payload.data)) homepageTracks = payload.data;
+  } catch {
+    homepageTracks = [];
+  }
+}
 let myTracksCursor = null;
 let myTracksLoading = false;
 let publicTrackId = null;
@@ -76,7 +86,7 @@ app.innerHTML = `
     <div class="topbar-actions"><button class="upload-button" data-auth-upload type="button" hidden><span aria-hidden="true">＋</span> Загрузить GPX</button><div id="auth-control">${renderAuthControl(null)}</div></div></div>
     <input id="gpx-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden />
   </header>
-  ${isHomePage ? renderHomePage() : ''}
+  ${isHomePage ? renderHomePage(homepageTracks) : ''}
   <main class="my-tracks-page" id="my-tracks" ${isMyTracksPage ? '' : 'hidden'}>
     <header class="my-tracks-header">
       <div><p class="route-kicker">ЛИЧНАЯ КОЛЛЕКЦИЯ</p><h1>Мои треки</h1><p>Ваши маршруты — от свежих загрузок к старым.</p></div>
@@ -530,10 +540,8 @@ async function initHomeExampleMap() {
   const loading = document.querySelector('#home-map-loading');
   if (!container) return;
   try {
-    const response = await fetch(`/api/tracks/${HOME_EXAMPLE_TRACK_ID}`, { headers: { accept: 'application/json' } });
-    const payload = await response.json();
-    if (!response.ok) throw new Error('Track unavailable');
-    const track = payload.data.analysis;
+    const track = homepageTracks[0]?.analysis;
+    if (!track?.points?.length) throw new Error('Track unavailable');
     const coordinates = track.points.map((point) => [point.lat, point.lon]);
     [container, previewContainer].filter(Boolean).forEach((mapContainer) => {
       const homeMap = L.map(mapContainer, { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false });

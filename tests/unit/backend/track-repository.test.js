@@ -119,6 +119,29 @@ describe('track repository', () => {
     expect(cursor.limit).toHaveBeenCalledWith(25);
   });
 
+  it('loads configured homepage tracks in configuration order', async () => {
+    const collection = createTracksCollection();
+    const repository = createTrackRepository(collection);
+    const ids = [new ObjectId(), new ObjectId(), new ObjectId()];
+    const documents = ids.map((_id, index) => ({ _id, title: `Track ${index + 1}` }));
+    collection.find.mockReturnValueOnce({ toArray: vi.fn().mockResolvedValue([documents[2], documents[0], documents[1]]) });
+
+    await expect(repository.listHomepage(ids)).resolves.toEqual(documents);
+    expect(collection.find).toHaveBeenCalledWith({ _id: { $in: ids } });
+  });
+
+  it('falls back to the first three created tracks', async () => {
+    const collection = createTracksCollection();
+    const repository = createTrackRepository(collection);
+
+    await repository.listHomepage();
+
+    expect(collection.find).toHaveBeenCalledWith({});
+    const cursor = collection.find.mock.results[0].value;
+    expect(cursor.sort).toHaveBeenCalledWith({ createdAt: 1, _id: 1 });
+    expect(cursor.limit).toHaveBeenCalledWith(3);
+  });
+
   it('does not let a stale processing revision overwrite a replacement', async () => {
     const repository = createTrackRepository(createTracksCollection());
     const ownerId = new ObjectId();

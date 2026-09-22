@@ -20,6 +20,7 @@ function dependencies() {
     failAnalysis: vi.fn().mockResolvedValue({ ...track, analysisStatus: 'FAILED' }),
     restartEnrichment: vi.fn().mockResolvedValue({ ...track, analysis: { name: 'Ride', points: [{}, {}] }, analysisStep: 'ENRICHING' }),
     listOwned: vi.fn().mockResolvedValue([]),
+    listHomepage: vi.fn().mockResolvedValue([]),
     updateDetails: vi.fn(),
     beginReplacement: vi.fn(),
     setReplacementStep: vi.fn(),
@@ -68,6 +69,21 @@ describe('track service', () => {
       createdAt: '2026-09-17T10:00:00.000Z',
       uploader: { displayName: 'Jan Kowalski', avatarUrl: 'https://example.com/jan.jpg' },
     });
+  });
+
+  it('returns homepage tracks with the first track analysis and compact remaining items', async () => {
+    const { service, trackRepository } = dependencies();
+    trackRepository.listHomepage.mockResolvedValue([
+      { _id: 'track-1', title: 'First', analysisStatus: 'READY', analysis: { distanceKm: 10, ascentM: 200, points: [{ lat: 1, lon: 2 }], pointsOfInterest: [{ name: 'Water' }] } },
+      { _id: 'track-2', title: 'Second', analysisStatus: 'READY', analysis: { distanceKm: 20, ascentM: 300, points: [{ lat: 3, lon: 4 }] } },
+    ]);
+
+    const tracks = await service.getHomepageTracks();
+
+    expect(trackRepository.listHomepage).toHaveBeenCalledWith(undefined);
+    expect(tracks[0]).toMatchObject({ id: 'track-1', title: 'First', distanceKm: 10, ascentM: 200, pointsOfInterestCount: 1, analysis: { points: [{ lat: 1, lon: 2 }] } });
+    expect(tracks[1]).toMatchObject({ id: 'track-2', title: 'Second', distanceKm: 20, ascentM: 300 });
+    expect(tracks[1]).not.toHaveProperty('analysis');
   });
 
   it('stores the source, creates a queued track and schedules processing', async () => {

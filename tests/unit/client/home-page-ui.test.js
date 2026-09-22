@@ -1,19 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { renderHomePage } from '../../../src/client/home-page-ui.js';
 
+const tracks = [
+  { id: '111111111111111111111111', title: 'First route', distanceKm: 201.7, ascentM: 3810, pointsOfInterestCount: 25, url: '/tracks/111111111111111111111111' },
+  { id: '222222222222222222222222', title: 'Second route', distanceKm: 120, ascentM: 900, pointsOfInterestCount: 3, url: '/tracks/222222222222222222222222' },
+  { id: '333333333333333333333333', title: 'Third route', distanceKm: 148, ascentM: 1100, pointsOfInterestCount: 4, url: '/tracks/333333333333333333333333' },
+];
+
 describe('renderHomePage', () => {
   it('presents one independent track link without promising platform distribution', () => {
-    const markup = renderHomePage();
+    const markup = renderHomePage(tracks);
 
     expect(markup).toContain('Один трек.');
     expect(markup).toContain('Одна ссылка.');
     expect(markup).toContain('без регистрации');
-    expect(markup).toContain('THE TRAKA 200');
+    expect(markup).toContain('First route');
     expect(markup).toContain('201,7 км');
     expect(markup).toContain('Ссылки добавляет автор');
-    expect(markup).toContain('/tracks/6ab02471fb28fc3ae79e4d23');
+    expect(markup).toContain('/tracks/111111111111111111111111');
     expect(markup).toContain('id="home-example-map"');
     expect(markup).not.toContain('автоматическая синхронизация');
+  });
+
+  it('uses the first configured track for the hero and preserves example order', () => {
+    const markup = renderHomePage(tracks);
+
+    expect(markup.indexOf('First route')).toBeLessThan(markup.indexOf('Second route'));
+    expect(markup.indexOf('Second route')).toBeLessThan(markup.indexOf('Third route'));
+    expect(markup.match(/\/tracks\/111111111111111111111111/g)).toHaveLength(4);
+    expect(markup).not.toContain('6ab02471fb28fc3ae79e4d23');
   });
 
   it('renders separate publishing actions for guests and signed-in authors', () => {

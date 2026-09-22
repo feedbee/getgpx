@@ -126,6 +126,21 @@ function trackCard(track) {
   };
 }
 
+function homepageTrack(track, includeAnalysis) {
+  const id = track._id.toString();
+  const result = {
+    id,
+    title: track.title,
+    routeType: normalizeRouteType(track.routeType),
+    distanceKm: track.analysis?.distanceKm ?? null,
+    ascentM: track.analysis?.ascentM ?? null,
+    pointsOfInterestCount: track.analysis?.pointsOfInterest?.length ?? 0,
+    url: `/tracks/${id}`,
+  };
+  if (includeAnalysis) result.analysis = track.analysis;
+  return result;
+}
+
 export function createTrackService({
   trackRepository,
   gpxFileStore,
@@ -242,6 +257,12 @@ export function createTrackService({
   }
 
   return {
+    async getHomepageTracks() {
+      const configuredIds = configuration.homepageTrackIds?.map((id) => ObjectId.createFromHexString(id));
+      const tracks = await trackRepository.listHomepage(configuredIds);
+      return tracks.map((track, index) => homepageTrack(track, index === 0));
+    },
+
     async upload({ ownerId, tier = 'BASIC', filename, routeType, source }) {
       const limit = configuration.userTiers[tier]?.limits?.tracks
         ?? configuration.userTiers.BASIC.limits.tracks;

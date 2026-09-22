@@ -66,6 +66,15 @@ export function createTrackRepository(tracks) {
       return tracks.countDocuments({ ownerId });
     },
 
+    async listHomepage(trackIds) {
+      if (trackIds) {
+        const found = await tracks.find({ _id: { $in: trackIds } }).toArray();
+        const byId = new Map(found.map((track) => [track._id.toString(), track]));
+        return trackIds.map((id) => byId.get(id.toString())).filter(Boolean);
+      }
+      return tracks.find({}).sort({ createdAt: 1, _id: 1 }).limit(3).toArray();
+    },
+
     async listOwned({ ownerId, query = '', before = null, limit = 24 }) {
       const filter = { ownerId };
       const normalizedQuery = normalizeTrackName(query);

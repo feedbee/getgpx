@@ -146,6 +146,18 @@ describe('track HTTP handlers', () => {
     expect(authService.getUser).not.toHaveBeenCalled();
   });
 
+  it('returns homepage tracks publicly without checking a session', async () => {
+    const trackService = { getHomepageTracks: vi.fn().mockResolvedValue([{ id: 'track-1', title: 'First' }]) };
+    const authService = { getUser: vi.fn() };
+    const handlers = createTrackHandlers(trackService, authService);
+    const result = response();
+
+    await handlers.homepageTracks(request(), result);
+
+    expect(result.body).toEqual({ data: [{ id: 'track-1', title: 'First' }] });
+    expect(authService.getUser).not.toHaveBeenCalled();
+  });
+
   it('downloads the original GPX publicly with its UTF-8 filename', async () => {
     const trackId = new ObjectId();
     const stream = { on: vi.fn(), pipe: vi.fn() };

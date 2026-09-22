@@ -61,6 +61,10 @@ export function createTrackHandlers(trackService, authService) {
   }
 
   return {
+    async homepageTracks(_request, response) {
+      return send(response, 200, { data: await trackService.getHomepageTracks() });
+    },
+
     async mine(request, response) {
       const identity = await authenticatedOwner(request, response);
       if (!identity) return;
@@ -240,6 +244,7 @@ export function createTrackRouter(trackService, authService) {
   const handlers = createTrackHandlers(trackService, authService);
   const router = Router();
   router.post('/api/tracks', handlers.upload);
+  router.get('/api/tracks/homepage', handlers.homepageTracks);
   router.get('/api/tracks/mine', handlers.mine);
   router.delete('/api/tracks', express.json({ limit: '16kb' }), handlers.removeMany);
   router.get('/api/tracks/:id/status', handlers.status);
