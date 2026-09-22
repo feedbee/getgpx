@@ -13,7 +13,7 @@ describeWithMongo('MongoDB integration', () => {
   let database;
 
   beforeAll(() => {
-    database = createDatabase({ uri, databaseName: process.env.MONGODB_DATABASE || 'track_hub_test' });
+    database = createDatabase({ uri, databaseName: process.env.MONGODB_DATABASE || 'getgpx_test' });
     return database.connect();
   });
   afterAll(() => database?.close());

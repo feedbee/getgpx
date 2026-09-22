@@ -61,7 +61,7 @@ let tracksPendingDeletion = [];
 
 app.innerHTML = `
   <header class="topbar">
-    <div class="topbar-inner"><a class="brand" href="/" aria-label="Trace, главная"><span class="brand-mark">T</span><span>TRACE</span></a>
+    <div class="topbar-inner"><a class="brand" href="/" aria-label="GETGPX, главная"><img class="brand-mark" src="/getgpx-mark-30.png" srcset="/getgpx-mark-60.png 2x, /getgpx-mark-90.png 3x" alt="" width="30" height="30" /><span>GETGPX</span></a>
     <section class="compact-route-header" aria-label="Текущий маршрут" aria-hidden="true">
       <strong id="compact-track-name">Загрузка маршрута…</strong>
       <div class="compact-route-metrics" aria-label="Краткие показатели маршрута">

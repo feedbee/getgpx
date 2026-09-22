@@ -19,7 +19,7 @@ describe('authentication service', () => {
     const attempts = new Map();
     const sessions = [];
     const auth = createAuthService({
-      clientId: 'client-id', clientSecret: 'client-secret', redirectUri: 'https://trace.test/api/auth/google/callback',
+      clientId: 'client-id', clientSecret: 'client-secret', redirectUri: 'https://getgpx.test/api/auth/google/callback',
       sessionSecret: 'a'.repeat(32),
       userRepository: { loginWithGoogle: async (profile) => ({ _id: 'user-1', ...profile }) },
       sessionRepository: { create: async (...args) => sessions.push(args), findUserByToken: async () => null, deleteByToken: async () => {} },
@@ -45,7 +45,7 @@ describe('authentication service', () => {
 
   it('rejects unverified Google email addresses', async () => {
     const auth = createAuthService({
-      clientId: 'client-id', clientSecret: 'client-secret', redirectUri: 'https://trace.test/callback', sessionSecret: 'a'.repeat(32),
+      clientId: 'client-id', clientSecret: 'client-secret', redirectUri: 'https://getgpx.test/callback', sessionSecret: 'a'.repeat(32),
       userRepository: { loginWithGoogle: async () => { throw new Error('must not run'); } },
       sessionRepository: { create: async () => {}, findUserByToken: async () => null, deleteByToken: async () => {} },
       exchangeCode: async () => ({ sub: 'google-123', email: 'rider@example.com', email_verified: false, name: 'Rider' }),
@@ -74,8 +74,8 @@ describe('authentication HTTP handlers', () => {
       end() { this.ended = true; },
     };
 
-    await handlers.session({ headers: { cookie: 'track_hub_session=active-token' } }, sessionResponse);
-    await handlers.logout({ headers: { cookie: 'track_hub_session=active-token' } }, logoutResponse);
+    await handlers.session({ headers: { cookie: 'getgpx_session=active-token' } }, sessionResponse);
+    await handlers.logout({ headers: { cookie: 'getgpx_session=active-token' } }, logoutResponse);
 
     expect(sessionResponse.body).toEqual({ user: { id: 'user-1' } });
     expect(deleted).toEqual(['active-token']);

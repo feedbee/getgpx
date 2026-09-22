@@ -17,3 +17,4 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 - Updated the development toolchain to ESLint 10 and Vite 8; the minimum supported Node.js version is now 22.13.
 - Renamed the npm package from the PoC identifier to `track-hub`.
 - Routed all road-enrichment calls through the server instead of calling Overpass from the browser.
+- Renamed the project from **Track Hub** (`track-hub`) to **GetGPX** (`getgpx`): updated brand identity in the UI (logo mark, topbar label, page title, favicon), session/attempt cookie names, MongoDB default database name, and all documentation and configuration references.

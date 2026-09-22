@@ -25,7 +25,7 @@ export function renderHomePage() {
           <p class="route-kicker">ЦЕНТР ГОТОВОГО МАРШРУТА</p>
           <h1 id="home-title">Один трек.<br />Одна ссылка.</h1>
           <p class="home-lede">Публичная страница маршрута с картой, профилем, покрытием, важными точками и оригинальным GPX.</p>
-          <p class="home-note">Получатель открывает и скачивает трек без регистрации в Track Hub.</p>
+          <p class="home-note">Получатель открывает и скачивает трек без регистрации в GetGPX.</p>
           <div class="home-actions">
             <a class="home-primary" data-home-guest href="/api/auth/google">Войти и опубликовать GPX <span aria-hidden="true">↗</span></a>
             <button class="home-primary" data-home-author data-auth-upload type="button" hidden>Загрузить GPX <span aria-hidden="true">＋</span></button>
@@ -54,7 +54,7 @@ export function renderHomePage() {
         <p class="home-scroll-hint">Листайте горизонтально или выбирайте раздел выше</p>
       </section>
 
-      <section class="home-section home-platforms" id="platforms" aria-labelledby="platforms-title"><div class="home-platform-copy"><p class="route-kicker">02 · НЕЗАВИСИМАЯ СТРАНИЦА</p><h2 id="platforms-title">Маршрут не обязан жить в одном приложении</h2><p>Соберите ссылки на уже опубликованные версии трека в одном месте. Track Hub не переносит и не синхронизирует их автоматически. Ссылки добавляет автор вручную.</p><span class="home-soon">ДОБАВЛЯЮТСЯ ПРИ РЕДАКТИРОВАНИИ</span></div><div class="home-platform-list" aria-label="Поддерживаемые платформы"><span>Komoot <b>↗</b></span><span>Strava <b>↗</b></span><span>Garmin <b>↗</b></span><span>Ride with GPS <b>↗</b></span></div></section>
+      <section class="home-section home-platforms" id="platforms" aria-labelledby="platforms-title"><div class="home-platform-copy"><p class="route-kicker">02 · НЕЗАВИСИМАЯ СТРАНИЦА</p><h2 id="platforms-title">Маршрут не обязан жить в одном приложении</h2><p>Соберите ссылки на уже опубликованные версии трека в одном месте. GetGPX не переносит и не синхронизирует их автоматически. Ссылки добавляет автор вручную.</p><span class="home-soon">ДОБАВЛЯЮТСЯ ПРИ РЕДАКТИРОВАНИИ</span></div><div class="home-platform-list" aria-label="Поддерживаемые платформы"><span>Komoot <b>↗</b></span><span>Strava <b>↗</b></span><span>Garmin <b>↗</b></span><span>Ride with GPS <b>↗</b></span></div></section>
 
       <section class="home-section home-tracks" id="public-tracks" aria-labelledby="public-tracks-title"><div class="home-section-heading"><p class="route-kicker">03 · ПРИМЕРЫ</p><div><h2 id="public-tracks-title">Откройте настоящие публичные треки</h2><p>Просмотр и загрузка GPX доступны сразу. Авторизация понадобится только для публикации собственного маршрута.</p></div></div><div class="home-track-links">${renderPublicTracks()}</div></section>
 

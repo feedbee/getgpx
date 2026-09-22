@@ -76,7 +76,7 @@ export async function fetchOsmWayTags(matches, { endpoint = process.env.OVERPASS
     try {
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'user-agent': 'track-hub-poc/0.1 surface-enrichment', accept: 'application/json' },
+        headers: { 'user-agent': 'getgpx/0.1 surface-enrichment', accept: 'application/json' },
         body: new URLSearchParams({ data: query }),
         signal,
       });

@@ -6,8 +6,8 @@ const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo';
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1_000;
 const ATTEMPT_DURATION_MS = 10 * 60 * 1_000;
-const SESSION_COOKIE = 'track_hub_session';
-const ATTEMPT_COOKIE = 'track_hub_oauth_attempt';
+const SESSION_COOKIE = 'getgpx_session';
+const ATTEMPT_COOKIE = 'getgpx_oauth_attempt';
 
 function base64url(value) {
   return Buffer.from(value).toString('base64url');

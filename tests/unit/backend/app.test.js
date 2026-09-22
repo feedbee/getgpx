@@ -3,7 +3,7 @@ import { createHealthHandlers, defaultStaticDirectory } from '../../../src/backe
 
 describe('production static files', () => {
   it('serves the root Vite dist directory rather than src/dist', () => {
-    expect(defaultStaticDirectory).toMatch(/\/track-hub\/dist$/);
+    expect(defaultStaticDirectory).toMatch(/\/(?:track-hub|getgpx)\/dist$/);
     expect(defaultStaticDirectory).not.toMatch(/\/src\/dist$/);
   });
 });

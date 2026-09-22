@@ -1,6 +1,6 @@
-# Track Hub
+# GetGPX
 
-Track Hub analyses GPX routes in the browser: distance and elevation, climbs and descents, road types, surface quality, and a synchronized map/profile view. The MVP runtime serves the Vite client through a Node.js API and uses MongoDB as the persistence foundation for upcoming accounts and saved tracks.
+GetGPX analyses GPX routes in the browser: distance and elevation, climbs and descents, road types, surface quality, and a synchronized map/profile view. The MVP runtime serves the Vite client through a Node.js API and uses MongoDB as the persistence foundation for upcoming accounts and saved tracks.
 
 ## Quick start
 
@@ -38,7 +38,7 @@ Copy `.env.example` locally; never commit `.env`. The Node process reads environ
 | `GOOGLE_REDIRECT_URI` | Yes | Exact callback registered at Google; use port `5173` for Vite development and `3000` for the production-shaped local server |
 | `SESSION_SECRET` | Yes | At least 32 random characters used to sign short-lived OAuth state |
 | `MONGODB_URI` | Production: yes | MongoDB connection string |
-| `MONGODB_DATABASE` | No | `track_hub` |
+| `MONGODB_DATABASE` | No | `getgpx` |
 | `PORT` / `HOST` | No | `3000` / `0.0.0.0` |
 | `VALHALLA_URL` | No | Public Valhalla endpoint |
 | `OVERPASS_URL` | No | Public Overpass endpoints |

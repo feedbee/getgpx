@@ -15,7 +15,7 @@ describe('createDatabase', () => {
     };
     const database = createDatabase({
       uri: 'mongodb://localhost:27017',
-      databaseName: 'track_hub_test',
+      databaseName: 'getgpx_test',
       createClient: () => client,
     });
 
@@ -25,7 +25,7 @@ describe('createDatabase', () => {
     await database.close();
 
     expect(client.connect).toHaveBeenCalledTimes(1);
-    expect(client.db).toHaveBeenCalledWith('track_hub_test');
+    expect(client.db).toHaveBeenCalledWith('getgpx_test');
     expect(db.command).toHaveBeenCalledWith({ ping: 1 });
     expect(client.close).toHaveBeenCalledTimes(1);
   });

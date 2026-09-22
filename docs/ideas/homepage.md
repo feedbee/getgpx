@@ -1,20 +1,20 @@
-# Track Hub homepage
+# GetGPX homepage
 
 ## Objective
 
 Replace the demo route at `/` with a calm, product-led introduction for two audiences:
 authors who publish a route and recipients who open a shared route. The page should make
 the core promise clear within the first screen: one independent route page, one link,
-and an original GPX download that does not require a Track Hub account.
+and an original GPX download that does not require a GetGPX account.
 
 ## Recommended direction
 
 Lead with **“Один трек. Одна ссылка.”** and a compact visualization derived from the
-real `THE TRAKA 200 _2026` GPX supplied for this work. Present Track Hub as the
+real `THE TRAKA 200 _2026` GPX supplied for this work. Present GetGPX as the
 canonical page for a ready-to-ride route: map shape, key metrics, analysis, points of
 interest, original file, author, and links to copies already published elsewhere.
 
-Track Hub does not distribute or synchronize routes with Komoot, Strava, Garmin, or
+GetGPX does not distribute or synchronize routes with Komoot, Strava, Garmin, or
 Ride with GPS. Authors add those links manually. External links, collections, and tags
 may be previewed on the homepage only when clearly labelled as upcoming.
 
@@ -24,8 +24,8 @@ may be previewed on the homepage only when clearly labelled as upcoming.
 - The first screen explains the product and distinguishes publishing from viewing.
 - Guests see a sign-in-first publishing action; signed-in users see the existing GPX
   upload action.
-- A recipient is told that viewing and downloading the original GPX requires no Track
-  Hub registration.
+- A recipient is told that viewing and downloading the original GPX requires no GetGPX
+  registration.
 - The real example route is represented by a lightweight inline route outline and its
   factual headline metrics, without adding the source GPX to the repository.
 - Current and upcoming functionality cannot be confused.

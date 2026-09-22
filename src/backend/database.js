@@ -2,7 +2,7 @@ import { MongoClient } from 'mongodb';
 
 export function createDatabase({
   uri = process.env.MONGODB_URI,
-  databaseName = process.env.MONGODB_DATABASE || 'track_hub',
+  databaseName = process.env.MONGODB_DATABASE || 'getgpx',
   createClient = (connectionUri) => new MongoClient(connectionUri, { serverSelectionTimeoutMS: 5_000 }),
 } = {}) {
   if (!uri) throw new Error('MONGODB_URI is required.');

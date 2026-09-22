@@ -26,7 +26,7 @@ const trackService = createTrackService({
 });
 const trackRouter = createTrackRouter(trackService, authentication.service);
 const server = createApp({ database, authRouter: authentication.middleware, trackRouter }).listen(port, host, () => {
-  console.log(`Track Hub listening on http://${host}:${port}`);
+  console.log(`GetGPX listening on http://${host}:${port}`);
 });
 
 async function shutdown(signal) {

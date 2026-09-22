@@ -5,7 +5,7 @@ describe('track persistence', () => {
   it('initializes track indexes and the dedicated GPX GridFS bucket', async () => {
     const tracks = { createIndex: vi.fn().mockResolvedValue('index') };
     const enrichmentCache = { createIndex: vi.fn().mockResolvedValue('index') };
-    const mongoDatabase = { databaseName: 'track_hub_test' };
+    const mongoDatabase = { databaseName: 'getgpx_test' };
     const database = {
       connect: vi.fn().mockResolvedValue(mongoDatabase),
       collection: vi.fn().mockImplementation((name) => Promise.resolve(name === 'tracks' ? tracks : enrichmentCache)),

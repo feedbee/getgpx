@@ -22,7 +22,7 @@ The authoritative version is `package.json` (with `package-lock.json` synchroniz
 4. Build and smoke-test the Docker image.
 5. Commit the version and changelog, then create and push `vMAJOR.MINOR.PATCH` only after review.
 
-Docker Hub publication requires repository variable `DOCKERHUB_IMAGE` (for example `namespace/track-hub`) and secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`. The workflow publishes immutable full-version and major/minor tags, not `latest`. It currently targets `linux/amd64`; add arm64 only after the image and dependencies are verified there.
+Docker Hub publication requires repository variable `DOCKERHUB_IMAGE` (for example `namespace/getgpx`) and secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`. The workflow publishes immutable full-version and major/minor tags, not `latest`. It currently targets `linux/amd64`; add arm64 only after the image and dependencies are verified there.
 
 ## Observability and recovery
 

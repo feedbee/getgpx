@@ -1,6 +1,6 @@
 # Architecture
 
-Track Hub is a browser-first GPX analysis application with a small Node.js backend.
+GetGPX is a browser-first GPX analysis application with a small Node.js backend.
 
 `client` and `backend` are separate because they execute in different trust zones. The browser owns interaction and local GPX analysis; the backend owns secrets, MongoDB, validation, and controlled access to external services. They are both application source code, so both live under `src/`.
 
