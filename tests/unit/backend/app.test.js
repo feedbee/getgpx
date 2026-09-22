@@ -1,10 +1,12 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { createHealthHandlers, defaultStaticDirectory, frontendPageStatus } from '../../../src/backend/app.js';
 
 describe('production static files', () => {
   it('serves the root Vite dist directory rather than src/dist', () => {
-    expect(defaultStaticDirectory).toMatch(/\/(?:track-hub|getgpx)\/dist$/);
-    expect(defaultStaticDirectory).not.toMatch(/\/src\/dist$/);
+    const projectRoot = fileURLToPath(new URL('../../../', import.meta.url));
+    expect(defaultStaticDirectory).toBe(path.join(projectRoot, 'dist'));
   });
 
   it('returns the app shell only for known frontend routes', () => {
