@@ -167,6 +167,18 @@ describe('track service', () => {
     expect(tracks[1]).not.toHaveProperty('analysis');
   });
 
+  it('uses the refreshed homepage selection, including the oldest-three fallback', async () => {
+    const { service, trackRepository } = dependencies();
+    trackRepository.listHomepage.mockResolvedValue([]);
+    const ids = ['6ab02471fb28fc3ae79e4d23', '6ab0249bfb28fc3ae79e4d26', '6aafc485fb28fc3ae79e4d17'];
+
+    await service.getHomepageTracks(ids);
+    await service.getHomepageTracks(null);
+
+    expect(trackRepository.listHomepage.mock.calls[0][0].map(String)).toEqual(ids);
+    expect(trackRepository.listHomepage.mock.calls[1][0]).toBeUndefined();
+  });
+
   it('stores the source, creates a queued track and schedules processing', async () => {
     const { service, scheduled, gpxFileStore, trackRepository } = dependencies();
 

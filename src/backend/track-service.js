@@ -311,8 +311,8 @@ export function createTrackService({
   }
 
   return {
-    async getHomepageTracks() {
-      const configuredIds = configuration.homepageTrackIds?.map((id) => ObjectId.createFromHexString(id));
+    async getHomepageTracks(homepageTrackIds = configuration.homepageTrackIds) {
+      const configuredIds = homepageTrackIds?.map((id) => ObjectId.createFromHexString(id));
       const tracks = await trackRepository.listHomepage(configuredIds);
       return tracks.map((track, index) => homepageTrack(track, index === 0));
     },

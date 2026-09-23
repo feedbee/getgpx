@@ -29,8 +29,14 @@ The optional `configuration` entry keyed by `homepageTrackIds` contains exactly 
 unique track ID strings. Their array order controls both the homepage example list and
 the featured route at the top (the first ID is featured). When this entry is absent,
 the homepage uses the first three tracks by ascending `createdAt`, with `_id` as the
-stable tie-breaker. Like other startup configuration, changes require an application
-restart.
+stable tie-breaker. With the optional homepage track cache enabled, this setting is
+reread on every hourly refresh; otherwise changes require an application restart.
+
+`HOMEPAGE_TRACK_CACHE_ENABLED=true` keeps the complete homepage tracks API payload in
+process memory. The backend attempts to fill it at startup and refreshes it one hour
+after each completed attempt. A failed refresh is logged and preserves the last good
+payload. If startup loading fails, requests read the database until one succeeds and
+fills the cache. Unset or `false` leaves the per-request database behavior in place.
 
 Track documents keep MongoDB `_id` values for persistence and configuration references.
 Public track URLs use the separately indexed `publicId`; changing the generation format
