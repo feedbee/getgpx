@@ -19,6 +19,33 @@ export function createValhallaPayload(points, { maxPoints = 2_000 } = {}) {
   };
 }
 
+function distanceKm(first, second) {
+  const radians = Math.PI / 180;
+  const latitude = (second.lat - first.lat) * radians;
+  const longitude = (second.lon - first.lon) * radians;
+  const arc = Math.sin(latitude / 2) ** 2 + Math.cos(first.lat * radians) * Math.cos(second.lat * radians) * Math.sin(longitude / 2) ** 2;
+  return 12_742 * Math.asin(Math.min(1, Math.sqrt(arc)));
+}
+
+function splitValhallaPayload(payload, originalIndexes, maxDistanceKm) {
+  if (payload.shape.length < 2) return [{ payload, originalIndexes }];
+  const chunks = [];
+  for (let start = 0; start < payload.shape.length - 1;) {
+    let end = start + 1;
+    let lengthKm = distanceKm(payload.shape[start], payload.shape[end]);
+    while (end + 1 < payload.shape.length) {
+      const nextKm = distanceKm(payload.shape[end], payload.shape[end + 1]);
+      if (lengthKm + nextKm > maxDistanceKm) break;
+      lengthKm += nextKm;
+      end += 1;
+    }
+    chunks.push({ payload: { ...payload, shape: payload.shape.slice(start, end + 1) },
+      originalIndexes: originalIndexes.slice(start, end + 1) });
+    start = end;
+  }
+  return chunks;
+}
+
 function safeEnum(value, allowed, fallback) {
   return typeof value === 'string' && allowed.has(value) ? value : fallback;
 }
@@ -86,16 +113,26 @@ function sanitizeOsmTags(tags = {}) {
     .map((key) => [key, tags[key]]));
 }
 
-export async function matchTrackWithValhalla(points, { endpoint = process.env.VALHALLA_URL || DEFAULT_URL, signal } = {}) {
+export async function matchTrackWithValhalla(points, {
+  endpoint = process.env.VALHALLA_URL || DEFAULT_URL,
+  signal,
+  fetchImplementation = fetch,
+  maxDistanceKm = 150,
+} = {}) {
   const { payload, originalIndexes } = createValhallaPayload(points);
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify(payload),
-    signal,
-  });
-  if (!response.ok) throw new Error(`Valhalla HTTP ${response.status}`);
-  return normalizeValhallaMatch(await response.json(), originalIndexes);
+  const matches = [];
+  for (const chunk of splitValhallaPayload(payload, originalIndexes, maxDistanceKm)) {
+    const response = await fetchImplementation(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(chunk.payload),
+      signal,
+    });
+    if (!response.ok) throw new Error(`Valhalla HTTP ${response.status}`);
+    const chunkMatches = normalizeValhallaMatch(await response.json(), chunk.originalIndexes);
+    matches.push(...(matches.length ? chunkMatches.slice(1) : chunkMatches));
+  }
+  return matches;
 }
 
 export async function fetchTrackElevations(points, {

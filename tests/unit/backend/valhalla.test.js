@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createValhallaPayload, fetchTrackElevations, normalizeValhallaMatch } from '../../../src/backend/valhalla.js';
+import { createValhallaPayload, fetchTrackElevations, matchTrackWithValhalla, normalizeValhallaMatch } from '../../../src/backend/valhalla.js';
 
 describe('createValhallaPayload', () => {
   it('downsamples long tracks while preserving first and last original indexes', () => {
@@ -11,6 +11,27 @@ describe('createValhallaPayload', () => {
     expect(originalIndexes[0]).toBe(0);
     expect(originalIndexes.at(-1)).toBe(1000);
     expect(payload.filters.attributes).toContain('matched.edge_index');
+  });
+});
+
+describe('matchTrackWithValhalla', () => {
+  it('splits a long trace into overlapping requests and keeps original point indexes', async () => {
+    const points = Array.from({ length: 7 }, (_, index) => ({ lat: 50 + index * 0.3, lon: 19 }));
+    const fetchImplementation = vi.fn().mockImplementation(async (_url, request) => {
+      const { shape } = JSON.parse(request.body);
+      return { ok: true, json: async () => ({
+        edges: [{ surface: 'paved', road_class: 'secondary', use: 'road', way_id: 12 }],
+        matched_points: shape.map(() => ({ edge_index: 0, type: 'matched' })),
+      }) };
+    });
+
+    const matches = await matchTrackWithValhalla(points, { fetchImplementation, maxDistanceKm: 70 });
+
+    expect(fetchImplementation).toHaveBeenCalledTimes(3);
+    expect(matches.map(({ pointIndex }) => pointIndex)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    const shapes = fetchImplementation.mock.calls.map(([, request]) => JSON.parse(request.body).shape);
+    expect(shapes[0].at(-1)).toEqual(shapes[1][0]);
+    expect(shapes[1].at(-1)).toEqual(shapes[2][0]);
   });
 });
 
