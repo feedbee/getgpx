@@ -4,9 +4,16 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-23
+
 ### Changed
 
 - Docker Hub release builds now update `latest` alongside the version tags for both supported platforms.
+
+### Fixed
+
+- Production images now include the favicon and brand assets from `public/`.
+- OpenStreetMap tile requests now send the site's origin as referrer, and the production Content Security Policy allows the tile server.
 
 ## [0.1.1] - 2026-09-23
 
