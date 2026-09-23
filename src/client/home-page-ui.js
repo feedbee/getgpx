@@ -5,7 +5,8 @@ function escapeHtml(value) {
   })[character]);
 }
 
-function renderPublicTracks(publicTracks) {
+export function renderPublicTracks(publicTracks, loading = false) {
+  if (loading) return `<p class="home-note inline-loading" role="status"><span class="loading-spinner" aria-hidden="true"></span>${htmlMessage('tracks.loading')}</p>`;
   if (!publicTracks.length) return `<p class="home-note">${htmlMessage('home.noTracks')}</p>`;
   return publicTracks.map((track) => `
     <a class="home-track-link" href="${escapeHtml(track.url)}">
@@ -13,10 +14,19 @@ function renderPublicTracks(publicTracks) {
     </a>`).join('');
 }
 
-export function renderHomePage(publicTracks = []) {
-  const primary = publicTracks[0];
+export function renderHomeRouteCard(primary, loading = false) {
   const primaryUrl = primary?.url || '#public-tracks';
   const primaryTitle = primary?.title || t('common.routeUnavailable');
+  return `<article class="home-route-card" ${messageAttribute('aria-label', 'home.publicRoute', { title: primaryTitle })}>
+    <header><div><span>${htmlMessage('home.publicKicker')}</span><h2>${loading ? `<span class="inline-loading"><span class="loading-spinner" aria-hidden="true"></span>${htmlMessage('common.loadingRoute')}</span>` : escapeHtml(primaryTitle)}</h2></div><a href="${escapeHtml(primaryUrl)}" ${messageAttribute('aria-label', 'home.open', { title: primaryTitle })}>↗</a></header>
+    <a class="home-map-link" href="${escapeHtml(primaryUrl)}" ${messageAttribute('aria-label', 'home.openMap', { title: primaryTitle })}><div id="home-example-map" aria-hidden="true"></div><span class="home-map-loading inline-loading" id="home-map-loading" role="status"><span class="loading-spinner" aria-hidden="true"></span>${htmlMessage('home.mapLoading')}</span></a>
+    <dl class="home-route-stats"><div><dt>${htmlMessage('common.distance')}</dt><dd>${metricMarkup('distance', primary?.distanceKm)}</dd></div><div><dt>${htmlMessage('common.ascent')}</dt><dd>${metricMarkup('elevation', primary?.ascentM)}</dd></div><div><dt>${htmlMessage('common.points')}</dt><dd>${Number.isSafeInteger(primary?.pointsOfInterestCount) ? primary.pointsOfInterestCount : '—'}</dd></div></dl>
+  </article>`;
+}
+
+export function renderHomePage(publicTracks = [], { loading = false } = {}) {
+  const primary = publicTracks[0];
+  const primaryUrl = primary?.url || '#public-tracks';
   return `
     <main class="home-page" id="home">
       <nav class="home-nav" ${messageAttribute('aria-label', 'home.navigation')}>
@@ -32,14 +42,10 @@ export function renderHomePage(publicTracks = []) {
           <div class="home-actions">
             <a class="home-primary" data-home-guest href="/api/auth/google">${htmlMessage('home.publish')} <span aria-hidden="true">↗</span></a>
             <button class="home-primary" data-home-author data-auth-upload type="button" hidden>${htmlMessage('common.upload')} <span aria-hidden="true">＋</span></button>
-            <a class="home-secondary" href="${escapeHtml(primaryUrl)}">${htmlMessage('home.openReal')}</a>
+            <a class="home-secondary" id="home-open-real" href="${escapeHtml(primaryUrl)}" ${loading ? 'aria-disabled="true"' : ''}>${htmlMessage('home.openReal')}</a>
           </div>
         </div>
-        <article class="home-route-card" ${messageAttribute('aria-label', 'home.publicRoute', { title: primaryTitle })}>
-          <header><div><span>${htmlMessage('home.publicKicker')}</span><h2>${escapeHtml(primaryTitle)}</h2></div><a href="${escapeHtml(primaryUrl)}" ${messageAttribute('aria-label', 'home.open', { title: primaryTitle })}>↗</a></header>
-          <a class="home-map-link" href="${escapeHtml(primaryUrl)}" ${messageAttribute('aria-label', 'home.openMap', { title: primaryTitle })}><div id="home-example-map" aria-hidden="true"></div><span class="home-map-loading" id="home-map-loading">${htmlMessage('home.mapLoading')}</span></a>
-          <dl class="home-route-stats"><div><dt>${htmlMessage('common.distance')}</dt><dd>${metricMarkup('distance', primary?.distanceKm)}</dd></div><div><dt>${htmlMessage('common.ascent')}</dt><dd>${metricMarkup('elevation', primary?.ascentM)}</dd></div><div><dt>${htmlMessage('common.points')}</dt><dd>${Number.isSafeInteger(primary?.pointsOfInterestCount) ? primary.pointsOfInterestCount : '—'}</dd></div></dl>
-        </article>
+        ${renderHomeRouteCard(primary, loading)}
       </section>
 
       <section class="home-proof" ${messageAttribute('aria-label', 'home.mainFeatures')}><div><strong>${htmlMessage('home.noAccount')}</strong><span>${htmlMessage('home.viewDownload')}</span></div><div><strong>${htmlMessage('home.original')}</strong><span>${htmlMessage('home.directLink')}</span></div><div><strong>${htmlMessage('home.openData')}</strong><span>${htmlMessage('home.forAnalysis')}</span></div></section>
@@ -59,7 +65,7 @@ export function renderHomePage(publicTracks = []) {
 
       <section class="home-section home-platforms" id="platforms" aria-labelledby="platforms-title"><div class="home-platform-copy"><p class="route-kicker">${htmlMessage('home.independentKicker')}</p><h2 id="platforms-title">${htmlMessage('home.oneApp')}</h2><p>${htmlMessage('home.linksDescription')}</p><span class="home-soon">${htmlMessage('home.addWhileEditing')}</span></div><div class="home-platform-list" ${messageAttribute('aria-label', 'home.supportedPlatforms')}><span>Komoot <b>↗</b></span><span>Strava <b>↗</b></span><span>Garmin <b>↗</b></span><span>Ride with GPS <b>↗</b></span></div></section>
 
-      <section class="home-section home-tracks" id="public-tracks" aria-labelledby="public-tracks-title"><div class="home-section-heading"><p class="route-kicker">${htmlMessage('home.examples')}</p><div><h2 id="public-tracks-title">${htmlMessage('home.openPublic')}</h2><p>${htmlMessage('home.publicDescription')}</p></div></div><div class="home-track-links">${renderPublicTracks(publicTracks)}</div></section>
+      <section class="home-section home-tracks" id="public-tracks" aria-labelledby="public-tracks-title"><div class="home-section-heading"><p class="route-kicker">${htmlMessage('home.examples')}</p><div><h2 id="public-tracks-title">${htmlMessage('home.openPublic')}</h2><p>${htmlMessage('home.publicDescription')}</p></div></div><div class="home-track-links">${renderPublicTracks(publicTracks, loading)}</div></section>
 
       <section class="home-library" aria-labelledby="library-title"><div><p class="route-kicker">${htmlMessage('home.library')}</p><h2 id="library-title">${htmlMessage('home.atHand')}</h2><p>${htmlMessage('home.searchReady')}</p></div><span class="home-soon">${htmlMessage('home.soon')}</span></section>
       <section class="home-final" aria-labelledby="home-final-title"><p class="route-kicker">${htmlMessage('home.haveGpx')}</p><h2 id="home-final-title">${htmlMessage('home.goodLink')}</h2><a class="home-primary" data-home-guest href="/api/auth/google">${htmlMessage('home.publish')} <span aria-hidden="true">↗</span></a><button class="home-primary" data-home-author data-auth-upload type="button" hidden>${htmlMessage('common.upload')} <span aria-hidden="true">＋</span></button></section>

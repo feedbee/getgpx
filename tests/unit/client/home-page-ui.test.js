@@ -2,7 +2,7 @@ import { beforeEach } from 'vitest';
 import { preferences } from '../../../src/client/i18n.js';
 beforeEach(() => { preferences.set('language', 'ru'); preferences.set('measurementSystem', 'metric'); });
 import { describe, expect, it } from 'vitest';
-import { renderHomePage } from '../../../src/client/home-page-ui.js';
+import { renderHomePage, renderHomeRouteCard, renderPublicTracks } from '../../../src/client/home-page-ui.js';
 
 const tracks = [
   { id: '111111111111111111111111', title: 'First route', distanceKm: 201.7, ascentM: 3810, pointsOfInterestCount: 25, url: '/tracks/111111111111111111111111' },
@@ -11,6 +11,16 @@ const tracks = [
 ];
 
 describe('renderHomePage', () => {
+  it('renders the page structure while example tracks are loading', () => {
+    const markup = renderHomePage([], { loading: true });
+    expect(markup).toContain('id="home-title"');
+    expect(markup).toContain('id="home-example-map"');
+    expect(markup).toContain('role="status"');
+    expect(markup).toContain('aria-disabled="true"');
+    expect(markup).not.toContain('home.noTracks');
+    expect(renderHomeRouteCard(tracks[0])).toContain('First route');
+    expect(renderPublicTracks(tracks)).toContain('Second route');
+  });
   it('presents one independent track link without promising platform distribution', () => {
     const markup = renderHomePage(tracks);
 

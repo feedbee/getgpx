@@ -7,13 +7,14 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { renderAuthControl } from './auth-ui.js';
-import { renderHomePage } from './home-page-ui.js';
+import { renderHomePage, renderHomeRouteCard, renderPublicTracks } from './home-page-ui.js';
 import { renderNotFoundPage } from './not-found-ui.js';
 import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, createTrackCard } from './my-tracks-ui.js';
 import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, favoriteButtonState, publicTrackIdFromPath, renderOwnerTrackActions } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js';
 import { renderTrackUploadDialogs, uploadMetadataHint, uploadMetadataPayload } from './track-upload-ui.js';
+import { setButtonLoading, withButtonLoading } from './button-loading-ui.js';
 import { closeRouteTypeDropdownOnEscape, closeRouteTypeDropdownsOutside, renderRouteTypeDropdown, routeTypeDefinition, routeTypeIcon, selectedRouteType, setRouteTypeDropdown } from './route-type-ui.js';
 import { availableExternalTrackLinks, renderExternalLinkFields, renderExternalTrackLinks } from './external-track-links-ui.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
@@ -58,15 +59,6 @@ const isHomePage = window.location.pathname === '/';
 const pathPublicTrackId = publicTrackIdFromPath(window.location.pathname);
 const isNotFoundPage = !isHomePage && !isTrackCollectionPage && !pathPublicTrackId;
 let homepageTracks = [];
-if (isHomePage) {
-  try {
-    const response = await fetch('/api/tracks/homepage', { headers: { accept: 'application/json' } });
-    const payload = await response.json();
-    if (response.ok && Array.isArray(payload.data)) homepageTracks = payload.data;
-  } catch {
-    homepageTracks = [];
-  }
-}
 let myTracksCursor = null;
 let myTracksLoading = false;
 let publicTrackId = null;
@@ -93,7 +85,7 @@ app.innerHTML = `
     <div class="topbar-actions">${renderPreferencesControl()}<button class="upload-button" data-auth-upload type="button" hidden><span aria-hidden="true">＋</span> ${htmlMessage('common.upload')}</button><div id="auth-control">${renderAuthControl(null)}</div></div></div>
     <input id="gpx-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden />
   </header>
-  ${isHomePage ? renderHomePage(homepageTracks) : ''}
+  ${isHomePage ? renderHomePage([], { loading: true }) : ''}
   ${isNotFoundPage ? renderNotFoundPage() : ''}
   <main class="my-tracks-page" id="my-tracks" ${isTrackCollectionPage ? '' : 'hidden'}>
     <header class="my-tracks-header">
@@ -111,7 +103,7 @@ app.innerHTML = `
       <p class="route-state-note" id="route-state-note" hidden></p>
       <div class="route-heading">
         <div class="route-heading-copy">
-          <h1 id="track-name">${htmlMessage('common.loadingRoute')}</h1>
+          <h1 id="track-name" class="inline-loading is-loading"><span class="loading-spinner" aria-hidden="true"></span>${htmlMessage('common.loadingRoute')}</h1>
         </div>
         <div class="track-attribution" id="track-attribution" hidden>
           <span class="track-attribution-avatar" aria-hidden="true"><img id="track-uploader-avatar" alt="" hidden /><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0"/></svg></span>
@@ -355,11 +347,13 @@ function openTrackEditor({ id, title, speedKmh, routeType, externalLinks }) {
   document.querySelector('#edit-track-dialog').showModal();
 }
 
-async function openTrackEditorFromList(track) {
-  const response = await fetch(`/api/tracks/${track.id}/manage`, { headers: { accept: 'application/json' } });
-  if (!response.ok) return;
-  const { data } = await response.json();
-  openTrackEditor(data);
+async function openTrackEditorFromList(track, button) {
+  await withButtonLoading(button, async () => {
+    const response = await fetch(`/api/tracks/${track.id}/manage`, { headers: { accept: 'application/json' } });
+    if (!response.ok) return;
+    const { data } = await response.json();
+    openTrackEditor(data);
+  });
 }
 
 function openTrackDeleteConfirmation({ id, title }) {
@@ -589,6 +583,23 @@ async function initHomeExampleMap() {
   } catch {
     bindText(loading, () => t('map.unavailable'));
   }
+}
+
+async function loadHomepageTracks() {
+  try {
+    const response = await fetch('/api/tracks/homepage', { headers: { accept: 'application/json' } });
+    if (!response.ok) throw new Error('Homepage tracks unavailable');
+    const payload = await response.json();
+    homepageTracks = Array.isArray(payload.data) ? payload.data : [];
+  } catch {
+    homepageTracks = [];
+  }
+  document.querySelector('.home-route-card').outerHTML = renderHomeRouteCard(homepageTracks[0]);
+  document.querySelector('.home-track-links').innerHTML = renderPublicTracks(homepageTracks);
+  const realLink = document.querySelector('#home-open-real');
+  realLink.href = homepageTracks[0]?.url || '#public-tracks';
+  realLink.removeAttribute('aria-disabled');
+  initHomeExampleMap();
 }
 
 function nearestPoint(latlng) {
@@ -973,6 +984,7 @@ function setActivePoint(index, { showContext = false } = {}) {
 }
 
 function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
+  document.querySelector('#track-name').classList.remove('inline-loading', 'is-loading');
   clearRangeFocus();
   hoveredSurfaceId = null;
   pinnedSurfaceId = null;
@@ -1041,10 +1053,12 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
 }
 
 function renderUnavailableTrack(track) {
+  document.querySelector('#track-name').classList.remove('inline-loading', 'is-loading');
   bindText(document.querySelector('#track-name'), () => track.title || t('common.unnamed'));
   bindText(document.querySelector('#compact-track-name'), () => track.title || t('common.unnamed'));
   bindText(document.querySelector('#route-state-note'), () => track.analysisNote || t(track.status === 'PROCESSING' ? 'sources.waiting' : 'sources.failed'));
   document.querySelector('#route-state-note').hidden = false;
+  document.querySelector('#route-state-note').classList.toggle('is-processing', track.status === 'PROCESSING');
   document.querySelector('.route-metrics').hidden = true;
   document.querySelector('.route-workspace').hidden = true;
 }
@@ -1523,6 +1537,7 @@ document.querySelector('#finish-processing').addEventListener('click', async () 
   if (isMyTracksPage) await loadMyTracks({ reset: true });
 });
 document.querySelector('#open-uploaded-track').addEventListener('click', (event) => {
+  setButtonLoading(event.currentTarget, true);
   window.location.assign(`/tracks/${event.currentTarget.dataset.trackId}`);
 });
 document.querySelector('#edit-upload-title').addEventListener('click', () => {
@@ -1558,7 +1573,7 @@ document.addEventListener('keydown', (event) => {
   closeRouteTypeDropdownOnEscape(event);
 }, true);
 
-async function saveUploadMetadata({ title, routeType, links }) {
+async function saveUploadMetadata({ title, routeType, links }, button = null) {
   if (!activeUploadMetadata) return false;
   const payload = uploadMetadataPayload({
     title: title ?? activeUploadMetadata.title,
@@ -1568,60 +1583,74 @@ async function saveUploadMetadata({ title, routeType, links }) {
   });
   const error = document.querySelector('#upload-metadata-error');
   error.hidden = true;
-  const response = await fetch(`/api/tracks/${activeUploadMetadata.id}`, {
-    method: 'PATCH',
-    headers: { accept: 'application/json', 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  const responsePayload = await response.json();
-  if (!response.ok) {
-    bindText(error, () => errorMessage(responsePayload?.error));
+  try {
+    return await withButtonLoading(button, async () => {
+      const response = await fetch(`/api/tracks/${activeUploadMetadata.id}`, {
+        method: 'PATCH',
+        headers: { accept: 'application/json', 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const responsePayload = await response.json();
+      if (!response.ok) {
+        bindText(error, () => errorMessage(responsePayload?.error));
+        error.hidden = false;
+        return false;
+      }
+      activeUploadMetadata.title = responsePayload.data.title;
+      activeUploadMetadata.routeType = responsePayload.data.routeType;
+      activeUploadMetadata.externalLinks = responsePayload.data.externalLinks || {};
+      renderUploadMetadata();
+      return true;
+    });
+  } catch (saveError) {
+    bindText(error, () => errorMessage(saveError));
     error.hidden = false;
     return false;
   }
-  activeUploadMetadata.title = responsePayload.data.title;
-  activeUploadMetadata.routeType = responsePayload.data.routeType;
-  activeUploadMetadata.externalLinks = responsePayload.data.externalLinks || {};
-  renderUploadMetadata();
-  return true;
 }
 
 document.querySelector('#upload-title-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (await saveUploadMetadata({ title: document.querySelector('#upload-track-title').value })) setUploadMetadataEditing('#upload-title-row', false);
+  if (await saveUploadMetadata({ title: document.querySelector('#upload-track-title').value }, event.submitter)) setUploadMetadataEditing('#upload-title-row', false);
 });
 document.querySelector('#upload-links-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const links = Object.fromEntries(['komoot', 'strava', 'garmin', 'rideWithGps'].map((service) => [service, formData.get(service)]));
-  if (await saveUploadMetadata({ links })) setUploadMetadataEditing('#upload-links-row', false);
+  if (await saveUploadMetadata({ links }, event.submitter)) setUploadMetadataEditing('#upload-links-row', false);
 });
-document.querySelector('#retry-processing').addEventListener('click', async () => {
+document.querySelector('#retry-processing').addEventListener('click', async (event) => {
   if (!activeUploadTrackId) return;
-  const response = await fetch(`/api/tracks/${activeUploadTrackId}/retry-analysis`, { method: 'POST', headers: { accept: 'application/json' } });
-  const payload = await response.json();
-  if (!response.ok) {
-    showProcessingError({ message: errorMessage(payload?.error), code: payload?.error?.code || 'RETRY_FAILED' });
-    return;
+  try {
+    await withButtonLoading(event.currentTarget, async () => {
+      const response = await fetch(`/api/tracks/${activeUploadTrackId}/retry-analysis`, { method: 'POST', headers: { accept: 'application/json' } });
+      const payload = await response.json();
+      if (!response.ok) {
+        showProcessingError({ message: errorMessage(payload?.error), code: payload?.error?.code || 'RETRY_FAILED' });
+        return;
+      }
+      document.querySelector('#processing-error').hidden = true;
+      document.querySelector('#processing-details').hidden = true;
+      document.querySelector('#retry-processing').hidden = true;
+      document.querySelector('#close-processing').hidden = true;
+      document.querySelector('#processing-status').classList.remove('is-failed');
+      bindText(document.querySelector('#processing-status').querySelector('strong'), () => t('upload.processing'));
+      bindText(document.querySelector('#processing-status-copy'), () => t('upload.wait'));
+      updateProcessing(payload.data.step);
+      await pollTrackStatus(activeUploadTrackId);
+    });
+  } catch (retryError) {
+    showProcessingError(retryError);
   }
-  document.querySelector('#processing-error').hidden = true;
-  document.querySelector('#processing-details').hidden = true;
-  document.querySelector('#retry-processing').hidden = true;
-  document.querySelector('#close-processing').hidden = true;
-  document.querySelector('#processing-status').classList.remove('is-failed');
-  bindText(document.querySelector('#processing-status').querySelector('strong'), () => t('upload.processing'));
-  bindText(document.querySelector('#processing-status-copy'), () => t('upload.wait'));
-  updateProcessing(payload.data.step);
-  await pollTrackStatus(activeUploadTrackId);
 });
 
-document.querySelector('#track-search').addEventListener('submit', (event) => {
+document.querySelector('#track-search').addEventListener('submit', async (event) => {
   event.preventDefault();
   const query = document.querySelector('#track-query').value.trim();
   const pathname = isFavoriteTracksPage ? '/favorite-tracks' : '/my-tracks';
   const nextUrl = query ? `${pathname}?query=${encodeURIComponent(query)}` : pathname;
   window.history.replaceState(null, '', nextUrl);
-  loadMyTracks({ reset: true });
+  await withButtonLoading(event.submitter, () => loadMyTracks({ reset: true }));
 });
 const trackQueryInput = document.querySelector('#track-query');
 const trackSearchClear = document.querySelector('#track-search-clear');
@@ -1631,7 +1660,7 @@ trackSearchClear.addEventListener('click', () => {
   trackSearchClear.hidden = true;
   trackQueryInput.focus();
 });
-document.querySelector('#load-more-tracks').addEventListener('click', () => loadMyTracks());
+document.querySelector('#load-more-tracks').addEventListener('click', (event) => withButtonLoading(event.currentTarget, () => loadMyTracks()));
 document.querySelector('#select-all-tracks').addEventListener('click', () => {
   const checkboxes = [...document.querySelectorAll('[data-track-select]')];
   const select = checkboxes.some((checkbox) => !checkbox.checked);
@@ -1663,34 +1692,41 @@ document.querySelector('#edit-track-form').addEventListener('submit', async (eve
   }
   const error = document.querySelector('#edit-track-error');
   error.hidden = true;
-  const response = await fetch(`/api/tracks/${managedTrackId}`, {
-    method: 'PATCH',
-    headers: { accept: 'application/json', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      title: document.querySelector('#edit-track-title').value,
-      speedKmh: speedDraft.canonical,
-      routeType: selectedRouteType(document.querySelector('#edit-track-route-type')),
-      externalLinks: externalLinksFromEditor(),
-    }),
-  });
-  const payload = await response.json();
-  if (!response.ok) {
-    bindText(error, () => errorMessage(payload?.error));
+  try {
+    await withButtonLoading(event.submitter, async () => {
+      const response = await fetch(`/api/tracks/${managedTrackId}`, {
+        method: 'PATCH',
+        headers: { accept: 'application/json', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: document.querySelector('#edit-track-title').value,
+          speedKmh: speedDraft.canonical,
+          routeType: selectedRouteType(document.querySelector('#edit-track-route-type')),
+          externalLinks: externalLinksFromEditor(),
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        bindText(error, () => errorMessage(payload?.error));
+        error.hidden = false;
+        return;
+      }
+      document.querySelector('#edit-track-dialog').close();
+      if (isMyTracksPage) {
+        await loadMyTracks({ reset: true });
+      } else {
+        managedTrackTitle = payload.data.title;
+        publicTrackData = payload.data;
+        renderExternalTrackLinks(document.querySelector('#external-track-links'), payload.data.externalLinks);
+        const linksSection = document.querySelector('#external-track-links-section');
+        linksSection.hidden = availableExternalTrackLinks(payload.data.externalLinks).length === 0;
+        document.querySelector('#external-track-links-nav').hidden = linksSection.hidden;
+        payload.data.analysis.name = payload.data.title;
+        renderTrack(payload.data.analysis, { analysisSources: payload.data.analysisSources, routeType: payload.data.routeType });
+      }
+    });
+  } catch (saveError) {
+    bindText(error, () => errorMessage(saveError));
     error.hidden = false;
-    return;
-  }
-  document.querySelector('#edit-track-dialog').close();
-  if (isMyTracksPage) {
-    await loadMyTracks({ reset: true });
-  } else {
-    managedTrackTitle = payload.data.title;
-    publicTrackData = payload.data;
-    renderExternalTrackLinks(document.querySelector('#external-track-links'), payload.data.externalLinks);
-    const linksSection = document.querySelector('#external-track-links-section');
-    linksSection.hidden = availableExternalTrackLinks(payload.data.externalLinks).length === 0;
-    document.querySelector('#external-track-links-nav').hidden = linksSection.hidden;
-    payload.data.analysis.name = payload.data.title;
-    renderTrack(payload.data.analysis, { analysisSources: payload.data.analysisSources, routeType: payload.data.routeType });
   }
 });
 document.querySelector('#replacement-gpx').addEventListener('change', (event) => {
@@ -1718,26 +1754,32 @@ document.querySelector('#cancel-track-delete').addEventListener('click', () => d
 document.querySelector('#confirm-track-delete').addEventListener('click', async () => {
   const button = document.querySelector('#confirm-track-delete');
   const error = document.querySelector('#delete-track-error');
-  button.disabled = true;
+  setButtonLoading(button, true);
   error.hidden = true;
   const isBulkDelete = managedTrackId === null;
-  const response = await fetch(isFavoriteTracksPage ? '/api/tracks/saved' : isBulkDelete ? '/api/tracks' : `/api/tracks/${managedTrackId}`, {
-    method: 'DELETE',
-    headers: isBulkDelete || isFavoriteTracksPage
-      ? { accept: 'application/json', 'content-type': 'application/json' }
-      : { accept: 'application/json' },
-    body: isBulkDelete || isFavoriteTracksPage ? JSON.stringify({ ids: tracksPendingDeletion.map((track) => track.id) }) : undefined,
-  });
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null);
-    bindText(error, () => errorMessage(payload?.error));
+  try {
+    const response = await fetch(isFavoriteTracksPage ? '/api/tracks/saved' : isBulkDelete ? '/api/tracks' : `/api/tracks/${managedTrackId}`, {
+      method: 'DELETE',
+      headers: isBulkDelete || isFavoriteTracksPage
+        ? { accept: 'application/json', 'content-type': 'application/json' }
+        : { accept: 'application/json' },
+      body: isBulkDelete || isFavoriteTracksPage ? JSON.stringify({ ids: tracksPendingDeletion.map((track) => track.id) }) : undefined,
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      bindText(error, () => errorMessage(payload?.error));
+      error.hidden = false;
+      return;
+    }
+    document.querySelector('#confirm-delete-dialog').close();
+    if (isTrackCollectionPage) await loadMyTracks({ reset: true });
+    else window.location.assign('/my-tracks');
+  } catch (deleteError) {
+    bindText(error, () => errorMessage(deleteError));
     error.hidden = false;
-    button.disabled = false;
-    return;
+  } finally {
+    setButtonLoading(button, false);
   }
-  document.querySelector('#confirm-delete-dialog').close();
-  if (isTrackCollectionPage) await loadMyTracks({ reset: true });
-  else window.location.assign('/my-tracks');
 });
 
 document.querySelector('#track-list').addEventListener('click', (event) => {
@@ -1745,7 +1787,7 @@ document.querySelector('#track-list').addEventListener('click', (event) => {
   if (!action) return;
   const card = action.closest('.track-card');
   const track = { id: card.dataset.trackId, title: card.dataset.trackTitle, speedKmh: Number(card.dataset.trackSpeed) };
-  if (action.dataset.trackAction === 'edit') openTrackEditorFromList(track);
+  if (action.dataset.trackAction === 'edit') openTrackEditorFromList(track, action);
   if (action.dataset.trackAction === 'delete') openTrackDeleteConfirmation(track);
   if (action.dataset.trackAction === 'unsave' && isFavoriteTracksPage) {
     managedTrackId = null;
@@ -1756,7 +1798,7 @@ document.querySelector('#track-list').addEventListener('click', (event) => {
 
 async function toggleCardFavorite(button, track) {
   const wasFavorite = button.getAttribute('aria-pressed') === 'true';
-  button.disabled = true;
+  setButtonLoading(button, true);
   try {
     const response = await fetch(`/api/tracks/${track.id}/saved`, { method: wasFavorite ? 'DELETE' : 'PUT', headers: { accept: 'application/json' } });
     if (!response.ok) throw new Error();
@@ -1770,21 +1812,25 @@ async function toggleCardFavorite(button, track) {
     toast.classList.add('visible');
     setTimeout(() => toast.classList.remove('visible'), 2500);
   } finally {
-    button.disabled = false;
+    setButtonLoading(button, false);
   }
 }
 document.querySelector('#track-list').addEventListener('change', (event) => {
   if (event.target.matches('[data-track-select]')) updateBulkDeleteButton();
 });
 
-document.querySelector('#share-track')?.addEventListener('click', async () => {
+document.querySelector('#share-track')?.addEventListener('click', async (event) => {
   if (!publicTrackId) return;
+  const button = event.currentTarget;
   const toast = document.querySelector('#toast');
+  setButtonLoading(button, true);
   try {
     await copyPublicTrackLink({ trackId: publicTrackId, origin: window.location.origin, clipboard: navigator.clipboard });
     bindText(toast, () => t('notification.copied'));
   } catch {
     bindText(toast, () => t('notification.copyFailed'));
+  } finally {
+    setButtonLoading(button, false);
   }
   toast.classList.add('visible');
   setTimeout(() => toast.classList.remove('visible'), 2500);
@@ -1798,7 +1844,7 @@ document.querySelector('#save-track')?.addEventListener('click', async () => {
   if (!publicTrackId) return;
   const button = document.querySelector('#save-track');
   const saved = button.getAttribute('aria-pressed') === 'true';
-  button.disabled = true;
+  setButtonLoading(button, true);
   try {
     const response = await fetch(`/api/tracks/${publicTrackId}/saved`, {
       method: saved ? 'DELETE' : 'PUT',
@@ -1812,7 +1858,7 @@ document.querySelector('#save-track')?.addEventListener('click', async () => {
     toast.classList.add('visible');
     setTimeout(() => toast.classList.remove('visible'), 2500);
   } finally {
-    button.disabled = false;
+    setButtonLoading(button, false);
   }
 });
 
@@ -1825,7 +1871,7 @@ if (pathPublicTrackId) {
   setColorMode('map', mapColorMode);
   setColorMode('profile', profileColorMode);
 }
-if (isHomePage) initHomeExampleMap();
+if (isHomePage) loadHomepageTracks();
 restoreSession();
 if (pathPublicTrackId) loadPublicTrack(pathPublicTrackId);
 
