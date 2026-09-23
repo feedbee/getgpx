@@ -4,6 +4,17 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-23
+
+### Changed
+
+- Long routes are split into bounded Valhalla requests, with limited parallel processing to improve analysis time while respecting public service rate limits.
+- Track analysis failures are logged as warnings for easier diagnosis.
+
+### Fixed
+
+- The upload dialog button now uses the correct hover styling.
+
 ## [0.1.2] - 2026-09-23
 
 ### Changed
