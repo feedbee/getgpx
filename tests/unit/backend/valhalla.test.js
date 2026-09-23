@@ -25,13 +25,86 @@ describe('matchTrackWithValhalla', () => {
       }) };
     });
 
-    const matches = await matchTrackWithValhalla(points, { fetchImplementation, maxDistanceKm: 70 });
+    const matches = await matchTrackWithValhalla(points, { endpoint: 'https://valhalla.example/trace_attributes', fetchImplementation, maxDistanceKm: 70 });
 
     expect(fetchImplementation).toHaveBeenCalledTimes(3);
     expect(matches.map(({ pointIndex }) => pointIndex)).toEqual([0, 1, 2, 3, 4, 5, 6]);
     const shapes = fetchImplementation.mock.calls.map(([, request]) => JSON.parse(request.body).shape);
     expect(shapes[0].at(-1)).toEqual(shapes[1][0]);
     expect(shapes[1].at(-1)).toEqual(shapes[2][0]);
+  });
+
+  it('runs at most two custom-server requests concurrently and restores track order', async () => {
+    const points = Array.from({ length: 7 }, (_, index) => ({ lat: 50 + index * 0.3, lon: 19 }));
+    const requests = [];
+    let active = 0;
+    let peak = 0;
+    const fetchImplementation = vi.fn().mockImplementation((_url, request) => new Promise((resolve) => {
+      const shape = JSON.parse(request.body).shape;
+      active += 1;
+      peak = Math.max(peak, active);
+      requests.push(() => {
+        active -= 1;
+        resolve({ ok: true, json: async () => ({
+          edges: [{ surface: 'paved', road_class: 'secondary', use: 'road', way_id: shape[0].lat }],
+          matched_points: shape.map(() => ({ edge_index: 0, type: 'matched' })),
+        }) });
+      });
+    }));
+
+    const matching = matchTrackWithValhalla(points, {
+      endpoint: 'https://valhalla.example/trace_attributes', fetchImplementation, maxDistanceKm: 70,
+    });
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    requests[1]();
+    await vi.waitFor(() => expect(requests).toHaveLength(3));
+    requests[0]();
+    requests[2]();
+    const matches = await matching;
+
+    expect(peak).toBe(2);
+    expect(matches.map(({ pointIndex }) => pointIndex)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+  });
+
+  it('reads the segment distance from the environment and defaults to 200 km', async () => {
+    const points = Array.from({ length: 7 }, (_, index) => ({ lat: 50 + index * 0.29, lon: 19 }));
+    const fetchImplementation = vi.fn().mockImplementation(async (_url, request) => {
+      const shape = JSON.parse(request.body).shape;
+      return { ok: true, json: async () => ({
+        edges: [{ surface: 'paved', road_class: 'secondary', use: 'road' }],
+        matched_points: shape.map(() => ({ edge_index: 0, type: 'matched' })),
+      }) };
+    });
+    const options = { endpoint: 'https://valhalla.example/trace_attributes', fetchImplementation };
+
+    vi.stubEnv('VALHALLA_MAX_SEGMENT_KM', '70');
+    try {
+      await matchTrackWithValhalla(points, options);
+      expect(fetchImplementation).toHaveBeenCalledTimes(3);
+      fetchImplementation.mockClear();
+      vi.stubEnv('VALHALLA_MAX_SEGMENT_KM', '');
+      await matchTrackWithValhalla(points, options);
+      expect(fetchImplementation).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('starts public demo requests no more often than once per second', async () => {
+    const points = Array.from({ length: 7 }, (_, index) => ({ lat: 50 + index * 0.3, lon: 19 }));
+    const starts = [];
+    const fetchImplementation = vi.fn().mockImplementation(async (_url, request) => {
+      starts.push(Date.now());
+      const shape = JSON.parse(request.body).shape;
+      return { ok: true, json: async () => ({
+        edges: [{ surface: 'paved', road_class: 'secondary', use: 'road' }],
+        matched_points: shape.map(() => ({ edge_index: 0, type: 'matched' })),
+      }) };
+    });
+    await matchTrackWithValhalla(points, { fetchImplementation, maxDistanceKm: 70 });
+    expect(fetchImplementation).toHaveBeenCalledTimes(3);
+    expect(starts[1] - starts[0]).toBeGreaterThanOrEqual(950);
+    expect(starts[2] - starts[1]).toBeGreaterThanOrEqual(950);
   });
 });
 

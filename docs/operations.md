@@ -6,6 +6,13 @@
 
 The devcontainer uses Node.js 22 and a private MongoDB sidecar. The production image runs as the unprivileged `node` user and exposes port 3000.
 
+Road matching splits tracks at `VALHALLA_MAX_SEGMENT_KM` (default 200 km). Up to two
+segments run concurrently. Requests to the public `valhalla*.openstreetmap.de`
+service start at least one second apart across this process, including elevation
+requests, to respect its published per-user rate limit. A configured private
+`VALHALLA_URL` has no start delay; provision its capacity accordingly. All requests
+still share the 50-second analysis budget.
+
 ## CI and repository setup
 
 The quality workflow runs on pull requests, `main`, and manual dispatch. Configure branch protection to require both `check` and `mongodb-integration`, at least one approving review, and a current branch before merge.

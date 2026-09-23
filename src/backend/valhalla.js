@@ -1,4 +1,10 @@
+import { setTimeout as delay } from 'node:timers/promises';
+
 const DEFAULT_URL = 'https://valhalla1.openstreetmap.de/trace_attributes';
+const DEFAULT_MAX_SEGMENT_KM = 200;
+const MAX_CONCURRENT_MATCH_REQUESTS = 2;
+const PUBLIC_REQUEST_INTERVAL_MS = 1_000;
+let nextPublicRequestAt = 0;
 const ALLOWED_SURFACES = new Set(['paved_smooth', 'paved', 'paved_rough', 'compacted', 'dirt', 'gravel', 'path', 'impassable']);
 const ALLOWED_MATCH_TYPES = new Set(['matched', 'interpolated', 'unmatched']);
 
@@ -44,6 +50,19 @@ function splitValhallaPayload(payload, originalIndexes, maxDistanceKm) {
     start = end;
   }
   return chunks;
+}
+
+function configuredMaxSegmentKm() {
+  const value = Number(process.env.VALHALLA_MAX_SEGMENT_KM);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_SEGMENT_KM;
+}
+
+async function waitForPublicRequestSlot(endpoint, signal) {
+  if (!/^valhalla\d*\.openstreetmap\.de$/.test(new URL(endpoint).hostname)) return;
+  const now = Date.now();
+  const startAt = Math.max(now, nextPublicRequestAt);
+  nextPublicRequestAt = startAt + PUBLIC_REQUEST_INTERVAL_MS;
+  if (startAt > now) await delay(startAt - now, undefined, { signal });
 }
 
 function safeEnum(value, allowed, fallback) {
@@ -117,22 +136,36 @@ export async function matchTrackWithValhalla(points, {
   endpoint = process.env.VALHALLA_URL || DEFAULT_URL,
   signal,
   fetchImplementation = fetch,
-  maxDistanceKm = 150,
+  maxDistanceKm = configuredMaxSegmentKm(),
 } = {}) {
   const { payload, originalIndexes } = createValhallaPayload(points);
-  const matches = [];
-  for (const chunk of splitValhallaPayload(payload, originalIndexes, maxDistanceKm)) {
-    const response = await fetchImplementation(endpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify(chunk.payload),
-      signal,
-    });
-    if (!response.ok) throw new Error(`Valhalla HTTP ${response.status}`);
-    const chunkMatches = normalizeValhallaMatch(await response.json(), chunk.originalIndexes);
-    matches.push(...(matches.length ? chunkMatches.slice(1) : chunkMatches));
+  const chunks = splitValhallaPayload(payload, originalIndexes, maxDistanceKm);
+  const results = new Array(chunks.length);
+  let nextChunk = 0;
+  let failed = false;
+  async function worker() {
+    while (nextChunk < chunks.length && !failed) {
+      const index = nextChunk++;
+      const chunk = chunks[index];
+      try {
+        await waitForPublicRequestSlot(endpoint, signal);
+        if (failed) return;
+        const response = await fetchImplementation(endpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify(chunk.payload),
+          signal,
+        });
+        if (!response.ok) throw new Error(`Valhalla HTTP ${response.status}`);
+        results[index] = normalizeValhallaMatch(await response.json(), chunk.originalIndexes);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+    }
   }
-  return matches;
+  await Promise.all(Array.from({ length: Math.min(MAX_CONCURRENT_MATCH_REQUESTS, chunks.length) }, worker));
+  return results.flatMap((matches, index) => (index ? matches.slice(1) : matches));
 }
 
 export async function fetchTrackElevations(points, {
@@ -142,6 +175,7 @@ export async function fetchTrackElevations(points, {
 } = {}) {
   const url = new URL(endpoint);
   if (!url.pathname.endsWith('/height')) url.pathname = url.pathname.replace(/\/trace_attributes\/?$/, '/height');
+  await waitForPublicRequestSlot(url.toString(), signal);
   const response = await fetchImplementation(url.toString(), {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json' },
