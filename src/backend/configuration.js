@@ -21,7 +21,13 @@ function validateHomepageTrackIds(trackIds) {
   return trackIds;
 }
 
-export async function loadConfiguration(database) {
+export async function loadHomepageTrackIds(database) {
+  const configuration = await database.collection('configuration');
+  const entry = await configuration.findOne({ key: 'homepageTrackIds' });
+  return entry ? validateHomepageTrackIds(entry.value) : null;
+}
+
+export async function loadConfiguration(database, { loadHomepage = true } = {}) {
   if (!database) throw new Error('A database adapter is required.');
   const configuration = await database.collection('configuration');
   await configuration.createIndex({ key: 1 }, { unique: true });
@@ -32,7 +38,7 @@ export async function loadConfiguration(database) {
   );
   const [userTiers, homepageTrackIds] = await Promise.all([
     configuration.findOne({ key: 'userTiers' }),
-    configuration.findOne({ key: 'homepageTrackIds' }),
+    loadHomepage ? configuration.findOne({ key: 'homepageTrackIds' }) : null,
   ]);
   return Object.freeze({
     userTiers: validateUserTiers(userTiers?.value),

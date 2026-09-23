@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 import { ObjectId } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../../src/backend/database.js';
-import { loadConfiguration } from '../../src/backend/configuration.js';
+import { loadConfiguration, loadHomepageTrackIds } from '../../src/backend/configuration.js';
 import { createTrackPersistence } from '../../src/backend/track-persistence.js';
 import { createTrackRepository } from '../../src/backend/track-repository.js';
 import { createUserRepository } from '../../src/backend/user-repository.js';
@@ -57,6 +57,19 @@ describeWithMongo('MongoDB integration', () => {
       key: 'userTiers',
       value: configuration.userTiers,
     });
+  });
+
+  it('rereads homepage ids and observes removal without restarting', async () => {
+    const collection = await database.collection('configuration');
+    const ids = ['6ab02471fb28fc3ae79e4d23', '6ab0249bfb28fc3ae79e4d26', '6aafc485fb28fc3ae79e4d17'];
+    try {
+      await collection.updateOne({ key: 'homepageTrackIds' }, { $set: { value: ids } }, { upsert: true });
+      await expect(loadHomepageTrackIds(database)).resolves.toEqual(ids);
+      await collection.deleteOne({ key: 'homepageTrackIds' });
+      await expect(loadHomepageTrackIds(database)).resolves.toBeNull();
+    } finally {
+      await collection.deleteOne({ key: 'homepageTrackIds' });
+    }
   });
 
   it('uses MongoDB GridFS for GPX source files and creates track indexes', async () => {

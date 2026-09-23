@@ -37,13 +37,14 @@ describe('request profiling', () => {
     response.json = function () { this.emit('finish'); return this; };
     createRequestLogger(log)(request, response, () => {});
     const service = {
-      getHomepageTracks: async (profile) => profile('homepage.listTracks', async () => []),
+      getHomepageTracks: async (_ids, profile) => profile('homepage.listTracks', async () => []),
     };
 
     await createTrackHandlers(service, {}).homepageTracks(request, response);
 
-    expect(entries.map((entry) => entry.level)).toEqual([20, 30]);
+    expect(entries.map((entry) => entry.level)).toEqual([20, 20, 30]);
     expect(entries[0]).toMatchObject({ step: 'homepage.listTracks', durationMs: expect.any(Number) });
-    expect(entries[0].requestId).toBe(entries[1].requestId);
+    expect(entries[1]).toMatchObject({ step: 'homepage.load', durationMs: expect.any(Number) });
+    expect(new Set(entries.map((entry) => entry.requestId)).size).toBe(1);
   });
 });

@@ -6,6 +6,13 @@
 
 The devcontainer uses Node.js 22 and a private MongoDB sidecar. The production image runs as the unprivileged `node` user and exposes port 3000.
 
+Set `HOMEPAGE_TRACK_CACHE_ENABLED=true` to cache the homepage tracks response in each
+server process. It is disabled by default. The process attempts an initial load,
+refreshes one hour after each attempt, and rereads `homepageTrackIds` on refresh.
+Failed refreshes produce a structured warning and retain the last successful result;
+if the cache has never loaded, a homepage request reads the database and fills it on
+success. Each process has its own cache and timer.
+
 Road matching splits tracks at `VALHALLA_MAX_SEGMENT_KM` (default 200 km). Up to two
 segments run concurrently. Requests to the public `valhalla*.openstreetmap.de`
 service start at least one second apart across this process, including elevation

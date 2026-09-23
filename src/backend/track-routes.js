@@ -7,7 +7,7 @@ import { InvalidTrackCursorError, TrackLimitReachedError } from './track-service
 import { normalizeExternalTrackLinks } from './external-track-links.js';
 import { isRouteType } from '../route-types.js';
 import { isPublicId } from './public-id.js';
-import { createRequestProfiler } from './request-profile.js';
+import { createRequestProfiler, profileStep } from './request-profile.js';
 
 const GPX_CONTENT_TYPES = new Set(['application/gpx+xml', 'application/xml', 'text/xml']);
 
@@ -64,7 +64,9 @@ export function createTrackHandlers(trackService, authService) {
 
   return {
     async homepageTracks(request, response) {
-      return send(response, 200, { data: await trackService.getHomepageTracks(createRequestProfiler(request.log)) });
+      const profile = createRequestProfiler(request.log);
+      const tracks = await profileStep(profile, 'homepage.load', () => trackService.getHomepageTracks(undefined, profile));
+      return send(response, 200, { data: tracks });
     },
 
     async mine(request, response) {
