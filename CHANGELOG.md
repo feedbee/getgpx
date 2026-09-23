@@ -4,6 +4,10 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+### Changed
+
+- Docker Hub release builds now update `latest` alongside the version tags for both supported platforms.
+
 ## [0.1.1] - 2026-09-23
 
 ### Fixed

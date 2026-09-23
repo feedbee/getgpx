@@ -22,7 +22,14 @@ The authoritative version is `package.json` (with `package-lock.json` synchroniz
 4. Build and smoke-test the Docker image.
 5. Commit the version and changelog, then create and push `vMAJOR.MINOR.PATCH` only after review.
 
-Docker Hub publication requires repository variable `DOCKERHUB_IMAGE` (for example `namespace/getgpx`) and secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`. The workflow publishes full-version and major/minor tags, not `latest`, for `linux/amd64` and `linux/arm64`. The major/minor tag moves when a new patch release is published; deploy by full-version tag or digest to pin a release.
+Docker Hub publication requires repository variable `DOCKERHUB_IMAGE` (for example `namespace/getgpx`) and secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`. The workflow publishes full-version, major/minor, and `latest` tags for `linux/amd64` and `linux/arm64`. `latest` points to the most recently published release build; rerunning an older release can move it backward. The major/minor tag moves when a new patch release is published. Deploy by full-version tag or digest to pin a release.
+
+To point `latest` at an already published multi-platform release without rebuilding, sign in to Docker Hub and copy its image index:
+
+```bash
+docker buildx imagetools create --tag namespace/getgpx:latest namespace/getgpx:MAJOR.MINOR.PATCH
+docker buildx imagetools inspect namespace/getgpx:latest
+```
 
 ## Observability and recovery
 
