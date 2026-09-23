@@ -1,17 +1,16 @@
 # Architecture
 
-GetGPX is a browser-first GPX analysis application with a small Node.js backend.
+GetGPX is a GPX analysis application with a browser client and a Node.js backend.
 
-`client` and `backend` are separate because they execute in different trust zones. The browser owns interaction and local GPX analysis; the backend owns secrets, MongoDB, validation, and controlled access to external services. They are both application source code, so both live under `src/`.
+`client` and `backend` are separate because they execute in different trust zones. The browser owns interaction and rendering; the backend owns authoritative GPX analysis, secrets, MongoDB, validation, and controlled access to external services. They are both application source code, so both live under `src/`.
 
 ```text
 Browser (Vite bundle)
-  ├─ parses GPX and computes route metrics locally
-  ├─ renders Leaflet map and elevation analysis
-  └─ POST /api/surface-match
+  ├─ renders saved route metrics and analysis
+  └─ renders Leaflet map and elevation analysis
               │
 Node.js / Express
-  ├─ validates bounded coordinate input
+  ├─ validates and analyses uploaded GPX files
   ├─ completes Google OAuth and owns opaque user sessions
   ├─ calls Valhalla and enriches matches from Overpass
   ├─ serves the static production bundle

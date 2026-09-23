@@ -25,7 +25,6 @@ export function messageAttribute(attribute, key, parameters = {}) {
 export function bindText(element, render) {
   if (element) element.textContent = render();
 }
-export function setMessage(element, key, parameters = {}) { bindText(element, () => t(key, parameters)); }
 export function formatMeasurement(kind, value, options = {}) {
   const format = { distance, elevation, speed, number }[kind];
   return format(value, { ...preferences.value, ...options });

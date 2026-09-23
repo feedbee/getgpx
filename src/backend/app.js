@@ -2,7 +2,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import helmet from 'helmet';
-import { valhallaMiddleware } from './middleware.js';
 
 const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const defaultStaticDirectory = path.join(rootDirectory, 'dist');
@@ -39,7 +38,6 @@ export function createApp({ database, authRouter, trackRouter, staticDirectory =
   app.get('/health/ready', health.ready);
   if (authRouter) app.use(authRouter);
   if (trackRouter) app.use(trackRouter);
-  app.use(valhallaMiddleware());
   app.use(express.static(staticDirectory, { index: false, maxAge: '1h' }));
   app.get('*splat', (request, response) => response
     .status(frontendPageStatus(request.path))

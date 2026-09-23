@@ -1,20 +1,6 @@
 const DEFAULT_URL = 'https://valhalla1.openstreetmap.de/trace_attributes';
-const MAX_INPUT_POINTS = 20_000;
 const ALLOWED_SURFACES = new Set(['paved_smooth', 'paved', 'paved_rough', 'compacted', 'dirt', 'gravel', 'path', 'impassable']);
 const ALLOWED_MATCH_TYPES = new Set(['matched', 'interpolated', 'unmatched']);
-
-export function validateMatchRequest(body) {
-  if (!Array.isArray(body?.points) || body.points.length < 2) throw new Error('Нужно передать минимум две точки.');
-  if (body.points.length > MAX_INPUT_POINTS) throw new Error('В треке слишком много точек.');
-  return body.points.map((point) => {
-    const lat = Number(point?.lat);
-    const lon = Number(point?.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-      throw new Error('Трек содержит некорректные координаты.');
-    }
-    return { lat, lon };
-  });
-}
 
 export function createValhallaPayload(points, { maxPoints = 2_000 } = {}) {
   const count = Math.min(maxPoints, points.length);

@@ -16,14 +16,13 @@ import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js
 import { renderTrackUploadDialogs, uploadMetadataHint, uploadMetadataPayload } from './track-upload-ui.js';
 import { closeRouteTypeDropdownOnEscape, closeRouteTypeDropdownsOutside, renderRouteTypeDropdown, routeTypeDefinition, routeTypeIcon, selectedRouteType, setRouteTypeDropdown } from './route-type-ui.js';
 import { availableExternalTrackLinks, renderExternalLinkFields, renderExternalTrackLinks } from './external-track-links-ui.js';
-import { analyzeTrack } from './domain/gpx.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
 import { calculateSegmentGrades } from './domain/gradient.js';
 import { emptyPoiSelection, updatePoiSelection } from './domain/poi-selection.js';
 import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot, profileFocusVisibility, profileRangePosition, visibleRangeIndices } from './domain/profile-math.js';
 import { colorRunsForMode, highlightRunsForFilter, profileColorRuns } from './domain/route-color.js';
 import { isClosedRoute } from './domain/route-shape.js';
-import { applyValhallaMatches, classifySurface, classifyWayType, fetchValhallaMatches, roadQualityCategories, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
+import { classifySurface, classifyWayType, roadQualityCategories, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
 
 const app = document.querySelector('#app');
 let map;
@@ -41,7 +40,6 @@ let currentViewMetrics = null;
 let mapColorMode = 'gradient';
 let profileColorMode = 'gradient';
 let profileFocusPlacement = 'ribbon';
-let enrichmentRun = 0;
 let hoveredSurfaceId = null;
 let pinnedSurfaceId = null;
 let hoveredWayTypeId = null;
@@ -930,35 +928,6 @@ function setProfileFocusPlacement(placement) {
   if (currentTrack?.hasElevation) drawProfile(currentTrack);
 }
 
-async function enrichTrackSurfaces(track, runId) {
-  const refresh = (sources) => {
-    renderSurfaces(track);
-    renderSourceInfo(sources);
-    drawMap(track);
-    if (track.hasElevation) drawProfile(track);
-    setActivePoint(activePointIndex);
-  };
-  if (track.points.some((point) => point.surfaceTags)) {
-    track.points = track.points.map((point) => ({ ...point, surface: classifySurface(point.surfaceTags) }));
-    refresh({ gpx: 'SUCCESS', valhalla: 'SUCCESS', openStreetMap: 'SUCCESS' });
-    return;
-  }
-  const valhallaController = new AbortController();
-  const valhallaTimeout = setTimeout(() => valhallaController.abort(), 35_000);
-  try {
-    const matches = await fetchValhallaMatches(track.points, { signal: valhallaController.signal });
-    if (runId !== enrichmentRun) return;
-    track.points = applyValhallaMatches(track.points, matches);
-    refresh({ gpx: 'SUCCESS', valhalla: 'SUCCESS', openStreetMap: 'FAILED' });
-    return;
-  } catch {
-    if (runId !== enrichmentRun) return;
-  } finally { clearTimeout(valhallaTimeout); }
-
-  renderSurfaces(track);
-  renderSourceInfo({ gpx: 'SUCCESS', valhalla: 'FAILED', openStreetMap: 'FAILED' });
-}
-
 function renderSourceInfo(sources = {}) {
   const symbols = { SUCCESS: '✓', FAILED: '×', PENDING: '…' };
   const labels = { SUCCESS: 'sources.available', FAILED: 'sources.unavailable', PENDING: 'sources.processing' };
@@ -1003,8 +972,7 @@ function setActivePoint(index, { showContext = false } = {}) {
   setPointContext(showContext ? point : null);
 }
 
-function renderTrack(rawTrack, { persisted = false, analysisSources, routeType = 'other' } = {}) {
-  enrichmentRun += 1;
+function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
   clearRangeFocus();
   hoveredSurfaceId = null;
   pinnedSurfaceId = null;
@@ -1014,7 +982,7 @@ function renderTrack(rawTrack, { persisted = false, analysisSources, routeType =
   pinnedQualityId = null;
   hoveredRange = null;
   pinnedRange = null;
-  currentTrack = neutralAnalysis(persisted ? rawTrack : analyzeTrack(rawTrack));
+  currentTrack = neutralAnalysis(rawTrack);
   poiSelection = { ...emptyPoiSelection };
   const grades = calculateSegmentGrades(currentTrack.points);
   currentTrack.points = currentTrack.points.map((point, index) => ({
@@ -1066,13 +1034,10 @@ function renderTrack(rawTrack, { persisted = false, analysisSources, routeType =
   if (currentTrack.hasElevation) drawProfile(currentTrack);
   renderClimbs(currentTrack);
   renderSurfaces(currentTrack);
-  renderSourceInfo(analysisSources || (persisted
-    ? { gpx: 'SUCCESS', valhalla: 'PENDING', openStreetMap: 'PENDING' }
-    : { gpx: 'SUCCESS', valhalla: 'PENDING', openStreetMap: 'PENDING' }));
+  renderSourceInfo(analysisSources || { gpx: 'SUCCESS', valhalla: 'PENDING', openStreetMap: 'PENDING' });
   document.querySelector('#zoom-back').disabled = true;
   document.querySelector('#zoom-reset').disabled = true;
   setActivePoint(0);
-  if (!persisted) enrichTrackSurfaces(currentTrack, enrichmentRun);
 }
 
 function renderUnavailableTrack(track) {
@@ -1108,7 +1073,7 @@ async function loadPublicTrack(trackId) {
     return;
   }
   data.analysis.name = data.title;
-  renderTrack(data.analysis, { persisted: true, analysisSources: data.analysisSources, routeType: data.routeType });
+  renderTrack(data.analysis, { analysisSources: data.analysisSources, routeType: data.routeType });
 }
 
 const processingOrder = ['UPLOADING', 'QUEUED', 'PARSING', 'ENRICHING', 'COMPLETE'];
@@ -1725,7 +1690,7 @@ document.querySelector('#edit-track-form').addEventListener('submit', async (eve
     linksSection.hidden = availableExternalTrackLinks(payload.data.externalLinks).length === 0;
     document.querySelector('#external-track-links-nav').hidden = linksSection.hidden;
     payload.data.analysis.name = payload.data.title;
-    renderTrack(payload.data.analysis, { persisted: true, analysisSources: payload.data.analysisSources, routeType: payload.data.routeType });
+    renderTrack(payload.data.analysis, { analysisSources: payload.data.analysisSources, routeType: payload.data.routeType });
   }
 });
 document.querySelector('#replacement-gpx').addEventListener('change', (event) => {

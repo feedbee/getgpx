@@ -1,6 +1,6 @@
 import { t } from './i18n.js';
 import { classifyClimb } from './domain/climbs.js';
-import { surfaceCategories, roadQualityCategories, classifyWayType, roadTypeLabel } from './domain/surface.js';
+import { surfaceCategories, roadQualityCategories, roadTypeLabel } from './domain/surface.js';
 const known = (items, id) => items.find(item => item.id === id) || items.find(item => item.id === 'unknown');
 // Legacy cached labels are ignored using their stable classifier IDs, never by text.
 export function neutralAnalysis(track) {
@@ -21,4 +21,3 @@ export function poiType(point) {
   return keys[id] ? t(keys[id]) : point.type || point.symbol;
 }
 export function roadLabel(highway) { return t(roadTypeLabel(highway)); }
-export function wayLabel(surface) { return t(classifyWayType(surface.highway).label); }

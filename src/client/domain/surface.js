@@ -119,25 +119,6 @@ export function applyValhallaMatches(points, matches) {
   });
 }
 
-export async function fetchValhallaMatches(points, { signal } = {}) {
-  const response = await fetch('/api/surface-match', {
-    method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({ points: points.map(({ lat, lon }) => ({ lat, lon })) }), signal,
-  });
-  if (!response.ok) throw new Error(`Surface matching: ${response.status}`);
-  const result = await response.json();
-  const matches = result?.data?.matches;
-  if (!Array.isArray(matches) || matches.length < 2) throw new Error('Surface matching: invalid response');
-  let previousIndex = -1;
-  matches.forEach((match) => {
-    if (!Number.isInteger(match?.pointIndex) || match.pointIndex <= previousIndex || match.pointIndex >= points.length) {
-      throw new Error('Surface matching: invalid point index');
-    }
-    previousIndex = match.pointIndex;
-  });
-  return matches;
-}
-
 export function summarizeSurfaces(points) {
   const distances = Object.fromEntries(SURFACES.map(({ id }) => [id, 0]));
   points.slice(1).forEach((point, index) => {

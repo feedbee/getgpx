@@ -1,13 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createValhallaPayload, fetchTrackElevations, normalizeValhallaMatch, validateMatchRequest } from '../../../src/backend/valhalla.js';
-
-describe('validateMatchRequest', () => {
-  it('accepts a bounded coordinate list and rejects malformed or oversized input', () => {
-    expect(validateMatchRequest({ points: [{ lat: 52.2, lon: 21 }, { lat: 52.3, lon: 21.1 }] })).toHaveLength(2);
-    expect(() => validateMatchRequest({ points: [{ lat: 120, lon: 21 }, { lat: 52, lon: 21 }] })).toThrow(/координат/i);
-    expect(() => validateMatchRequest({ points: Array.from({ length: 20_001 }, () => ({ lat: 52, lon: 21 })) })).toThrow(/слишком много/i);
-  });
-});
+import { createValhallaPayload, fetchTrackElevations, normalizeValhallaMatch } from '../../../src/backend/valhalla.js';
 
 describe('createValhallaPayload', () => {
   it('downsamples long tracks while preserving first and last original indexes', () => {

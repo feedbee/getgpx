@@ -5,20 +5,9 @@ import { analyzeGpxSource, enrichTrackAnalysis } from './src/backend/track-analy
 import { createTrackPersistence } from './src/backend/track-persistence.js';
 import { createTrackRouter } from './src/backend/track-routes.js';
 import { createTrackService } from './src/backend/track-service.js';
-import { valhallaMiddleware } from './src/backend/middleware.js';
 
 export default defineConfig(({ command, mode }) => {
   const environment = loadEnv(mode, process.cwd(), '');
-  const middleware = () => valhallaMiddleware({
-    valhallaEndpoint: environment.VALHALLA_URL,
-    overpassEndpoint: environment.OVERPASS_URL,
-  });
-  const surfaceMatchingPlugin = {
-    name: 'surface-matching-api',
-    configureServer(server) { server.middlewares.use(middleware()); },
-    configurePreviewServer(server) { server.middlewares.use(middleware()); },
-  };
-
   const authenticationPlugin = {
     name: 'authentication-api',
     async configureServer(server) {
@@ -44,7 +33,7 @@ export default defineConfig(({ command, mode }) => {
   };
 
   const plugins = command === 'serve' && mode !== 'test'
-    ? [authenticationPlugin, surfaceMatchingPlugin]
-    : [surfaceMatchingPlugin];
+    ? [authenticationPlugin]
+    : [];
   return { plugins };
 });
