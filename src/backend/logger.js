@@ -3,7 +3,7 @@ import pinoHttp from 'pino-http';
 import { randomUUID } from 'node:crypto';
 
 export const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
+  level: process.env.LOG_LEVEL || 'warn',
   timestamp: pino.stdTimeFunctions.isoTime,
   formatters: { level: (label) => ({ level: label }) },
   base: { service: 'getgpx' },

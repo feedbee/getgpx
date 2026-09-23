@@ -50,6 +50,6 @@ async function start() {
 }
 
 start().catch((error) => {
-  logger.fatal({ reason: error?.name || 'UNKNOWN' }, 'Server startup failed');
+  logger.error({ reason: error?.name || 'UNKNOWN' }, 'Server startup failed');
   process.exitCode = 1;
 });
