@@ -555,7 +555,7 @@ function initMap() {
   map = L.map('map', { zoomControl: false, attributionControl: true });
   map.createPane('startMarkerPane');
   map.getPane('startMarkerPane').style.zIndex = '675';
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap',
   }).addTo(map);
@@ -577,7 +577,7 @@ async function initHomeExampleMap() {
     const coordinates = track.points.map((point) => [point.lat, point.lon]);
     [container, previewContainer].filter(Boolean).forEach((mapContainer) => {
       const homeMap = L.map(mapContainer, { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(homeMap);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(homeMap);
       const outline = L.polyline(coordinates, { color: '#fafbf7', weight: 8, opacity: 0.92, interactive: false }).addTo(homeMap);
       L.polyline(coordinates, { color: '#173d31', weight: 4, opacity: 0.96, interactive: false }).addTo(homeMap);
       (track.pointsOfInterest || []).slice(0, 14).forEach((point) => {

@@ -21,13 +21,14 @@ export function createApp({ database, authRouter, trackRouter, staticDirectory =
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet({
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc: ["'self'", 'data:', 'https://*.tile.openstreetmap.org', 'https://lh3.googleusercontent.com'],
+        imgSrc: ["'self'", 'data:', 'https://tile.openstreetmap.org', 'https://lh3.googleusercontent.com'],
         connectSrc: ["'self'"],
       },
     },

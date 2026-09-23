@@ -1,9 +1,21 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
-import { createHealthHandlers, defaultStaticDirectory, frontendPageStatus } from '../../../src/backend/app.js';
+import { createApp, createHealthHandlers, defaultStaticDirectory, frontendPageStatus } from '../../../src/backend/app.js';
 
 describe('production static files', () => {
+  it('allows the browser to identify the site to OpenStreetMap tile servers', async () => {
+    const app = createApp({ database: { ping: vi.fn() } });
+    const headers = new Map();
+    const response = {
+      setHeader(name, value) { headers.set(name.toLowerCase(), value); },
+      removeHeader(name) { headers.delete(name.toLowerCase()); },
+    };
+    await new Promise((resolve, reject) => app.router.stack[0].handle({}, response, (error) => error ? reject(error) : resolve()));
+    expect(headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+    expect(headers.get('content-security-policy')).toContain('https://tile.openstreetmap.org');
+  });
+
   it('serves the root Vite dist directory rather than src/dist', () => {
     const projectRoot = fileURLToPath(new URL('../../../', import.meta.url));
     expect(defaultStaticDirectory).toBe(path.join(projectRoot, 'dist'));
