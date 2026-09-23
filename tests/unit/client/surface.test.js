@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyOsmSurfaces, applyValhallaMatches, classifyRoadQuality, classifySurface, classifyWayType, groupQualityRuns, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceEmphasis } from '../../../src/client/domain/surface.js';
+import { applyValhallaMatches, classifyRoadQuality, classifySurface, classifyWayType, groupQualityRuns, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceEmphasis } from '../../../src/client/domain/surface.js';
 
 describe('surfaceEmphasis', () => {
   it('highlights the selected surface and dims every other surface', () => {
@@ -40,25 +40,6 @@ describe('classifySurface', () => {
 
   it('keeps missing surface data unknown even on major roads', () => {
     expect(classifySurface({ highway: 'primary' }).id).toBe('unknown');
-  });
-});
-
-describe('applyOsmSurfaces', () => {
-  it('matches route points to the nearest OSM segment and keeps distant points unknown', () => {
-    const points = [
-      { lat: 50, lon: 19, distanceKm: 0 },
-      { lat: 50.0005, lon: 19, distanceKm: 0.055 },
-      { lat: 50.01, lon: 19, distanceKm: 1.11 },
-    ];
-    const ways = [{ tags: { surface: 'asphalt', highway: 'secondary' }, geometry: [
-      { lat: 49.9999, lon: 19 }, { lat: 50.0007, lon: 19 },
-    ] }];
-
-    const matched = applyOsmSurfaces(points, ways, { maxDistanceM: 30 });
-
-    expect(matched[0].surface.id).toBe('asphalt');
-    expect(matched[1].surface.id).toBe('asphalt');
-    expect(matched[2].surface.id).toBe('unknown');
   });
 });
 

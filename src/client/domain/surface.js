@@ -86,33 +86,6 @@ export function classifySurface(tags = {}) {
   return { ...category, raw: value || null, highway: tags.highway || null, smoothness: tags.smoothness || null, tracktype: tags.tracktype || null, quality: classifyRoadQuality(tags) };
 }
 
-function pointSegmentDistanceM(point, start, end) {
-  const latScale = 111_320;
-  const lonScale = latScale * Math.cos((point.lat * Math.PI) / 180);
-  const bx = (end.lon - start.lon) * lonScale;
-  const by = (end.lat - start.lat) * latScale;
-  const px = (point.lon - start.lon) * lonScale;
-  const py = (point.lat - start.lat) * latScale;
-  const lengthSquared = bx * bx + by * by;
-  const ratio = lengthSquared ? Math.max(0, Math.min(1, (px * bx + py * by) / lengthSquared)) : 0;
-  return Math.hypot(px - ratio * bx, py - ratio * by);
-}
-
-export function applyOsmSurfaces(points, ways, { maxDistanceM = 40 } = {}) {
-  const segments = ways.flatMap((way) => (way.geometry || []).slice(1).map((end, index) => ({
-    start: way.geometry[index], end, surface: classifySurface(way.tags),
-  })));
-  return points.map((point) => {
-    let nearest = null;
-    let nearestDistance = maxDistanceM;
-    segments.forEach((segment) => {
-      const distance = pointSegmentDistanceM(point, segment.start, segment.end);
-      if (distance < nearestDistance) { nearestDistance = distance; nearest = segment; }
-    });
-    return { ...point, surface: nearest?.surface || classifySurface() };
-  });
-}
-
 function valhallaTags(match) {
   const surfaceMap = {
     paved_smooth: { surface: 'asphalt', smoothness: 'good', inferred: true },
