@@ -2,9 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import helmet from 'helmet';
-import pinoHttp from 'pino-http';
-import { randomUUID } from 'node:crypto';
-import { logger } from './logger.js';
+import { createRequestLogger, logger } from './logger.js';
 
 const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const defaultStaticDirectory = path.join(rootDirectory, 'dist');
@@ -36,18 +34,7 @@ export function createApp({ database, authRouter, trackRouter, staticDirectory =
       },
     },
   }));
-  app.use(pinoHttp({
-    logger: log,
-    wrapSerializers: false,
-    genReqId: () => randomUUID(),
-    customProps: (request) => ({ requestId: request.id }),
-    serializers: {
-      req: (request) => ({ method: request.method, route: request.route?.path }),
-      res: (response) => ({ statusCode: response.statusCode }),
-    },
-    autoLogging: { ignore: (request) => request.url?.startsWith('/health/') },
-    customLogLevel: (_request, response) => response.statusCode >= 500 ? 'warn' : 'info',
-  }));
+  app.use(createRequestLogger(log));
 
   const health = createHealthHandlers(database);
   app.get('/health/live', health.live);

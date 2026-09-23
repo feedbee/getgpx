@@ -5,12 +5,14 @@ import { analyzeGpxSource, enrichTrackAnalysis } from './src/backend/track-analy
 import { createTrackPersistence } from './src/backend/track-persistence.js';
 import { createTrackRouter } from './src/backend/track-routes.js';
 import { createTrackService } from './src/backend/track-service.js';
+import { createRequestLogger } from './src/backend/logger.js';
 
 export default defineConfig(({ command, mode }) => {
   const environment = loadEnv(mode, process.cwd(), '');
   const authenticationPlugin = {
     name: 'authentication-api',
     async configureServer(server) {
+      server.middlewares.use(createRequestLogger());
       const database = createDatabase({ uri: environment.MONGODB_URI, databaseName: environment.MONGODB_DATABASE });
       await database.connect();
       const authentication = await createAuthentication(database, {
