@@ -112,14 +112,17 @@ describe('server track analysis', () => {
       pointIndex, surface: 'paved', roadClass: 'residential', use: 'road', matchType: 'matched', wayId: null,
     }));
 
+    const warn = vi.fn();
     const result = await enrichTrackAnalysis(base, {
       fetchElevations: vi.fn().mockRejectedValue(new Error('height unavailable')),
       matchTrack: vi.fn().mockResolvedValue(matches),
       fetchWayTags: vi.fn().mockImplementation(async (value) => value),
+      warn,
     });
 
     expect(result.points.map(({ ele }) => ele)).toEqual([95, null]);
     expect(result).toMatchObject({ hasElevation: false, elevationSource: 'GPX_PARTIAL' });
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ event: 'track_analysis_partial', step: 'ELEVATION' }));
   });
 
   it('caches external matches and persists derived display data', async () => {
@@ -157,15 +160,18 @@ describe('server track analysis', () => {
     ];
 
     const cache = { get: vi.fn().mockResolvedValue(null), put: vi.fn() };
+    const warn = vi.fn();
     const result = await enrichTrackAnalysis(base, {
       matchTrack: vi.fn().mockResolvedValue(matches),
       fetchWayTags: vi.fn().mockRejectedValue(new Error('Overpass unavailable')),
       cache,
+      warn,
     });
 
     expect(result.enrichmentSource).toBe('VALHALLA');
     expect(cache.put).toHaveBeenCalledTimes(1);
     expect(cache.put).toHaveBeenCalledWith(expect.any(String), { matches, source: 'VALHALLA' });
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ event: 'track_analysis_partial', step: 'OVERPASS' }));
   });
 
   it('keeps Valhalla data when the shared timeout interrupts only Overpass', async () => {

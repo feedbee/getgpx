@@ -41,6 +41,7 @@ function dependencies() {
   };
   const analyzeSource = vi.fn().mockReturnValue({ name: 'Ride', points: [{}, {}], distanceKm: 10 });
   const enrichAnalysis = vi.fn().mockImplementation(async (analysis) => ({ ...analysis, surfaces: [] }));
+  const warn = vi.fn();
   const userRepository = {
     findPublicProfileById: vi.fn().mockResolvedValue({ displayName: 'Jan Kowalski', avatarUrl: 'https://example.com/jan.jpg' }),
   };
@@ -63,8 +64,9 @@ function dependencies() {
     enrichAnalysis,
     configuration: { userTiers: { BASIC: { limits: { tracks: 100 } }, PREMIUM: { limits: { tracks: 1000 } } } },
     schedule: (job) => scheduled.push(job),
+    warn,
   });
-  return { service, scheduled, trackRepository, savedTrackRepository, gpxFileStore, userRepository, analyzeSource, enrichAnalysis };
+  return { service, scheduled, trackRepository, savedTrackRepository, gpxFileStore, userRepository, analyzeSource, enrichAnalysis, warn };
 }
 
 describe('track service', () => {
@@ -213,6 +215,9 @@ describe('track service', () => {
       failedStep: 'PARSING',
       errorCode: 'INVALID_GPX',
     }));
+    expect(deps.warn).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'track_analysis_failed', trackId: 'track-1', step: 'PARSING', reason: 'Error',
+    }));
   });
 
   it('aborts external enrichment after its configured budget', async () => {
@@ -238,6 +243,19 @@ describe('track service', () => {
 
     expect(deps.trackRepository.failAnalysis).toHaveBeenCalledWith(expect.objectContaining({ errorCode: 'ENRICHMENT_UNAVAILABLE' }));
     vi.useRealTimers();
+  });
+
+  it('logs the enrichment failure reason without the provider response body', async () => {
+    const deps = dependencies();
+    deps.enrichAnalysis.mockRejectedValue(new Error('Valhalla HTTP 429'));
+    await deps.service.upload({ ownerId: 'owner-1', filename: 'ride.gpx', source: Readable.from('<gpx />') });
+
+    await deps.scheduled[0]();
+
+    expect(deps.warn).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'track_analysis_failed', trackId: 'track-1', step: 'ENRICHING',
+      pointCount: 2, reason: 'VALHALLA_HTTP_429',
+    }));
   });
 
   it('retries only enrichment from the persisted base analysis', async () => {

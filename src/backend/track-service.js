@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb';
 import { DEFAULT_USER_TIERS } from './configuration.js';
 import { normalizeTrackName } from './track-repository.js';
 import { normalizeRouteType } from '../route-types.js';
+import { analysisFailure } from './analysis-warning.js';
 
 const ERROR_MESSAGES = {
   INVALID_GPX: 'Не удалось прочитать GPX-файл. Проверьте файл и попробуйте снова.',
@@ -182,6 +183,7 @@ export function createTrackService({
   configuration = { userTiers: DEFAULT_USER_TIERS },
   enrichmentTimeoutMs = EXTERNAL_ANALYSIS_TIMEOUT_MS,
   schedule = (job) => setImmediate(job),
+  warn = (details) => console.warn('Track analysis warning', details),
 }) {
   if (!trackRepository || !gpxFileStore || !analyzeSource || !enrichAnalysis) {
     throw new Error('Track service dependencies are required.');
@@ -191,14 +193,17 @@ export function createTrackService({
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), enrichmentTimeoutMs);
     try {
-      const analysis = await enrichAnalysis(track.analysis, { cache: enrichmentCacheRepository, signal: controller.signal });
+      const analysis = await enrichAnalysis(track.analysis, { cache: enrichmentCacheRepository, signal: controller.signal,
+        warn: (details) => warn({ trackId: String(track._id), revision: track.analysisRevision, ...details }) });
       await trackRepository.completeAnalysis({
         trackId: track._id,
         ownerId: track.ownerId,
         revision: track.analysisRevision,
         analysis,
       });
-    } catch {
+    } catch (error) {
+      warn({ event: 'track_analysis_failed', trackId: String(track._id), revision: track.analysisRevision,
+        step: 'ENRICHING', pointCount: track.analysis?.points?.length, ...analysisFailure(error, controller.signal) });
       await trackRepository.failAnalysis({
         trackId: track._id,
         ownerId: track.ownerId,
@@ -219,18 +224,20 @@ export function createTrackService({
       step: 'PARSING',
     });
     if (!parsing) return;
+    let enriching;
     try {
       const source = await readUtf8(gpxFileStore.openDownload(track.sourceFileId));
       const analysis = analyzeSource(source, { filename: track.originalFilename });
-      const enriching = await trackRepository.saveBaseAnalysis({
+      enriching = await trackRepository.saveBaseAnalysis({
         trackId: track._id,
         ownerId: track.ownerId,
         revision: track.analysisRevision,
         title: analysis.name,
         analysis,
       });
-      if (enriching) await enrich(enriching);
-    } catch {
+    } catch (error) {
+      warn({ event: 'track_analysis_failed', trackId: String(track._id), revision: track.analysisRevision,
+        step: 'PARSING', ...analysisFailure(error) });
       await trackRepository.failAnalysis({
         trackId: track._id,
         ownerId: track.ownerId,
@@ -239,6 +246,7 @@ export function createTrackService({
         errorCode: 'INVALID_GPX',
       });
     }
+    if (enriching) await enrich(enriching);
   }
 
   async function enrichReplacement(track) {
@@ -246,7 +254,8 @@ export function createTrackService({
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), enrichmentTimeoutMs);
     try {
-      const analysis = await enrichAnalysis(pending.analysis, { cache: enrichmentCacheRepository, signal: controller.signal });
+      const analysis = await enrichAnalysis(pending.analysis, { cache: enrichmentCacheRepository, signal: controller.signal,
+        warn: (details) => warn({ trackId: String(track._id), revision: pending.revision, replacement: true, ...details }) });
       const previous = await trackRepository.completeReplacement({
         trackId: track._id,
         ownerId: track.ownerId,
@@ -256,7 +265,10 @@ export function createTrackService({
         analysis,
       });
       if (previous) await gpxFileStore.delete(previous.sourceFileId).catch(() => undefined);
-    } catch {
+    } catch (error) {
+      warn({ event: 'track_analysis_failed', trackId: String(track._id), revision: pending.revision,
+        replacement: true, step: 'ENRICHING', pointCount: pending.analysis?.points?.length,
+        ...analysisFailure(error, controller.signal) });
       await trackRepository.failReplacement({
         trackId: track._id, ownerId: track.ownerId, revision: pending.revision,
         failedStep: 'ENRICHING', errorCode: 'ENRICHMENT_UNAVAILABLE',
@@ -272,19 +284,22 @@ export function createTrackService({
       trackId: track._id, ownerId: track.ownerId, revision: pending.revision, step: 'PARSING',
     });
     if (!parsing) return;
+    let enriching;
     try {
       const source = await readUtf8(gpxFileStore.openDownload(pending.sourceFileId));
       const analysis = analyzeSource(source, { filename: pending.originalFilename });
-      const enriching = await trackRepository.saveReplacementBase({
+      enriching = await trackRepository.saveReplacementBase({
         trackId: track._id, ownerId: track.ownerId, revision: pending.revision, title: analysis.name, analysis,
       });
-      if (enriching) await enrichReplacement(enriching);
-    } catch {
+    } catch (error) {
+      warn({ event: 'track_analysis_failed', trackId: String(track._id), revision: pending.revision,
+        replacement: true, step: 'PARSING', ...analysisFailure(error) });
       await trackRepository.failReplacement({
         trackId: track._id, ownerId: track.ownerId, revision: pending.revision,
         failedStep: 'PARSING', errorCode: 'INVALID_GPX',
       });
     }
+    if (enriching) await enrichReplacement(enriching);
   }
 
   return {

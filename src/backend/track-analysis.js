@@ -5,6 +5,7 @@ import { calculateSegmentGrades } from '../client/domain/gradient.js';
 import { applyValhallaMatches, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes } from '../client/domain/surface.js';
 import { fetchOsmWayTags, fetchTrackElevations, matchTrackWithValhalla } from './valhalla.js';
 import { TRACK_UPLOAD_LIMITS } from './track-repository.js';
+import { analysisFailure } from './analysis-warning.js';
 
 const DEFAULT_SPEED_KMH = 20;
 
@@ -62,6 +63,7 @@ export async function enrichTrackAnalysis(baseAnalysis, {
   fetchWayTags = fetchOsmWayTags,
   cache,
   signal,
+  warn = (details) => console.warn('Track analysis warning', details),
 } = {}) {
   let analysis = baseAnalysis;
   if (baseAnalysis.points.some(({ ele }) => !Number.isFinite(ele))) {
@@ -74,7 +76,9 @@ export async function enrichTrackAnalysis(baseAnalysis, {
       if (points.some(({ ele }, index) => ele !== baseAnalysis.points[index].ele && Number.isFinite(ele))) {
         analysis = { ...analyzeTrack({ ...baseAnalysis, points }), elevationSource: 'VALHALLA_DEM' };
       }
-    } catch {
+    } catch (error) {
+      warn({ event: 'track_analysis_partial', step: 'ELEVATION', pointCount: baseAnalysis.points.length,
+        ...analysisFailure(error, signal) });
       // Elevation is optional; road enrichment can still complete without DEM coverage.
     }
   }
@@ -95,7 +99,9 @@ export async function enrichTrackAnalysis(baseAnalysis, {
       matches = await fetchWayTags(matches, { signal });
       enrichmentSource = 'VALHALLA_OSM';
       await cache?.put(key, { matches, source: enrichmentSource });
-    } catch {
+    } catch (error) {
+      warn({ event: 'track_analysis_partial', step: 'OVERPASS', matchCount: matches.length,
+        ...analysisFailure(error, signal) });
       enrichmentSource = 'VALHALLA';
     }
   }
