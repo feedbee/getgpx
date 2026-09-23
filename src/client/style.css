@@ -100,11 +100,11 @@ nav a.active { color:var(--ink); border-color:var(--ink); }
 .home-mini-pois small { margin-top:3px; font:400 8px 'Inter',sans-serif; letter-spacing:.07em; }
 .home-mini-surfaces { display:grid; gap:15px; padding:28px 22px; }
 .home-mini-surfaces div { height:42px; overflow:hidden; border-radius:7px; background:#efede6; }
-.home-mini-surfaces span { width:var(--share); min-width:130px; height:100%; display:flex; align-items:center; justify-content:space-between; padding:0 12px; border-radius:7px; background:color-mix(in srgb,var(--tone) 28%,#f8f3e8); font-size:11px; }
-.home-mini-climbs span { display:grid; grid-template-columns:38px 1fr auto; align-items:center; gap:10px; min-height:56px; padding:0 12px; border-radius:7px; background:#efede6; }
+.home-mini-surfaces > div > span { width:var(--share); min-width:max-content; height:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 12px; border-radius:7px; background:color-mix(in srgb,var(--tone) 28%,#f8f3e8); font-size:11px; white-space:nowrap; }
+.home-mini-climbs > span { display:grid; grid-template-columns:38px 1fr auto; align-items:center; gap:10px; min-height:56px; padding:0 12px; border-radius:7px; background:#efede6; }
 .home-mini-climbs b { width:30px; height:30px; display:grid; place-items:center; border:2px solid #b88b54; border-radius:50%; font-size:9px; }
 .home-mini-climbs strong { font:600 12px 'Exo 2',sans-serif; }
-.home-mini-climbs i { color:var(--muted); font-size:10px; font-style:normal; }
+.home-mini-climbs i { color:var(--muted); font-size:10px; font-style:normal; white-space:nowrap; }
 .home-scroll-hint { margin:4px 0 0; color:var(--muted); font-size:9px; text-align:right; }
 .home-platforms { display:grid; grid-template-columns:1.05fr .95fr; gap:16px; padding-top:0; }
 .home-platform-copy,.home-platform-list { padding:clamp(32px,4vw,64px); border-radius:12px; }
@@ -176,7 +176,7 @@ nav a.active { color:var(--ink); border-color:var(--ink); }
   .home-preview-nav a { flex:0 0 auto; }
   .home-preview-rail { grid-auto-columns:92%; }
   .home-preview-card { min-height:350px; }
-  .home-mini-climbs span { grid-template-columns:36px 1fr; }
+  .home-mini-climbs > span { grid-template-columns:36px 1fr; }
   .home-mini-climbs i { grid-column:2; }
   .home-platform-copy,.home-platform-list { padding:44px 22px; }
   .home-library { align-items:start; flex-direction:column; padding:32px 24px; }
