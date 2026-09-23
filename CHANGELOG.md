@@ -4,6 +4,13 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-23
+
+### Fixed
+
+- Docker Hub releases now include both `linux/amd64` and `linux/arm64` images. The ARM64 image was built and smoke-tested against MongoDB.
+- Release metadata no longer adds an unplanned `latest` tag. Use the full version tag to pin a deployment.
+
 ## [0.1.0] - 2026-09-23
 
 ### Added
