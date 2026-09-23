@@ -4,6 +4,12 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-23
+
+### Changed
+
+- Debug logs now include timing for individual server steps in homepage tracks, public track, and GPX upload requests, using the request ID to correlate them with the HTTP log. Step timing is enabled with `LOG_LEVEL=debug`.
+
 ## [0.1.4] - 2026-09-23
 
 ### Changed
