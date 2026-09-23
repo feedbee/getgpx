@@ -7,6 +7,7 @@ import { InvalidTrackCursorError, TrackLimitReachedError } from './track-service
 import { normalizeExternalTrackLinks } from './external-track-links.js';
 import { isRouteType } from '../route-types.js';
 import { isPublicId } from './public-id.js';
+import { createRequestProfiler } from './request-profile.js';
 
 const GPX_CONTENT_TYPES = new Set(['application/gpx+xml', 'application/xml', 'text/xml']);
 
@@ -62,8 +63,8 @@ export function createTrackHandlers(trackService, authService) {
   }
 
   return {
-    async homepageTracks(_request, response) {
-      return send(response, 200, { data: await trackService.getHomepageTracks() });
+    async homepageTracks(request, response) {
+      return send(response, 200, { data: await trackService.getHomepageTracks(createRequestProfiler(request.log)) });
     },
 
     async mine(request, response) {
@@ -141,7 +142,7 @@ export function createTrackHandlers(trackService, authService) {
     async publicTrack(request, response) {
       const publicId = isPublicId(request.params.id) ? request.params.id : null;
       if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
-      const track = await trackService.getPublicTrack(publicId);
+      const track = await trackService.getPublicTrack(publicId, createRequestProfiler(request.log));
       return track
         ? send(response, 200, { data: track })
         : error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
@@ -259,7 +260,8 @@ export function createTrackHandlers(trackService, authService) {
         return;
       }
       try {
-        const status = await trackService.upload({ ownerId, tier, filename, routeType, source: request });
+        const status = await trackService.upload({ ownerId, tier, filename, routeType, source: request,
+          profile: createRequestProfiler(request.log) });
         response.setHeader('Location', `/api/tracks/${status.id}/status`);
         send(response, 202, { data: status });
       } catch (uploadError) {

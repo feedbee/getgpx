@@ -167,6 +167,19 @@ describe('track service', () => {
     expect(tracks[1]).not.toHaveProperty('analysis');
   });
 
+  it('profiles homepage selection and preparation with request-scoped steps', async () => {
+    const { service } = dependencies();
+    const steps = [];
+    const profile = async (step, operation) => {
+      steps.push(step);
+      return operation();
+    };
+
+    await service.getHomepageTracks(profile);
+
+    expect(steps).toEqual(['homepage.listTracks', 'homepage.prepareResponse']);
+  });
+
   it('stores the source, creates a queued track and schedules processing', async () => {
     const { service, scheduled, gpxFileStore, trackRepository } = dependencies();
 

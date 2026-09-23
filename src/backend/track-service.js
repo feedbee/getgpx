@@ -4,6 +4,7 @@ import { normalizeTrackName } from './track-repository.js';
 import { normalizeRouteType } from '../route-types.js';
 import { analysisFailure } from './analysis-warning.js';
 import { logger } from './logger.js';
+import { profileStep } from './request-profile.js';
 
 const ERROR_MESSAGES = {
   INVALID_GPX: 'Не удалось прочитать GPX-файл. Проверьте файл и попробуйте снова.',
@@ -311,26 +312,28 @@ export function createTrackService({
   }
 
   return {
-    async getHomepageTracks() {
+    async getHomepageTracks(profile) {
       const configuredIds = configuration.homepageTrackIds?.map((id) => ObjectId.createFromHexString(id));
-      const tracks = await trackRepository.listHomepage(configuredIds);
-      return tracks.map((track, index) => homepageTrack(track, index === 0));
+      const tracks = await profileStep(profile, 'homepage.listTracks', () => trackRepository.listHomepage(configuredIds));
+      return profileStep(profile, 'homepage.prepareResponse', () => tracks.map((track, index) => homepageTrack(track, index === 0)));
     },
 
-    async upload({ ownerId, tier = 'BASIC', filename, routeType, source }) {
+    async upload({ ownerId, tier = 'BASIC', filename, routeType, source, profile }) {
       const limit = configuration.userTiers[tier]?.limits?.tracks
         ?? configuration.userTiers.BASIC.limits.tracks;
-      if (await trackRepository.countOwned(ownerId) >= limit) throw new TrackLimitReachedError(limit);
-      const sourceFileId = await gpxFileStore.save({ filename, ownerId, source });
+      if (await profileStep(profile, 'upload.countTracks', () => trackRepository.countOwned(ownerId)) >= limit) {
+        throw new TrackLimitReachedError(limit);
+      }
+      const sourceFileId = await profileStep(profile, 'upload.saveFile', () => gpxFileStore.save({ filename, ownerId, source }));
       let track;
       try {
-        track = await trackRepository.createProcessing({
+        track = await profileStep(profile, 'upload.createTrack', () => trackRepository.createProcessing({
           ownerId,
           sourceFileId,
           originalFilename: filename,
           title: filenameTitle(filename),
           routeType,
-        });
+        }));
       } catch (error) {
         await gpxFileStore.delete(sourceFileId).catch(() => undefined);
         throw error;
@@ -467,13 +470,13 @@ export function createTrackService({
       return favorites.map(({ publicId }) => publicId);
     },
 
-    async getPublicTrack(publicId) {
-      const track = await trackRepository.findByPublicId(publicId);
+    async getPublicTrack(publicId, profile) {
+      const track = await profileStep(profile, 'track.find', () => trackRepository.findByPublicId(publicId));
       if (!track) return null;
       const uploader = userRepository?.findPublicProfileById
-        ? await userRepository.findPublicProfileById(track.ownerId)
+        ? await profileStep(profile, 'track.findAuthor', () => userRepository.findPublicProfileById(track.ownerId))
         : null;
-      return publicTrack(track, uploader);
+      return profileStep(profile, 'track.prepareResponse', () => publicTrack(track, uploader));
     },
 
     async getPublicDownload(publicId) {

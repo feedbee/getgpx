@@ -111,7 +111,7 @@ describe('track HTTP handlers', () => {
 
     await handlers.upload(source, result);
 
-    expect(trackService.upload).toHaveBeenCalledWith({ ownerId, tier: 'BASIC', filename: 'Заезд.gpx', routeType: 'gravel-cycling', source });
+    expect(trackService.upload).toHaveBeenCalledWith({ ownerId, tier: 'BASIC', filename: 'Заезд.gpx', routeType: 'gravel-cycling', source, profile: null });
     expect(result.statusCode).toBe(202);
     expect(result.headers.location).toBe('/api/tracks/track-1/status');
   });
@@ -192,7 +192,7 @@ describe('track HTTP handlers', () => {
     expect(result.statusCode).toBe(200);
     expect(result.body.data.analysisLevel).toBe('BASIC');
     expect(authService.getUser).not.toHaveBeenCalled();
-    expect(trackService.getPublicTrack).toHaveBeenCalledWith(publicId);
+    expect(trackService.getPublicTrack).toHaveBeenCalledWith(publicId, null);
   });
 
   it('returns homepage tracks publicly without checking a session', async () => {
