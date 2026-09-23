@@ -4,6 +4,14 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-23
+
+### Changed
+
+- Pages and track actions now show loading feedback while data or saves are in progress.
+- Backend logs now use structured JSON with request IDs and timing; routine request logging is available by setting `LOG_LEVEL=info`.
+- The homepage tracks response can be cached per server process with hourly refresh by setting `HOMEPAGE_TRACK_CACHE_ENABLED=true`; caching is off by default.
+
 ## [0.1.3] - 2026-09-23
 
 ### Changed
