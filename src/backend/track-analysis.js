@@ -10,7 +10,7 @@ const DEFAULT_SPEED_KMH = 20;
 
 function filenameTitle(filename) {
   const basename = String(filename || '').split(/[\\/]/).at(-1).replace(/\.gpx$/i, '').trim();
-  return basename || 'Маршрут без названия';
+  return basename;
 }
 
 function cacheKey(points) {

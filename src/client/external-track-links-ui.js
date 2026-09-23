@@ -1,3 +1,4 @@
+import { t, bindAttribute, htmlMessage } from './i18n.js';
 import garminLogo from './assets/service-logos/garmin.png';
 import komootLogo from './assets/service-logos/komoot.png';
 import rideWithGpsLogo from './assets/service-logos/ride-with-gps.jpg';
@@ -38,7 +39,7 @@ export function renderExternalLinkFields(idPrefix, { legend = true } = {}) {
     const details = SERVICE_FIELD_DETAILS[service.id];
     return `<label class="service-link-field" for="${idPrefix}-${details.suffix}"><span><img class="service-field-icon" src="${service.logo}" alt="" width="18" height="18" />${service.label}</span><input id="${idPrefix}-${details.suffix}" name="${service.id}" type="url" inputmode="url" placeholder="${details.placeholder}" /></label>`;
   }).join('');
-  return `<fieldset class="external-links-fields">${legend ? '<legend>Ссылки на трек в других сервисах</legend>' : ''}${fields}</fieldset>`;
+  return `<fieldset class="external-links-fields">${legend ? `<legend>${htmlMessage('common.links')}</legend>` : ''}${fields}</fieldset>`;
 }
 
 export function availableExternalTrackLinks(links = {}) {
@@ -61,9 +62,9 @@ export function renderExternalTrackLinks(container, links, documentRef = null, {
     anchor.href = service.url;
     anchor.target = '_blank';
     anchor.rel = 'noopener noreferrer';
-    const actionLabel = `Открыть трек в ${service.label}`;
-    anchor.setAttribute('aria-label', actionLabel);
-    anchor.title = actionLabel;
+    const actionLabel = () => t('links.open', { service: service.label });
+    bindAttribute(anchor, 'aria-label', actionLabel);
+    bindAttribute(anchor, 'title', actionLabel);
     const mark = ownerDocument.createElement('span');
     mark.setAttribute('aria-hidden', 'true');
     const image = ownerDocument.createElement('img');

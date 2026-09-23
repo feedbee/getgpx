@@ -1,3 +1,6 @@
+import { beforeEach } from 'vitest';
+import { preferences } from '../../../src/client/i18n.js';
+beforeEach(() => { preferences.set('language', 'ru'); preferences.set('measurementSystem', 'metric'); });
 import { describe, expect, it, vi } from 'vitest';
 import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, favoriteButtonState, publicTrackIdFromPath, renderOwnerTrackActions } from '../../../src/client/route-actions-ui.js';
 

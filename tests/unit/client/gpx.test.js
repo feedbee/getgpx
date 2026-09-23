@@ -33,6 +33,7 @@ describe('parseGpx', () => {
       lat: 50.005,
       lon: 19.006,
       name: 'Water stop',
+      nameGenerated: false,
       type: 'Drinking Water',
       symbol: 'Water Source',
     }]);
@@ -49,8 +50,20 @@ describe('parseGpx', () => {
     expect(analyzeTrack(track).hasElevation).toBe(false);
   });
 
+
+  it('marks only generated names and leaves source names unchanged', () => {
+    const generated = parseGpx('<gpx><wpt lat="50" lon="19"/><trk><trkseg><trkpt lat="50" lon="19"/><trkpt lat="50.1" lon="19.1"/></trkseg></trk></gpx>');
+    expect(generated.name).toBe('');
+    expect(generated.nameGenerated).toBe(true);
+    expect(generated.pointsOfInterest[0]).toMatchObject({ name: '', nameGenerated: true });
+    const supplied = parseGpx('<gpx><wpt lat="50" lon="19"><name>Маршрут без названия</name></wpt><trk><name>Маршрут без названия</name><trkseg><trkpt lat="50" lon="19"/><trkpt lat="50.1" lon="19.1"/></trkseg></trk></gpx>');
+    expect(supplied.name).toBe('Маршрут без названия');
+    expect(supplied.nameGenerated).toBe(false);
+    expect(supplied.pointsOfInterest[0].nameGenerated).toBe(false);
+  });
+
   it('rejects files without a usable track', () => {
-    expect(() => parseGpx('<gpx><trk /></gpx>')).toThrow(/точек маршрута/i);
+    expect(() => parseGpx('<gpx><trk /></gpx>')).toThrow('INSUFFICIENT_POINTS');
   });
 });
 
@@ -96,11 +109,11 @@ describe('analyzeTrack', () => {
       <gpx><trk><trkseg>
         <trkpt lat="50" lon="19"/><trkpt lat="50.1" lon="19.1"/><trkpt lat="50.2" lon="19.2"/>
       </trkseg></trk></gpx>
-    `, { maxPoints: 2 })).toThrow('не более 2 точек');
+    `, { maxPoints: 2 })).toThrow('GPX_POINT_LIMIT');
   });
 
   it('rejects XML document type and entity declarations', () => {
     expect(() => parseGpx('<!DOCTYPE gpx [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><gpx>&xxe;</gpx>'))
-      .toThrow('неподдерживаемую XML-конструкцию');
+      .toThrow('UNSUPPORTED_XML');
   });
 });

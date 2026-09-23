@@ -11,7 +11,7 @@ export function colorRunsForMode(points, mode) {
   if (mode === 'surface') {
     return groupSurfaceRuns(points).map((run) => ({ ...run, color: run.surface.color, label: run.surface.label }));
   }
-  return groupGradientRuns(points).map((run) => ({ ...run, label: 'Градиент' }));
+  return groupGradientRuns(points).map((run) => ({ ...run, label: 'common.gradient' }));
 }
 
 export function profileColorRuns(points, mode) {

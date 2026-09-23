@@ -1,3 +1,4 @@
+import { t, bindText, htmlMessage } from './i18n.js';
 import { DEFAULT_ROUTE_TYPE, ROUTE_TYPE_IDS, normalizeRouteType } from '../route-types.js';
 
 // Cycling SVG paths are from Pictogrammers Material Design Icons (Apache 2.0).
@@ -20,23 +21,23 @@ const ICONS = Object.freeze({
 });
 
 const ROUTE_TYPES = Object.freeze({
-  cycling: { label: 'Cycling', shortLabel: 'Cycling', icon: 'bike' },
-  'road-cycling': { label: 'Road cycling', shortLabel: 'Road', icon: 'roadBike' },
-  'gravel-cycling': { label: 'Gravel riding', shortLabel: 'Gravel', icon: 'gravelBike' },
-  'mountain-biking': { label: 'Mountain biking', shortLabel: 'MTB', icon: 'mountainBike' },
-  hiking: { label: 'Hiking', shortLabel: 'Hiking', icon: 'trekking' },
-  running: { label: 'Running', shortLabel: 'Running', icon: 'run' },
-  walking: { label: 'Walking', shortLabel: 'Walking', icon: 'walk' },
-  driving: { label: 'Driving', shortLabel: 'Driving', icon: 'car' },
-  motorcycling: { label: 'Motorcycling', shortLabel: 'Moto', icon: 'motorbike' },
-  swimming: { label: 'Swimming', shortLabel: 'Swimming', icon: 'swimming' },
-  'winter-sports': { label: 'Winter sports', shortLabel: 'Winter', icon: 'snowflake' },
-  other: { label: 'Other', shortLabel: 'Other', icon: 'other' },
+  cycling: { icon: 'bike' },
+  'road-cycling': { icon: 'roadBike' },
+  'gravel-cycling': { icon: 'gravelBike' },
+  'mountain-biking': { icon: 'mountainBike' },
+  hiking: { icon: 'trekking' },
+  running: { icon: 'run' },
+  walking: { icon: 'walk' },
+  driving: { icon: 'car' },
+  motorcycling: { icon: 'motorbike' },
+  swimming: { icon: 'swimming' },
+  'winter-sports': { icon: 'snowflake' },
+  other: { icon: 'other' },
 });
 
 export function routeTypeDefinition(value) {
   const id = normalizeRouteType(value);
-  return { id, ...ROUTE_TYPES[id] };
+  return { id, icon: ROUTE_TYPES[id].icon, label: t(`activity.${id}`), shortLabel: t(`activity.${id}`) };
 }
 
 export function routeTypeIcon(value, className = 'route-type-icon') {
@@ -68,10 +69,10 @@ export function closeRouteTypeDropdownOnEscape(event, root = document) {
 export function renderRouteTypeDropdown({ id, name, selected = DEFAULT_ROUTE_TYPE }) {
   const current = routeTypeDefinition(selected);
   const options = ROUTE_TYPE_IDS.map((typeId) => {
-    const type = ROUTE_TYPES[typeId];
-    return `<label class="route-type-option"><input type="radio" name="${name}" value="${typeId}" ${typeId === current.id ? 'checked' : ''} /><span class="route-type-option-icon">${routeTypeIcon(typeId)}</span><span>${type.label}</span></label>`;
+    const type = routeTypeDefinition(typeId);
+    return `<label class="route-type-option"><input type="radio" name="${name}" value="${typeId}" ${typeId === current.id ? 'checked' : ''} /><span class="route-type-option-icon">${routeTypeIcon(typeId)}</span><span>${htmlMessage(`activity.${type.id}`)}</span></label>`;
   }).join('');
-  return `<div class="route-type-field"><span class="route-type-label">Тип маршрута</span><details class="route-type-dropdown" id="${id}"><summary><span class="route-type-current-icon">${routeTypeIcon(current.id)}</span><span class="route-type-current-label">${current.label}</span><svg class="route-type-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary><div class="route-type-options">${options}</div></details></div>`;
+  return `<div class="route-type-field"><span class="route-type-label">${htmlMessage('common.routeType')}</span><details class="route-type-dropdown" id="${id}"><summary><span class="route-type-current-icon">${routeTypeIcon(current.id)}</span><span class="route-type-current-label">${htmlMessage(`activity.${current.id}`)}</span><svg class="route-type-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary><div class="route-type-options">${options}</div></details></div>`;
 }
 
 export function setRouteTypeDropdown(dropdown, value) {
@@ -79,7 +80,7 @@ export function setRouteTypeDropdown(dropdown, value) {
   const input = dropdown.querySelector(`input[value="${type.id}"]`);
   if (input) input.checked = true;
   dropdown.querySelector('.route-type-current-icon').innerHTML = routeTypeIcon(type.id);
-  dropdown.querySelector('.route-type-current-label').textContent = type.label;
+  bindText(dropdown.querySelector('.route-type-current-label'), () => t(`activity.${type.id}`));
 }
 
 export function selectedRouteType(dropdown) {

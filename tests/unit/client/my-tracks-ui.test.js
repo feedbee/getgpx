@@ -1,3 +1,6 @@
+import { beforeEach } from 'vitest';
+import { preferences } from '../../../src/client/i18n.js';
+beforeEach(() => { preferences.set('language', 'ru'); preferences.set('measurementSystem', 'metric'); });
 import { describe, expect, it, vi } from 'vitest';
 import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, createTrackCard, formatTrackDuration, formatTrackMetrics, previewPolyline, trackStatusLabel } from '../../../src/client/my-tracks-ui.js';
 
@@ -22,7 +25,7 @@ describe('my tracks UI', () => {
       estimatedDurationMs: 7_200_000,
       speedKmh: 21.2,
       routeType: 'gravel-cycling',
-    })).toContain('Gravel · 42,4 км · ↗ 812 м');
+    })).toContain('Гравийный велоспорт · 42,4 км · ↗ 812 м');
   });
 
   it('clears an active search, restores the collection URL, and reloads tracks', () => {
@@ -80,7 +83,7 @@ describe('my tracks UI', () => {
     expect(dateRow.children[1].children[0]).toMatchObject({
       href: 'https://www.strava.com/routes/1',
       target: '_blank',
-      title: 'Открыть трек в Strava',
+      attributes: { title: 'Открыть трек в Strava' },
     });
     expect(card.children[2].children.map((child) => child.dataset.trackAction).filter(Boolean)).toEqual(['favorite', 'edit', 'delete']);
   });

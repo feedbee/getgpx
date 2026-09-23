@@ -1,3 +1,6 @@
+import { beforeEach } from 'vitest';
+import { preferences } from '../../../src/client/i18n.js';
+beforeEach(() => { preferences.set('language', 'ru'); preferences.set('measurementSystem', 'metric'); });
 import { describe, expect, it } from 'vitest';
 import { formatTrackAttribution, resolveTrackUploader } from '../../../src/client/track-meta-ui.js';
 

@@ -1,26 +1,26 @@
 const SURFACES = [
-  { id: 'asphalt', label: 'Асфальт', color: '#29322d' },
-  { id: 'paved', label: 'Другое твёрдое', color: '#778279' },
-  { id: 'cobblestone', label: 'Брусчатка', color: '#9b9489' },
-  { id: 'gravel', label: 'Гравий', color: '#c59043' },
-  { id: 'unpaved', label: 'Грунт', color: '#8b563d' },
-  { id: 'unknown', label: 'Нет данных', color: '#b8bbb3' },
+  { id: 'asphalt', label: 'surface.asphalt', color: '#29322d' },
+  { id: 'paved', label: 'surface.paved', color: '#778279' },
+  { id: 'cobblestone', label: 'surface.cobblestone', color: '#9b9489' },
+  { id: 'gravel', label: 'surface.gravel', color: '#c59043' },
+  { id: 'unpaved', label: 'surface.unpaved', color: '#8b563d' },
+  { id: 'unknown', label: 'surface.unknown', color: '#b8bbb3' },
 ];
 
 const ROAD_QUALITIES = [
-  { id: 'good', label: 'Хорошее', color: '#648a55' },
-  { id: 'mixed', label: 'Среднее', color: '#d0a13b' },
-  { id: 'rough', label: 'Плохое', color: '#c45a42' },
-  { id: 'unknown', label: 'Нет данных', color: '#b8bbb3' },
+  { id: 'good', label: 'quality.good', color: '#648a55' },
+  { id: 'mixed', label: 'quality.mixed', color: '#d0a13b' },
+  { id: 'rough', label: 'quality.rough', color: '#c45a42' },
+  { id: 'unknown', label: 'surface.unknown', color: '#b8bbb3' },
 ];
 
 const WAY_TYPES = [
-  { id: 'road', label: 'Дороги', color: '#202521' },
-  { id: 'cycleway', label: 'Велодорожки', color: '#65aaa4' },
-  { id: 'street', label: 'Улицы', color: '#b6bec7' },
-  { id: 'path', label: 'Тропы', color: '#7758a6' },
-  { id: 'access', label: 'Подъездные', color: '#2f7195' },
-  { id: 'unknown', label: 'Нет данных', color: '#e3e5e2' },
+  { id: 'road', label: 'waytype.road', color: '#202521' },
+  { id: 'cycleway', label: 'waytype.cycleway', color: '#65aaa4' },
+  { id: 'street', label: 'waytype.street', color: '#b6bec7' },
+  { id: 'path', label: 'waytype.path', color: '#7758a6' },
+  { id: 'access', label: 'waytype.access', color: '#2f7195' },
+  { id: 'unknown', label: 'surface.unknown', color: '#e3e5e2' },
 ];
 
 const ASPHALT = new Set(['asphalt', 'chipseal']);
@@ -52,13 +52,13 @@ export function surfaceEmphasis(surfaceId, selectedSurfaceId) {
 }
 
 const ROAD_LABELS = {
-  motorway: 'Автомагистраль', trunk: 'Скоростная дорога', primary: 'Главная дорога', secondary: 'Региональная дорога',
-  tertiary: 'Местная дорога', residential: 'Жилая улица', service: 'Служебная дорога', cycleway: 'Велодорожка',
-  track: 'Грунтовая дорога', path: 'Тропа', footway: 'Пешеходная дорожка', steps: 'Ступени',
+  motorway: 'road.motorway', trunk: 'road.trunk', primary: 'road.primary', secondary: 'road.secondary',
+  tertiary: 'road.tertiary', residential: 'road.residential', service: 'road.service', cycleway: 'road.cycleway',
+  track: 'road.track', path: 'road.path', footway: 'road.footway', steps: 'road.steps',
 };
 
 export function roadTypeLabel(highway) {
-  return ROAD_LABELS[highway] || (highway ? 'Дорога' : 'Тип дороги неизвестен');
+  return ROAD_LABELS[highway] || (highway ? 'road.other' : 'road.unknown');
 }
 
 export function classifyRoadQuality(tags = {}) {

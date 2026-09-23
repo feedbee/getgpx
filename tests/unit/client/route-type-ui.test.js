@@ -1,3 +1,6 @@
+import { beforeEach } from 'vitest';
+import { preferences } from '../../../src/client/i18n.js';
+beforeEach(() => { preferences.set('language', 'ru'); preferences.set('measurementSystem', 'metric'); });
 import { describe, expect, it, vi } from 'vitest';
 import { ROUTE_TYPE_IDS, normalizeRouteType } from '../../../src/route-types.js';
 import {
@@ -23,7 +26,7 @@ describe('route type UI', () => {
 
   it('falls back to Other for absent legacy values', () => {
     expect(normalizeRouteType(undefined)).toBe('other');
-    expect(routeTypeDefinition('unknown')).toMatchObject({ id: 'other', shortLabel: 'Other' });
+    expect(routeTypeDefinition('unknown')).toMatchObject({ id: 'other', shortLabel: 'Другое' });
   });
 
   it('renders one keyboard-accessible icon choice per type in a custom dropdown', () => {
@@ -35,9 +38,9 @@ describe('route type UI', () => {
   });
 
   it('uses concise labels while keeping descriptive picker labels', () => {
-    expect(routeTypeDefinition('road-cycling')).toMatchObject({ label: 'Road cycling', shortLabel: 'Road' });
-    expect(routeTypeDefinition('gravel-cycling')).toMatchObject({ label: 'Gravel riding', shortLabel: 'Gravel' });
-    expect(routeTypeDefinition('mountain-biking')).toMatchObject({ label: 'Mountain biking', shortLabel: 'MTB' });
+    expect(routeTypeDefinition('road-cycling')).toMatchObject({ label: 'Шоссейный велоспорт', shortLabel: 'Шоссейный велоспорт' });
+    expect(routeTypeDefinition('gravel-cycling')).toMatchObject({ label: 'Гравийный велоспорт', shortLabel: 'Гравийный велоспорт' });
+    expect(routeTypeDefinition('mountain-biking')).toMatchObject({ label: 'Горный велосипед', shortLabel: 'Горный велосипед' });
   });
 
   it('derives cycling disciplines from the same ready-made cyclist icon and adds terrain cues', () => {

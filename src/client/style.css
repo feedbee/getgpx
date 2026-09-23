@@ -278,8 +278,8 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:400; }
 .surface-stat:last-child { padding-left:18px; border-right:0; }
 .surface-stat:not(:disabled):hover,.surface-stat:not(:disabled):focus-visible,.surface-stat.is-active { background:var(--white); }
 .surface-stat:focus-visible { z-index:1; outline:2px solid var(--ink); outline-offset:-2px; }
-.surface-stat.is-active::after { content:'ВЫБРАНО'; position:absolute; top:5px; right:7px; color:var(--muted); font-size:7px; font-weight:700; letter-spacing:.12em; }
-.surface-section:not(.has-pinned-surface) .surface-stat.is-active::after { content:'НА КАРТЕ'; }
+.surface-stat.is-active::after { content:attr(data-selected-label); position:absolute; top:5px; right:7px; color:var(--muted); font-size:7px; font-weight:700; letter-spacing:.12em; }
+.surface-section:not(.has-pinned-surface) .surface-stat.is-active::after { content:attr(data-map-label); }
 .surface-stat.is-dimmed { opacity:.32; }
 .surface-stat:disabled { cursor:default; opacity:.4; }
 .surface-stat i { width:8px; height:8px; background:var(--surface-color); }
@@ -1047,4 +1047,29 @@ body button:focus-visible,
   outline:2px solid var(--ink);
   outline-offset:2px;
   box-shadow:none;
+}
+
+/* Translation bindings preserve the existing layout and interactive elements. */
+.localized-text { display: contents; }
+.preferences-control { position: relative; }
+#preferences-trigger { display: grid; place-items: center; width: 38px; height: 38px; background: transparent; color: var(--ink); border: 0; padding: 0; cursor: pointer; }
+#preferences-trigger svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+#preferences-trigger:hover, #preferences-trigger[aria-expanded="true"] { color: var(--primary); }
+.preferences-popover { position: absolute; right: 0; top: calc(100% + .5rem); width: 258px; max-width: calc(100vw - 24px); padding: 14px; background: var(--white); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 28px #10251d22; z-index: 1500; }
+.preferences-group + .preferences-group { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.preferences-heading { margin: 0 0 8px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.preferences-languages { display: grid; gap: 3px; }
+.preferences-systems { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.preferences-option { min-height: 36px; width: 100%; border: 1px solid transparent; background: transparent; padding: 7px 10px; text-align: left; font-size: 12px; font-weight: 600; cursor: pointer; }
+.preferences-option:hover { background: var(--control-hover); }
+.preferences-option[aria-pressed="true"] { border-color: var(--primary); background: #e7ece4; color: var(--primary); }
+.preferences-option[aria-pressed="true"]::after { content: '✓'; float: right; }
+.preferences-systems .preferences-option { text-align: center; }
+.preferences-systems .preferences-option::after { float: none; margin-left: 6px; }
+.preferences-popover > p { margin: 10px 0 0; font-size: 11px; line-height: 1.4; }
+#preferences-trigger:focus-visible, .preferences-option:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+@media (max-width: 600px) {
+  .topbar-actions { gap: .4rem; }
+  .topbar-actions .upload-button { max-width: 105px; white-space: normal; font-size: .75rem; }
+  .preferences-popover { position: fixed; top: 66px; right: 12px; }
 }

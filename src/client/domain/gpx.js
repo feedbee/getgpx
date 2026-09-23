@@ -19,13 +19,17 @@ function haversine(a, b) {
   return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
 }
 
-export function parseGpx(xml, { fallbackName = 'Маршрут без названия', maxPoints = 500_000 } = {}) {
+export class GpxParseError extends Error {
+  constructor(code) { super(code); this.name = 'GpxParseError'; this.code = code; }
+}
+
+export function parseGpx(xml, { fallbackName = '', maxPoints = 500_000 } = {}) {
   if (/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(xml)) {
-    throw new Error('GPX содержит неподдерживаемую XML-конструкцию.');
+    throw new GpxParseError('UNSUPPORTED_XML');
   }
   const document = new XmlParser().parseFromString(xml, 'application/xml');
   const parserError = document.getElementsByTagName('parsererror')[0];
-  if (parserError) throw new Error('Не удалось прочитать GPX: файл содержит ошибку XML.');
+  if (parserError) throw new GpxParseError('INVALID_XML');
 
   const track = document.getElementsByTagName('trk')[0];
   const route = document.getElementsByTagName('rte')[0];
@@ -33,7 +37,7 @@ export function parseGpx(xml, { fallbackName = 'Маршрут без назва
   const rawPoints = track
     ? Array.from(track.getElementsByTagName('trkpt'))
     : Array.from(source.getElementsByTagName('rtept'));
-  if (rawPoints.length > maxPoints) throw new Error(`GPX должен содержать не более ${maxPoints.toLocaleString('ru-RU')} точек.`);
+  if (rawPoints.length > maxPoints) throw new GpxParseError('GPX_POINT_LIMIT');
 
   const points = rawPoints.map((node) => {
     const timeText = textOf(node, 'time');
@@ -47,19 +51,22 @@ export function parseGpx(xml, { fallbackName = 'Маршрут без назва
     };
   }).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon));
 
-  const pointsOfInterest = Array.from(document.getElementsByTagName('wpt')).map((node, index) => ({
+  const pointsOfInterest = Array.from(document.getElementsByTagName('wpt')).map((node) => ({
     lat: Number(node.getAttribute('lat')),
     lon: Number(node.getAttribute('lon')),
-    name: textOf(node, 'name') || textOf(node, 'desc') || `Точка интереса ${index + 1}`,
+    name: textOf(node, 'name') || textOf(node, 'desc'),
+    nameGenerated: !textOf(node, 'name') && !textOf(node, 'desc'),
     type: textOf(node, 'type'),
     symbol: textOf(node, 'sym'),
   })).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon));
 
-  if (points.length < 2) throw new Error('В GPX не найдено достаточно точек маршрута.');
+  if (points.length < 2) throw new GpxParseError('INSUFFICIENT_POINTS');
 
+  const sourceName = textOf(track, 'name') || textOf(route, 'name')
+    || textOf(document.getElementsByTagName('metadata')[0], 'name') || fallbackName;
   return {
-    name: textOf(track, 'name') || textOf(route, 'name')
-      || textOf(document.getElementsByTagName('metadata')[0], 'name') || fallbackName,
+    name: sourceName,
+    nameGenerated: !sourceName,
     points,
     pointsOfInterest,
   };

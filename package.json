@@ -15,7 +15,8 @@
     "test:performance": "vitest run tests/performance/gpx-load.test.js",
     "test:all": "npm run test:fast && npm run test:integration",
     "lint": "eslint .",
-    "check": "npm run lint && npm run test:fast && npm run build"
+    "check": "npm run locales:check && npm run lint && npm run test:fast && npm run build",
+    "locales:check": "node scripts/check-locales.js"
   },
   "engines": {
     "node": ">=22.13"
@@ -24,6 +25,7 @@
     "@xmldom/xmldom": "^0.9.12",
     "express": "^5.2.1",
     "helmet": "^8.3.0",
+    "intl-messageformat": "^12.1.2",
     "leaflet": "^1.9.4",
     "mongodb": "^7.6.0"
   },

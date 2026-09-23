@@ -24,12 +24,12 @@ function smoothElevations(points, radiusM) {
 }
 
 export function classifyClimb(score) {
-  if (score >= 64_000) return { label: 'HC', color: '#8e2632' };
-  if (score >= 48_000) return { label: 'Кат. 1', color: '#c83f3f' };
-  if (score >= 32_000) return { label: 'Кат. 2', color: '#e57732' };
-  if (score >= 16_000) return { label: 'Кат. 3', color: '#e9ad2f' };
-  if (score >= 8_000) return { label: 'Кат. 4', color: '#91aa39' };
-  return { label: 'Без категории', color: '#87a834' };
+  if (score >= 64_000) return { label: 'terrain.hc', color: '#8e2632' };
+  if (score >= 48_000) return { label: 'terrain.category1', color: '#c83f3f' };
+  if (score >= 32_000) return { label: 'terrain.category2', color: '#e57732' };
+  if (score >= 16_000) return { label: 'terrain.category3', color: '#e9ad2f' };
+  if (score >= 8_000) return { label: 'terrain.category4', color: '#91aa39' };
+  return { label: 'terrain.uncategorized', color: '#87a834' };
 }
 
 function buildClimb(points, smoothed, startIndex, endIndex, options) {

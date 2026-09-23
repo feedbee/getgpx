@@ -63,7 +63,7 @@ function decodeSavedCursor(cursor) {
 }
 
 function filenameTitle(filename) {
-  return String(filename || '').split(/[\\/]/).at(-1).replace(/\.gpx$/i, '').trim() || 'Маршрут без названия';
+  return String(filename || '').split(/[\\/]/).at(-1).replace(/\.gpx$/i, '').trim();
 }
 
 async function readUtf8(stream) {

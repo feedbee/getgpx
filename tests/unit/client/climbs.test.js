@@ -49,9 +49,9 @@ describe('detectClimbs', () => {
 
 describe('classifyClimb', () => {
   it('uses Garmin climb-score category thresholds', () => {
-    expect(classifyClimb(2_000).label).toBe('Без категории');
-    expect(classifyClimb(9_000).label).toBe('Кат. 4');
-    expect(classifyClimb(70_000).label).toBe('HC');
+    expect(classifyClimb(2_000).label).toBe('terrain.uncategorized');
+    expect(classifyClimb(9_000).label).toBe('terrain.category4');
+    expect(classifyClimb(70_000).label).toBe('terrain.hc');
   });
 });
 

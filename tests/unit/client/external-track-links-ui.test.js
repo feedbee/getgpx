@@ -1,3 +1,6 @@
+import { beforeEach } from 'vitest';
+import { preferences } from '../../../src/client/i18n.js';
+beforeEach(() => { preferences.set('language', 'ru'); preferences.set('measurementSystem', 'metric'); });
 import { describe, expect, it } from 'vitest';
 import { availableExternalTrackLinks, renderExternalLinkFields, renderExternalTrackLinks } from '../../../src/client/external-track-links-ui.js';
 
@@ -41,8 +44,7 @@ describe('external track links', () => {
       href: 'https://ridewithgps.com/routes/4',
       target: '_blank',
       rel: 'noopener noreferrer',
-      title: 'Открыть трек в Ride with GPS',
-      attributes: { 'aria-label': 'Открыть трек в Ride with GPS' },
+      attributes: { 'aria-label': 'Открыть трек в Ride with GPS', title: 'Открыть трек в Ride with GPS' },
     });
     expect(container.children[0].children[0].children[0]).toMatchObject({
       tagName: 'img',
@@ -75,7 +77,7 @@ describe('external track links', () => {
     expect(container.children[0]).toMatchObject({
       target: '_blank',
       rel: 'noopener noreferrer',
-      title: 'Открыть трек в Komoot',
+      attributes: { title: 'Открыть трек в Komoot' },
     });
   });
 

@@ -1,3 +1,8 @@
+import { renderPreferencesControl, setupPreferencesControl } from './preferences-ui.js';
+import { distanceValue, elevationValue, number, createSpeedDraft } from './measurements.js';
+import { neutralAnalysis, poiName, poiType, roadLabel } from './analysis-presentation.js';
+import { errorMessage, errorFromPayload } from './errors-ui.js';
+import { t, bindText, bindAttribute, htmlMessage, messageAttribute, preferences, formatMeasurement, currentUnit, unitMarkup, percent, escapeHtml } from './i18n.js';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
@@ -18,7 +23,7 @@ import { emptyPoiSelection, updatePoiSelection } from './domain/poi-selection.js
 import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot, profileFocusVisibility, profileRangePosition, visibleRangeIndices } from './domain/profile-math.js';
 import { colorRunsForMode, highlightRunsForFilter, profileColorRuns } from './domain/route-color.js';
 import { isClosedRoute } from './domain/route-shape.js';
-import { applyValhallaMatches, classifySurface, classifyWayType, fetchValhallaMatches, roadQualityCategories, roadTypeLabel, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
+import { applyValhallaMatches, classifySurface, classifyWayType, fetchValhallaMatches, roadQualityCategories, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
 
 const app = document.querySelector('#app');
 let map;
@@ -75,40 +80,40 @@ let tracksPendingDeletion = [];
 
 app.innerHTML = `
   <header class="topbar">
-    <div class="topbar-inner"><a class="brand" href="/" aria-label="GETGPX, главная"><img class="brand-mark" src="/getgpx-mark-30.png" srcset="/getgpx-mark-60.png 2x, /getgpx-mark-90.png 3x" alt="" width="30" height="30" /><span>GETGPX</span></a>
-    <section class="compact-route-header" aria-label="Текущий маршрут" aria-hidden="true">
-      <strong id="compact-track-name">Загрузка маршрута…</strong>
-      <div class="compact-route-metrics" aria-label="Краткие показатели маршрута">
-        <span class="route-type-metric" id="compact-route-type-metric" aria-label="Тип маршрута">${routeTypeIcon('other')}<b>Other</b></span>
-        <span class="distance-metric" aria-label="Расстояние маршрута"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 9l-3 3 3 3m10-6 3 3-3 3"/></svg><b id="compact-distance">—</b> км</span>
-        <span class="elevation-metric" aria-label="Набор высоты"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17 17 5m-7 0h7v7"/></svg><b id="compact-ascent">—</b> м <small>набор</small></span>
-        <span class="elevation-metric" aria-label="Спуск по высоте"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 12 12m0-7v7h-7"/></svg><b id="compact-descent">—</b> м <small>спуск</small></span>
+    <div class="topbar-inner"><a class="brand" href="/" ${messageAttribute('aria-label', 'header.home')}><img class="brand-mark" src="/getgpx-mark-30.png" srcset="/getgpx-mark-60.png 2x, /getgpx-mark-90.png 3x" alt="" width="30" height="30" /><span>GETGPX</span></a>
+    <section class="compact-route-header" ${messageAttribute('aria-label', 'header.currentRoute')} aria-hidden="true">
+      <strong id="compact-track-name">${htmlMessage('common.loadingRoute')}</strong>
+      <div class="compact-route-metrics" ${messageAttribute('aria-label', 'header.metrics')}>
+        <span class="route-type-metric" id="compact-route-type-metric" ${messageAttribute('aria-label', 'common.routeType')}>${routeTypeIcon('other')}<b>${htmlMessage('activity.other')}</b></span>
+        <span class="distance-metric" ${messageAttribute('aria-label', 'route.distance')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 9l-3 3 3 3m10-6 3 3-3 3"/></svg><b id="compact-distance">—</b> ${unitMarkup('distance')}</span>
+        <span class="elevation-metric" ${messageAttribute('aria-label', 'route.ascent')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17 17 5m-7 0h7v7"/></svg><b id="compact-ascent">—</b> ${unitMarkup('elevation')} <small>${htmlMessage('common.ascentLower')}</small></span>
+        <span class="elevation-metric" ${messageAttribute('aria-label', 'route.descent')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 12 12m0-7v7h-7"/></svg><b id="compact-descent">—</b> ${unitMarkup('elevation')} <small>${htmlMessage('common.descentLower')}</small></span>
         <span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><b id="compact-duration">—</b> <i id="compact-duration-unit"></i></span>
-        <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.6 18a8 8 0 1 1 12.8 0M12 13l4-4"/><path d="M4 18h16"/></svg><b id="compact-speed">— км/ч</b></span>
+        <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.6 18a8 8 0 1 1 12.8 0M12 13l4-4"/><path d="M4 18h16"/></svg><b id="compact-speed">— ${unitMarkup('speed')}</b></span>
       </div>
     </section>
-    <div class="topbar-actions"><button class="upload-button" data-auth-upload type="button" hidden><span aria-hidden="true">＋</span> Загрузить GPX</button><div id="auth-control">${renderAuthControl(null)}</div></div></div>
+    <div class="topbar-actions">${renderPreferencesControl()}<button class="upload-button" data-auth-upload type="button" hidden><span aria-hidden="true">＋</span> ${htmlMessage('common.upload')}</button><div id="auth-control">${renderAuthControl(null)}</div></div></div>
     <input id="gpx-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden />
   </header>
   ${isHomePage ? renderHomePage(homepageTracks) : ''}
   ${isNotFoundPage ? renderNotFoundPage() : ''}
   <main class="my-tracks-page" id="my-tracks" ${isTrackCollectionPage ? '' : 'hidden'}>
     <header class="my-tracks-header">
-      <div><p class="route-kicker">ЛИЧНАЯ КОЛЛЕКЦИЯ</p><h1>${isFavoriteTracksPage ? 'Избранные треки' : 'Мои треки'}</h1><p>${isFavoriteTracksPage ? 'Ваши любимые маршруты — свои и других авторов.' : 'Ваши маршруты — от свежих загрузок к старым.'}</p></div>
-      <button class="my-tracks-upload" ${isFavoriteTracksPage ? '' : 'data-auth-upload'} type="button" ${isFavoriteTracksPage ? 'hidden disabled' : 'hidden'}><span aria-hidden="true">＋</span> Загрузить GPX</button>
+      <div><p class="route-kicker">${htmlMessage('tracks.collection')}</p><h1>${isFavoriteTracksPage ? t('common.favorites') : t('common.myTracks')}</h1><p>${isFavoriteTracksPage ? t('tracks.favoriteDescription') : t('tracks.description')}</p></div>
+      <button class="my-tracks-upload" ${isFavoriteTracksPage ? '' : 'data-auth-upload'} type="button" ${isFavoriteTracksPage ? 'hidden disabled' : 'hidden'}><span aria-hidden="true">＋</span> ${htmlMessage('common.upload')}</button>
     </header>
-    <form class="track-search" id="track-search" role="search"><label for="track-query">Поиск по названию</label><div class="track-search-controls"><span class="track-search-input"><input id="track-query" name="query" type="search" maxlength="100" placeholder="Например, вечерний гравий" autocomplete="off" /><button class="track-search-clear" id="track-search-clear" type="button" aria-label="Отменить поиск" title="Отменить поиск" hidden>×</button></span><button class="track-search-submit" type="submit">Найти</button></div></form>
-    <div class="track-list-toolbar"><button class="select-all-tracks" id="select-all-tracks" type="button" disabled>Выбрать всё</button><button class="bulk-delete-tracks" id="bulk-delete-tracks" type="button" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg><span>${isFavoriteTracksPage ? 'Убрать' : 'Удалить'}</span></button></div>
-    <p class="my-tracks-message" id="my-tracks-message" role="status">Войдите, чтобы увидеть ${isFavoriteTracksPage ? 'избранные' : 'свои'} треки.</p>
+    <form class="track-search" id="track-search" role="search"><label for="track-query">${htmlMessage('tracks.searchLabel')}</label><div class="track-search-controls"><span class="track-search-input"><input id="track-query" name="query" type="search" maxlength="100" ${messageAttribute('placeholder', 'tracks.searchPlaceholder')} autocomplete="off" /><button class="track-search-clear" id="track-search-clear" type="button" ${messageAttribute('aria-label', 'tracks.clearSearch')} ${messageAttribute('title', 'tracks.clearSearch')} hidden>×</button></span><button class="track-search-submit" type="submit">${htmlMessage('tracks.search')}</button></div></form>
+    <div class="track-list-toolbar"><button class="select-all-tracks" id="select-all-tracks" type="button" disabled>${htmlMessage('common.selectAll')}</button><button class="bulk-delete-tracks" id="bulk-delete-tracks" type="button" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg><span>${isFavoriteTracksPage ? t('common.remove') : t('common.delete')}</span></button></div>
+    <p class="my-tracks-message" id="my-tracks-message" role="status">${htmlMessage(isFavoriteTracksPage ? 'tracks.loginFavorites' : 'tracks.loginOwn')}</p>
     <section class="track-list" id="track-list" aria-live="polite"></section>
-    <button class="load-more-tracks" id="load-more-tracks" type="button" hidden>Показать ещё</button>
+    <button class="load-more-tracks" id="load-more-tracks" type="button" hidden>${htmlMessage('tracks.more')}</button>
   </main>
   <main class="page" id="route" ${isTrackCollectionPage || isHomePage || isNotFoundPage ? 'hidden' : ''}>
     <header class="route-header">
       <p class="route-state-note" id="route-state-note" hidden></p>
       <div class="route-heading">
         <div class="route-heading-copy">
-          <h1 id="track-name">Загрузка маршрута…</h1>
+          <h1 id="track-name">${htmlMessage('common.loadingRoute')}</h1>
         </div>
         <div class="track-attribution" id="track-attribution" hidden>
           <span class="track-attribution-avatar" aria-hidden="true"><img id="track-uploader-avatar" alt="" hidden /><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0"/></svg></span>
@@ -116,90 +121,90 @@ app.innerHTML = `
         </div>
       </div>
       <div class="route-summary-row">
-        <div class="route-metrics" aria-label="Показатели маршрута">
-          <span class="route-type-metric" id="route-type-metric" aria-label="Тип маршрута">${routeTypeIcon('other')}<b>Other</b></span>
-          <span class="distance-metric" aria-label="Расстояние маршрута"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 9l-3 3 3 3m10-6 3 3-3 3"/></svg><b id="distance">—</b> км</span>
-          <span class="elevation-metric" aria-label="Набор высоты"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17 17 5m-7 0h7v7"/></svg><b id="ascent">—</b> м <small>набор</small></span>
-          <span class="elevation-metric" aria-label="Спуск по высоте"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 12 12m0-7v7h-7"/></svg><b id="descent">—</b> м <small>спуск</small></span>
+        <div class="route-metrics" ${messageAttribute('aria-label', 'route.metrics')}>
+          <span class="route-type-metric" id="route-type-metric" ${messageAttribute('aria-label', 'common.routeType')}>${routeTypeIcon('other')}<b>${htmlMessage('activity.other')}</b></span>
+          <span class="distance-metric" ${messageAttribute('aria-label', 'route.distance')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 9l-3 3 3 3m10-6 3 3-3 3"/></svg><b id="distance">—</b> ${unitMarkup('distance')}</span>
+          <span class="elevation-metric" ${messageAttribute('aria-label', 'route.ascent')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17 17 5m-7 0h7v7"/></svg><b id="ascent">—</b> ${unitMarkup('elevation')} <small>${htmlMessage('common.ascentLower')}</small></span>
+          <span class="elevation-metric" ${messageAttribute('aria-label', 'route.descent')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 12 12m0-7v7h-7"/></svg><b id="descent">—</b> ${unitMarkup('elevation')} <small>${htmlMessage('common.descentLower')}</small></span>
           <span class="moving-metric"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><b id="duration">—</b> <i id="duration-unit"></i></span>
-          <span class="moving-metric"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.6 18a8 8 0 1 1 12.8 0M12 13l4-4"/><path d="M4 18h16"/></svg><abbr id="average-speed-badge" title="Средняя скорость движения по данным GPX">— км/ч</abbr></span>
+          <span class="moving-metric"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.6 18a8 8 0 1 1 12.8 0M12 13l4-4"/><path d="M4 18h16"/></svg><abbr id="average-speed-badge" ${messageAttribute('title', 'route.speedTitle')}>— ${unitMarkup('speed')}</abbr></span>
         </div>
-        <div class="route-actions" aria-label="Действия с маршрутом">
-          <button class="primary-action" id="save-track" type="button" aria-label="Добавить в избранное" aria-pressed="false" title="Добавить в избранное"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg><span>Избранное</span></button>
-          <button id="share-track" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg>Поделиться</button>
-          <a id="download-track" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></svg>Скачать трек</a>
-          <span class="owner-track-actions" id="owner-track-actions" hidden><details class="route-overflow"><summary aria-label="Дополнительные действия"><span aria-hidden="true">•••</span></summary><div>${renderOwnerTrackActions()}</div></details></span>
+        <div class="route-actions" ${messageAttribute('aria-label', 'route.actions')}>
+          <button class="primary-action" id="save-track" type="button" ${messageAttribute('aria-label', 'common.addFavorite')} aria-pressed="false" ${messageAttribute('title', 'common.addFavorite')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg><span>${htmlMessage('route.favorite')}</span></button>
+          <button id="share-track" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg>${htmlMessage('route.share')}</button>
+          <a id="download-track" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></svg>${htmlMessage('route.download')}</a>
+          <span class="owner-track-actions" id="owner-track-actions" hidden><details class="route-overflow"><summary ${messageAttribute('aria-label', 'route.more')}><span aria-hidden="true">•••</span></summary><div>${renderOwnerTrackActions()}</div></details></span>
         </div>
       </div>
     </header>
     <div class="route-workspace">
       <div class="route-content">
-        <nav class="section-nav route-tabs" aria-label="Содержание страницы">
-          <a href="#external-track-links-section" id="external-track-links-nav" hidden>В сервисах</a><a href="#points-of-interest" id="poi-nav-link" hidden>Точки интереса</a><a href="#details">Профиль высот</a><a href="#way-types">Информация о трассе</a><a href="#climbs">Подъёмы и спуски</a>
+        <nav class="section-nav route-tabs" ${messageAttribute('aria-label', 'route.contents')}>
+          <a href="#external-track-links-section" id="external-track-links-nav" hidden>${htmlMessage('route.services')}</a><a href="#points-of-interest" id="poi-nav-link" hidden>${htmlMessage('common.pois')}</a><a href="#details">${htmlMessage('common.elevationProfile')}</a><a href="#way-types">${htmlMessage('common.routeInfo')}</a><a href="#climbs">${htmlMessage('common.terrain')}</a>
         </nav>
         <section class="content-section external-track-links-section" id="external-track-links-section" aria-labelledby="external-track-links-title" hidden>
-          <div class="compact-heading"><h2 id="external-track-links-title">Трек в сервисах</h2></div>
+          <div class="compact-heading"><h2 id="external-track-links-title">${htmlMessage('route.serviceHeading')}</h2></div>
           <div class="external-track-links" id="external-track-links"></div>
         </section>
         <section class="content-section poi-section" id="points-of-interest" aria-labelledby="poi-title" hidden>
-          <div class="compact-heading"><h2 id="poi-title">Точки интереса</h2><p id="poi-count"></p></div>
+          <div class="compact-heading"><h2 id="poi-title">${htmlMessage('common.pois')}</h2><p id="poi-count"></p></div>
           <div class="analysis-card poi-list" id="poi-list"></div>
         </section>
         <section class="content-section profile-section" id="details">
-          <div class="compact-heading"><h2>Профиль высот</h2></div>
+          <div class="compact-heading"><h2>${htmlMessage('common.elevationProfile')}</h2></div>
           <div class="analysis-card profile-card">
-            <div class="profile-toolbar"><div class="profile-mode segmented-control" aria-label="Цвет профиля"><button class="active" type="button" data-color-scope="profile" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="profile" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="profile" data-color-mode="waytype">Тип дороги</button><button type="button" data-color-scope="profile" data-color-mode="quality">Качество</button></div><div class="profile-toolbar-actions"><div class="profile-overlay-settings"><button class="profile-settings-trigger" id="profile-settings-trigger" type="button" aria-label="Настройки наложения" aria-expanded="false" aria-controls="profile-settings-popover"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="M19 13.2v-2.4l-2-.7a7 7 0 0 0-.6-1.4l.9-1.9-1.7-1.7-1.9.9a7 7 0 0 0-1.4-.6l-.7-2H9.2l-.7 2a7 7 0 0 0-1.4.6l-1.9-.9-1.7 1.7.9 1.9a7 7 0 0 0-.6 1.4l-2 .7v2.4l2 .7a7 7 0 0 0 .6 1.4l-.9 1.9 1.7 1.7 1.9-.9a7 7 0 0 0 1.4.6l.7 2h2.4l.7-2a7 7 0 0 0 1.4-.6l1.9.9 1.7-1.7-.9-1.9a7 7 0 0 0 .6-1.4l2-.7Z"/></svg></button><div class="profile-settings-popover" id="profile-settings-popover" role="dialog" aria-labelledby="profile-settings-title" hidden><strong id="profile-settings-title">Отображать наложение</strong><div class="profile-focus-placement segmented-control" aria-label="Расположение подсветки"><button type="button" data-profile-focus-placement="profile" aria-pressed="false">На профиле</button><button class="active" type="button" data-profile-focus-placement="ribbon" aria-pressed="true">На полоске</button></div></div></div><div class="profile-actions segmented-control"><button id="zoom-back" type="button" disabled>← Назад</button><button id="zoom-reset" type="button" disabled>Отмена</button></div></div></div>
-            <div class="profile-wrap" id="profile-wrap" tabindex="0" role="slider" aria-label="Положение на профиле высоты" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="profile-toolbar"><div class="profile-mode segmented-control" ${messageAttribute('aria-label', 'profile.color')}><button class="active" type="button" data-color-scope="profile" data-color-mode="gradient">${htmlMessage('common.gradient')}</button><button type="button" data-color-scope="profile" data-color-mode="surface">${htmlMessage('common.surface')}</button><button type="button" data-color-scope="profile" data-color-mode="waytype">${htmlMessage('common.roadType')}</button><button type="button" data-color-scope="profile" data-color-mode="quality">${htmlMessage('common.quality')}</button></div><div class="profile-toolbar-actions"><div class="profile-overlay-settings"><button class="profile-settings-trigger" id="profile-settings-trigger" type="button" ${messageAttribute('aria-label', 'profile.overlaySettings')} aria-expanded="false" aria-controls="profile-settings-popover"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="M19 13.2v-2.4l-2-.7a7 7 0 0 0-.6-1.4l.9-1.9-1.7-1.7-1.9.9a7 7 0 0 0-1.4-.6l-.7-2H9.2l-.7 2a7 7 0 0 0-1.4.6l-1.9-.9-1.7 1.7.9 1.9a7 7 0 0 0-.6 1.4l-2 .7v2.4l2 .7a7 7 0 0 0 .6 1.4l-.9 1.9 1.7 1.7 1.9-.9a7 7 0 0 0 1.4.6l.7 2h2.4l.7-2a7 7 0 0 0 1.4-.6l1.9.9 1.7-1.7-.9-1.9a7 7 0 0 0 .6-1.4l2-.7Z"/></svg></button><div class="profile-settings-popover" id="profile-settings-popover" role="dialog" aria-labelledby="profile-settings-title" hidden><strong id="profile-settings-title">${htmlMessage('profile.showOverlay')}</strong><div class="profile-focus-placement segmented-control" ${messageAttribute('aria-label', 'profile.highlightPosition')}><button type="button" data-profile-focus-placement="profile" aria-pressed="false">${htmlMessage('profile.onProfile')}</button><button class="active" type="button" data-profile-focus-placement="ribbon" aria-pressed="true">${htmlMessage('profile.onRibbon')}</button></div></div></div><div class="profile-actions segmented-control"><button id="zoom-back" type="button" disabled>${htmlMessage('profile.back')}</button><button id="zoom-reset" type="button" disabled>${htmlMessage('common.cancel')}</button></div></div></div>
+            <div class="profile-wrap" id="profile-wrap" tabindex="0" role="slider" ${messageAttribute('aria-label', 'profile.position')} aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <svg id="profile" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ebc35" stop-opacity=".24"/><stop offset="1" stop-color="#7ebc35" stop-opacity=".02"/></linearGradient></defs><g id="grid"></g><g id="climb-bands"></g><path id="profile-area" class="profile-area"></path><g id="profile-gradient-area"></g><g id="gradient-line"></g><g id="profile-focus-profile"></g><g id="surface-ribbon"></g><g id="profile-focus-ribbon"></g><rect id="profile-selection" class="profile-selection" x="0" y="18" width="0" height="246"></rect><line id="profile-cursor" class="profile-cursor" y1="18" y2="264"></line><circle id="profile-dot" class="profile-dot" r="6"></circle></svg>
               <div class="profile-pois" id="profile-pois" aria-hidden="true"></div>
               <div class="axis" id="axis"></div>
             </div>
-            <div class="gradient-legend route-legend" id="gradient-legend"><span><i class="grade-down"></i>спуск</span><span><i class="grade-easy"></i>0–3%</span><span><i class="grade-mid"></i>3–6%</span><span><i class="grade-hard"></i>6–9%</span><span><i class="grade-steep"></i>9–12%</span><span><i class="grade-max"></i>12%+</span></div>
+            <div class="gradient-legend route-legend" id="gradient-legend"><span><i class="grade-down"></i>${htmlMessage('common.descentLower')}</span><span><i class="grade-easy"></i>0–3%</span><span><i class="grade-mid"></i>3–6%</span><span><i class="grade-hard"></i>6–9%</span><span><i class="grade-steep"></i>9–12%</span><span><i class="grade-max"></i>12%+</span></div>
             <div class="surface-legend route-legend" id="surface-legend" hidden></div><div class="waytype-legend route-legend" id="waytype-legend" hidden></div><div class="quality-legend route-legend" id="quality-legend" hidden></div>
-            <div class="profile-summary"><span><b id="profile-ascent">—</b> м<small>Набор</small></span><span><b id="profile-descent">—</b> м<small>Спуск</small></span><span><b id="max-label">—</b><small>Максимум</small></span><span><b id="min-label">—</b><small>Минимум</small></span></div>
+            <div class="profile-summary"><span><b id="profile-ascent">—</b> ${unitMarkup('elevation')}<small>${htmlMessage('common.ascent')}</small></span><span><b id="profile-descent">—</b> ${unitMarkup('elevation')}<small>${htmlMessage('common.descent')}</small></span><span><b id="max-label">—</b><small>${htmlMessage('profile.maximum')}</small></span><span><b id="min-label">—</b><small>${htmlMessage('profile.minimum')}</small></span></div>
           </div>
         </section>
         <section class="content-section surface-section" id="way-types" aria-labelledby="surface-title">
-          <div class="compact-heading"><div class="surface-title-row"><h2 id="surface-title">Информация о трассе</h2><div class="source-help"><button class="source-help-trigger" type="button" aria-label="Источники данных" aria-haspopup="dialog" aria-controls="source-popover">?</button><div class="source-popover" id="source-popover" role="dialog" aria-label="Источники данных"><strong>Источники данных</strong><ul><li data-analysis-source="gpx"><span class="source-state" aria-hidden="true">…</span><span><b>GPX</b><small>Маршрут, высоты и время</small></span></li><li data-analysis-source="valhalla"><span class="source-state" aria-hidden="true">…</span><span><b>Valhalla</b><small>Сопоставление с дорогами и оценка покрытий</small></span><button class="source-retry" data-retry-source="valhalla" type="button" aria-label="Повторить получение данных Valhalla" title="Повторить" hidden>↻</button></li><li data-analysis-source="openStreetMap"><span class="source-state" aria-hidden="true">…</span><span><b>OpenStreetMap</b><small>Детальные теги покрытий и качества дорог</small></span><button class="source-retry" data-retry-source="openStreetMap" type="button" aria-label="Повторить получение данных OpenStreetMap" title="Повторить" hidden>↻</button></li></ul></div></div></div></div>
+          <div class="compact-heading"><div class="surface-title-row"><h2 id="surface-title">${htmlMessage('common.routeInfo')}</h2><div class="source-help"><button class="source-help-trigger" type="button" ${messageAttribute('aria-label', 'sources.title')} aria-haspopup="dialog" aria-controls="source-popover">?</button><div class="source-popover" id="source-popover" role="dialog" ${messageAttribute('aria-label', 'sources.title')}><strong>${htmlMessage('sources.title')}</strong><ul><li data-analysis-source="gpx"><span class="source-state" aria-hidden="true">…</span><span><b>GPX</b><small>${htmlMessage('sources.gpx')}</small></span></li><li data-analysis-source="valhalla"><span class="source-state" aria-hidden="true">…</span><span><b>Valhalla</b><small>${htmlMessage('sources.valhalla')}</small></span><button class="source-retry" data-retry-source="valhalla" type="button" ${messageAttribute('aria-label', 'sources.retryValhalla')} ${messageAttribute('title', 'common.retry')} hidden>↻</button></li><li data-analysis-source="openStreetMap"><span class="source-state" aria-hidden="true">…</span><span><b>OpenStreetMap</b><small>${htmlMessage('sources.osm')}</small></span><button class="source-retry" data-retry-source="openStreetMap" type="button" ${messageAttribute('aria-label', 'sources.retryOsm')} ${messageAttribute('title', 'common.retry')} hidden>↻</button></li></ul></div></div></div></div>
           <div class="analysis-card">
-            <section class="distribution-group"><h3>Типы дорог</h3><div class="distribution-bar" id="way-type-bar" aria-label="Распределение типов дорог"></div><div class="distribution-list" id="way-type-stats"></div></section>
-            <section class="distribution-group"><h3>Покрытия</h3><div class="distribution-bar surface-bar" id="surface-bar" aria-label="Распределение покрытия"></div><div class="distribution-list surface-stats" id="surface-stats"></div></section>
-            <section class="distribution-group quality-compact"><h3>Качество проезда</h3><div class="distribution-bar" id="quality-bar" aria-label="Распределение качества проезда"></div><div class="distribution-list quality-stats" id="quality-stats"></div></section>
+            <section class="distribution-group"><h3>${htmlMessage('waytype.title')}</h3><div class="distribution-bar" id="way-type-bar" ${messageAttribute('aria-label', 'waytype.distribution')}></div><div class="distribution-list" id="way-type-stats"></div></section>
+            <section class="distribution-group"><h3>${htmlMessage('common.surfaces')}</h3><div class="distribution-bar surface-bar" id="surface-bar" ${messageAttribute('aria-label', 'surface.distribution')}></div><div class="distribution-list surface-stats" id="surface-stats"></div></section>
+            <section class="distribution-group quality-compact"><h3>${htmlMessage('quality.title')}</h3><div class="distribution-bar" id="quality-bar" ${messageAttribute('aria-label', 'quality.distribution')}></div><div class="distribution-list quality-stats" id="quality-stats"></div></section>
           </div>
         </section>
         <section class="content-section climbs-section" id="climbs" aria-labelledby="climbs-title">
-          <div class="compact-heading"><h2 id="climbs-title">Подъёмы и спуски</h2><p>Автоматическое определение</p></div>
+          <div class="compact-heading"><h2 id="climbs-title">${htmlMessage('common.terrain')}</h2><p>${htmlMessage('terrain.automatic')}</p></div>
           <div class="analysis-card terrain-card">
-            <div class="terrain-tabs" role="tablist"><button class="active" type="button" data-terrain-tab="climbs">Подъёмы <b id="climbs-count">0</b></button><button type="button" data-terrain-tab="descents">Спуски <b id="descents-count">0</b></button></div>
+            <div class="terrain-tabs" role="tablist"><button class="active" type="button" data-terrain-tab="climbs">${htmlMessage('common.climbs')} <b id="climbs-count">0</b></button><button type="button" data-terrain-tab="descents">${htmlMessage('common.descents')} <b id="descents-count">0</b></button></div>
             <div class="climbs-list terrain-list" id="climbs-list"></div><div class="descents-list terrain-list" id="descents-list" hidden></div>
           </div>
         </section>
       </div>
-      <aside class="map-column"><section class="map-shell" aria-label="Карта маршрута"><div id="map"></div><div class="map-mode segmented-control" aria-label="Цвет маршрута на карте"><button class="active" type="button" data-color-scope="map" data-color-mode="gradient">Градиент</button><button type="button" data-color-scope="map" data-color-mode="surface">Покрытие</button><button type="button" data-color-scope="map" data-color-mode="waytype">Тип дороги</button><button type="button" data-color-scope="map" data-color-mode="quality">Качество</button></div><div class="map-note" id="map-note"></div><div class="hover-readout" id="hover-readout" aria-live="polite"><b>Наведите на маршрут</b></div></section></aside>
+      <aside class="map-column"><section class="map-shell" ${messageAttribute('aria-label', 'map.route')}><div id="map"></div><div class="map-mode segmented-control" ${messageAttribute('aria-label', 'map.color')}><button class="active" type="button" data-color-scope="map" data-color-mode="gradient">${htmlMessage('common.gradient')}</button><button type="button" data-color-scope="map" data-color-mode="surface">${htmlMessage('common.surface')}</button><button type="button" data-color-scope="map" data-color-mode="waytype">${htmlMessage('common.roadType')}</button><button type="button" data-color-scope="map" data-color-mode="quality">${htmlMessage('common.quality')}</button></div><div class="map-note" id="map-note"></div><div class="hover-readout" id="hover-readout" aria-live="polite"><b>${htmlMessage('map.hover')}</b></div></section></aside>
     </div>
   </main>
   ${renderTrackUploadDialogs()}
   <input id="replacement-gpx" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden />
   <dialog class="edit-track-dialog" id="edit-track-dialog">
     <form id="edit-track-form">
-      <p class="route-kicker">РЕДАКТИРОВАНИЕ</p><h2>Параметры трека</h2>
+      <p class="route-kicker">${htmlMessage('edit.kicker')}</p><h2>${htmlMessage('edit.title')}</h2>
       ${renderRouteTypeDropdown({ id: 'edit-track-route-type', name: 'routeType' })}
-      <label>Название<input id="edit-track-title" name="title" required maxlength="200" /></label>
-      <label>Расчётная скорость, км/ч<input id="edit-track-speed" name="speedKmh" type="number" min="1" max="50" step="0.1" required /></label>
+      <label>${htmlMessage('common.title')}<input id="edit-track-title" name="title" required maxlength="200" /></label>
+      <label><span id="speed-input-label"></span><input id="edit-track-speed" name="speedKmh" type="text" inputmode="decimal" required /></label>
       ${renderExternalLinkFields('edit-track')}
-      <label class="replace-gpx-control" for="replacement-gpx">Заменить исходный GPX…</label>
+      <label class="replace-gpx-control" for="replacement-gpx">${htmlMessage('edit.replace')}</label>
       <p class="form-error" id="edit-track-error" hidden></p>
-      <div><button type="button" id="cancel-track-edit">Отмена</button><button type="submit">Сохранить</button></div>
+      <div><button type="button" id="cancel-track-edit">${htmlMessage('common.cancel')}</button><button type="submit">${htmlMessage('common.save')}</button></div>
     </form>
   </dialog>
   <dialog class="confirm-delete-dialog" id="confirm-delete-dialog">
     <form method="dialog">
       <div class="confirm-delete-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg></div>
-      <div><p class="route-kicker" id="delete-dialog-kicker">УДАЛЕНИЕ ТРЕКОВ</p><h2 id="delete-dialog-title">Удалить трек?</h2></div>
+      <div><p class="route-kicker" id="delete-dialog-kicker">${htmlMessage('tracks.deleteKicker')}</p><h2 id="delete-dialog-title">${htmlMessage('tracks.deleteOne')}</h2></div>
       <p id="delete-track-description"></p>
       <ul class="delete-track-list" id="delete-track-list"></ul>
       <p class="form-error" id="delete-track-error" hidden></p>
-      <div class="confirm-delete-actions"><button type="button" id="cancel-track-delete">Отмена</button><button class="confirm-delete-button" type="button" id="confirm-track-delete">Удалить</button></div>
+      <div class="confirm-delete-actions"><button type="button" id="cancel-track-delete">${htmlMessage('common.cancel')}</button><button class="confirm-delete-button" type="button" id="confirm-track-delete">${htmlMessage('common.delete')}</button></div>
     </form>
   </dialog>
   <div class="toast" id="toast" role="alert"></div>
@@ -218,10 +223,10 @@ function closeUserMenu() {
 function renderTrackAttribution() {
   if (!publicTrackData) return;
   const uploader = resolveTrackUploader(publicTrackData, currentUser, publicTrackOwnershipVerified);
-  const attributionText = formatTrackAttribution({ ...publicTrackData, uploader });
+  const attributionText = () => formatTrackAttribution({ ...publicTrackData, uploader });
   const attribution = document.querySelector('#track-attribution');
-  attribution.hidden = !attributionText;
-  document.querySelector('#track-attribution-text').textContent = attributionText;
+  attribution.hidden = !attributionText();
+  bindText(document.querySelector('#track-attribution-text'), attributionText);
   const uploaderAvatar = document.querySelector('#track-uploader-avatar');
   uploaderAvatar.hidden = !uploader?.avatarUrl;
   if (uploader?.avatarUrl) uploaderAvatar.src = uploader.avatarUrl;
@@ -256,7 +261,7 @@ async function loadTrackManagement(trackId) {
   renderTrackAttribution();
   document.querySelector('#owner-track-actions').hidden = false;
   document.querySelector('#edit-track-title').value = data.title;
-  document.querySelector('#edit-track-speed').value = data.speedKmh || 20;
+  setSpeedDraft(data.speedKmh || 20);
   setRouteTypeDropdown(document.querySelector('#edit-track-route-type'), data.routeType);
   setExternalLinkFields(data.externalLinks);
   document.querySelectorAll('.source-retry').forEach((button) => {
@@ -269,8 +274,8 @@ function setSavedButton(saved) {
   const state = favoriteButtonState(saved);
   button.classList.toggle('is-saved', saved);
   button.setAttribute('aria-pressed', state.pressed);
-  button.setAttribute('aria-label', state.label);
-  button.title = state.label;
+  bindAttribute(button, 'aria-label', () => favoriteButtonState(saved).label);
+  bindAttribute(button, 'title', () => favoriteButtonState(saved).label);
 }
 
 async function loadSavedState(trackId) {
@@ -287,7 +292,7 @@ async function loadMyTracks({ reset = false } = {}) {
   const more = document.querySelector('#load-more-tracks');
   if (!currentUser) {
     list.replaceChildren();
-    message.innerHTML = `Войдите, чтобы увидеть ${isFavoriteTracksPage ? 'избранные' : 'свои'} треки. <a href="/api/auth/google">Войти</a>`;
+    message.innerHTML = `${htmlMessage(isFavoriteTracksPage ? 'tracks.loginFavorites' : 'tracks.loginOwn')} <a href="/api/auth/google">${htmlMessage('common.login')}</a>`;
     message.hidden = false;
     more.hidden = true;
     return;
@@ -298,7 +303,7 @@ async function loadMyTracks({ reset = false } = {}) {
     updateBulkDeleteButton();
   }
   myTracksLoading = true;
-  message.textContent = 'Загружаем треки…';
+  bindText(message, () => t('tracks.loading'));
   message.hidden = false;
   more.disabled = true;
   const query = document.querySelector('#track-query').value.trim();
@@ -308,15 +313,15 @@ async function loadMyTracks({ reset = false } = {}) {
   try {
     const response = await fetch(`/api/tracks/${isFavoriteTracksPage ? 'saved' : 'mine'}?${parameters}`, { headers: { accept: 'application/json' } });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload?.error?.message || 'Не удалось загрузить список треков.');
+    if (!response.ok) throw errorFromPayload(payload);
     payload.data.items.forEach((track) => list.append(createTrackCard(track, document, { ownerActions: !isFavoriteTracksPage })));
     updateBulkDeleteButton();
     myTracksCursor = payload.data.nextCursor;
-    message.textContent = list.children.length ? '' : (query ? 'По вашему запросу ничего не найдено.' : isFavoriteTracksPage ? 'Здесь пока нет избранных треков.' : 'Здесь пока нет треков. Загрузите первый GPX.');
+    bindText(message, () => list.children.length ? '' : (query ? t('tracks.noResults') : isFavoriteTracksPage ? t('tracks.noFavorites') : t('tracks.empty')));
     message.hidden = Boolean(list.children.length);
     more.hidden = !myTracksCursor;
   } catch (listError) {
-    message.textContent = listError.message;
+    bindText(message, () => errorMessage(listError));
     message.hidden = false;
     more.hidden = true;
   } finally {
@@ -345,7 +350,7 @@ function openTrackEditor({ id, title, speedKmh, routeType, externalLinks }) {
   managedTrackId = id;
   managedTrackTitle = title;
   document.querySelector('#edit-track-title').value = title;
-  document.querySelector('#edit-track-speed').value = speedKmh || 20;
+  setSpeedDraft(speedKmh || 20);
   setRouteTypeDropdown(document.querySelector('#edit-track-route-type'), routeType);
   setExternalLinkFields(externalLinks);
   document.querySelector('#edit-track-error').hidden = true;
@@ -375,14 +380,14 @@ function selectedTrackCards() {
 function updateBulkDeleteButton() {
   const checkboxes = [...document.querySelectorAll('[data-track-select]')];
   const selectedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
-  const state = bulkSelectionState({ total: checkboxes.length, selected: selectedCount, actionLabel: isFavoriteTracksPage ? 'Убрать' : 'Удалить' });
+  const state = bulkSelectionState({ total: checkboxes.length, selected: selectedCount, actionLabel: isFavoriteTracksPage ? t('common.remove') : t('common.delete') });
   const selectAll = document.querySelector('#select-all-tracks');
   const remove = document.querySelector('#bulk-delete-tracks');
   selectAll.disabled = checkboxes.length === 0;
-  selectAll.textContent = state.selectLabel;
+  bindText(selectAll, () => t(state.allSelected ? 'common.clearSelection' : 'common.selectAll'));
   selectAll.setAttribute('aria-pressed', String(state.allSelected));
   remove.disabled = state.deleteDisabled;
-  remove.querySelector('span').textContent = state.deleteLabel;
+  bindText(remove.querySelector('span'), () => bulkSelectionState({ total: checkboxes.length, selected: selectedCount, actionLabel: t(isFavoriteTracksPage ? 'common.remove' : 'common.delete') }).deleteLabel);
   checkboxes.forEach((checkbox) => checkbox.closest('.track-card').classList.toggle('is-selected', checkbox.checked));
 }
 
@@ -390,24 +395,24 @@ function openTracksDeleteConfirmation(tracks) {
   tracksPendingDeletion = tracks;
   const summary = bulkDeleteSummary(tracks);
   const favoriteRemoval = isFavoriteTracksPage;
-  document.querySelector('#delete-dialog-kicker').textContent = favoriteRemoval ? 'ИЗБРАННЫЕ ТРЕКИ' : 'УДАЛЕНИЕ ТРЕКОВ';
-  document.querySelector('#delete-dialog-title').textContent = summary.count === 1
-    ? (favoriteRemoval ? 'Убрать трек из избранного?' : 'Удалить трек?')
-    : (favoriteRemoval ? `Убрать ${summary.count} треков из избранного?` : `Удалить ${summary.count} треков?`);
-  document.querySelector('#delete-track-description').textContent = favoriteRemoval
-    ? (summary.count === 1 ? 'Трек останется доступен по своей ссылке.' : 'Треки останутся доступны по своим ссылкам:')
-    : (summary.count === 1 ? 'Трек и исходный GPX будут удалены без возможности восстановления.'
-      : `${summary.count} треков и их исходные GPX будут удалены без возможности восстановления:`);
-  document.querySelector('#confirm-track-delete').textContent = favoriteRemoval ? 'Убрать' : 'Удалить';
+  bindText(document.querySelector('#delete-dialog-kicker'), () => favoriteRemoval ? t('tracks.favoritesKicker') : t('tracks.deleteKicker'));
+  bindText(document.querySelector('#delete-dialog-title'), () => summary.count === 1
+    ? (favoriteRemoval ? t('tracks.unsaveOne') : t('tracks.deleteOne'))
+    : t(favoriteRemoval ? 'tracks.unsaveMany' : 'tracks.deleteMany', { count: summary.count }));
+  bindText(document.querySelector('#delete-track-description'), () => favoriteRemoval
+    ? (summary.count === 1 ? t('tracks.keepLink') : t('tracks.keepLinks'))
+    : (summary.count === 1 ? t('tracks.deleteWarning')
+      : t('tracks.deleteManyWarning', { count: summary.count })));
+  bindText(document.querySelector('#confirm-track-delete'), () => favoriteRemoval ? t('common.remove') : t('common.delete'));
   const list = document.querySelector('#delete-track-list');
   list.replaceChildren(...summary.titles.map((trackTitle) => {
     const item = document.createElement('li');
-    item.textContent = trackTitle;
+    bindText(item, () => trackTitle);
     return item;
   }));
   if (summary.remaining) {
     const item = document.createElement('li');
-    item.textContent = `А также ещё ${summary.remaining} других треков`;
+    bindText(item, () => t('tracks.remaining', { count: summary.remaining }));
     list.append(item);
   }
   document.querySelector('#delete-track-error').hidden = true;
@@ -453,7 +458,7 @@ function formatDuration(ms) {
   if (!ms) return ['—', ''];
   const hours = Math.floor(ms / 3_600_000);
   const minutes = Math.round((ms % 3_600_000) / 60_000);
-  return [`${hours}:${String(minutes).padStart(2, '0')}`, 'часа'];
+  return [`${hours}:${String(minutes).padStart(2, '0')}`, t('common.hour')];
 }
 
 function makeEndpointIcon(label, type) {
@@ -524,11 +529,7 @@ function renderPointsOfInterest(pointsOfInterest = []) {
   list.replaceChildren();
   if (!pointsOfInterest.length) return;
 
-  const lastTwoDigits = pointsOfInterest.length % 100;
-  const lastDigit = pointsOfInterest.length % 10;
-  const countLabel = lastTwoDigits >= 11 && lastTwoDigits <= 14
-    ? 'точек' : lastDigit === 1 ? 'точка' : lastDigit >= 2 && lastDigit <= 4 ? 'точки' : 'точек';
-  document.querySelector('#poi-count').textContent = `${pointsOfInterest.length.toLocaleString('ru-RU')} ${countLabel}`;
+  bindText(document.querySelector('#poi-count'), () => t('poi.count', { count: pointsOfInterest.length }));
   pointsOfInterest.forEach((point, index) => {
     const row = document.createElement('button');
     row.type = 'button';
@@ -536,15 +537,15 @@ function renderPointsOfInterest(pointsOfInterest = []) {
     row.dataset.poiIndex = String(index);
     row.setAttribute('aria-pressed', 'false');
     const number = document.createElement('b');
-    number.textContent = String(index + 1);
+    bindText(number, () => String(index + 1));
     const copy = document.createElement('span');
     const name = document.createElement('strong');
-    name.textContent = point.name;
+    bindText(name, () => poiName(point, index));
     copy.append(name);
-    const detail = point.type || point.symbol;
+    const detail = poiType(point);
     if (detail) {
       const meta = document.createElement('small');
-      meta.textContent = detail;
+      bindText(meta, () => poiType(point));
       copy.append(meta);
     }
     row.append(number, copy);
@@ -560,7 +561,11 @@ function initMap() {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap',
   }).addTo(map);
-  L.control.zoom({ position: 'topright' }).addTo(map);
+  L.control.zoom({ position: 'topright', zoomInTitle: t('map.zoomIn'), zoomOutTitle: t('map.zoomOut') }).addTo(map);
+  bindAttribute(document.querySelector('.leaflet-control-zoom-in'), 'title', () => t('map.zoomIn'));
+  bindAttribute(document.querySelector('.leaflet-control-zoom-in'), 'aria-label', () => t('map.zoomIn'));
+  bindAttribute(document.querySelector('.leaflet-control-zoom-out'), 'title', () => t('map.zoomOut'));
+  bindAttribute(document.querySelector('.leaflet-control-zoom-out'), 'aria-label', () => t('map.zoomOut'));
 }
 
 async function initHomeExampleMap() {
@@ -584,7 +589,7 @@ async function initHomeExampleMap() {
     });
     loading.hidden = true;
   } catch {
-    loading.textContent = 'Карта временно недоступна';
+    bindText(loading, () => t('map.unavailable'));
   }
 }
 
@@ -645,18 +650,18 @@ function drawMap(track, { fit = true } = {}) {
   const closedRoute = isClosedRoute(track.points);
   L.marker(coordinates[0], {
     icon: makeEndpointIcon('A', 'start'), trackLayer: true, pane: 'startMarkerPane', interactive: false, zIndexOffset: 1000,
-    title: closedRoute ? 'Старт и финиш маршрута' : 'Старт маршрута',
+    title: closedRoute ? t('map.startFinishTitle') : t('map.startTitle'),
   }).addTo(map);
   if (!closedRoute) {
     L.marker(coordinates.at(-1), {
-      icon: makeEndpointIcon('B', 'finish'), trackLayer: true, interactive: false, zIndexOffset: 900, title: 'Финиш маршрута',
+      icon: makeEndpointIcon('B', 'finish'), trackLayer: true, interactive: false, zIndexOffset: 900, title: t('map.finishTitle'),
     }).addTo(map);
   }
   poiMarkers = (track.pointsOfInterest || []).map((point, index) => {
     const tooltip = document.createElement('span');
-    tooltip.textContent = point.name;
+    bindText(tooltip, () => poiName(point, index));
     const marker = L.marker([point.lat, point.lon], {
-      icon: makePoiIcon(index), trackLayer: true, zIndexOffset: 700, title: point.name,
+      icon: makePoiIcon(index), trackLayer: true, zIndexOffset: 700, title: poiName(point, index),
     }).addTo(map).bindTooltip(tooltip, { direction: 'top', offset: [0, -26] });
     marker.on('mouseover', () => hoverPoi(index));
     marker.on('mouseout', () => leavePoi());
@@ -665,8 +670,8 @@ function drawMap(track, { fit = true } = {}) {
   });
   renderPoiSelection();
   document.querySelector('#map-note').innerHTML = closedRoute
-    ? '<span class="start-dot"></span><b>СТАРТ / ФИНИШ</b>'
-    : '<span class="start-dot"></span><b>СТАРТ</b><i class="finish-dot"></i><b>ФИНИШ</b>';
+    ? `<span class="start-dot"></span><b>${htmlMessage('map.startFinish')}</b>`
+    : `<span class="start-dot"></span><b>${htmlMessage('map.start')}</b><i class="finish-dot"></i><b>${htmlMessage('map.finish')}</b>`;
   activeMarker = L.circleMarker(coordinates[0], { radius: 8, color: '#fff', weight: 3, fillColor: '#131712', fillOpacity: 1, trackLayer: true, interactive: false }).addTo(map);
   const terrainRange = selectedTerrainRange();
   if (terrainRange) {
@@ -710,8 +715,8 @@ function renderProfilePointsOfInterest(track, startKm, endKm) {
     marker.className = 'profile-poi';
     marker.dataset.profilePoiIndex = String(index);
     marker.style.left = `${ratio * 100}%`;
-    marker.title = point.name;
-    marker.textContent = String(index + 1);
+    marker.title = poiName(point, index);
+    bindText(marker, () => String(index + 1));
     group.append(marker);
   });
 }
@@ -720,8 +725,8 @@ function drawProfile(track) {
   currentViewMetrics = visibleMetrics();
   const { startIndex, endIndex, startKm, endKm, min, max } = currentViewMetrics;
   const { ascentM, descentM } = elevationGainLoss(track.points, startIndex, endIndex);
-  document.querySelector('#profile-ascent').textContent = ascentM.toLocaleString('ru-RU');
-  document.querySelector('#profile-descent').textContent = descentM.toLocaleString('ru-RU');
+  bindText(document.querySelector('#profile-ascent'), () => number(elevationValue(ascentM, preferences.value), { ...preferences.value, digits: 0 }));
+  bindText(document.querySelector('#profile-descent'), () => number(elevationValue(descentM, preferences.value), { ...preferences.value, digits: 0 }));
   const visiblePoints = track.points.slice(startIndex, endIndex + 1).filter((point) => Number.isFinite(point.ele));
   const coords = visiblePoints.map(chartCoordinates);
   renderProfilePointsOfInterest(track, startKm, endKm);
@@ -748,7 +753,7 @@ function drawProfile(track) {
   document.querySelector('#profile-gradient-area').innerHTML = gradientAreaPaths;
   const baseProfilePaths = profileRuns.line.map((run) => {
     const path = profilePath(run);
-    return path ? `<path d="${path}" stroke="${run.color}"><title>${run.label}</title></path>` : '';
+    return path ? `<path d="${path}" stroke="${run.color}"><title>${escapeHtml(t(run.label))}</title></path>` : '';
   }).join('');
   document.querySelector('#gradient-line').innerHTML = baseProfilePaths;
   const focusedRuns = highlightRunsForFilter(track.points, selectedRouteFilter());
@@ -757,33 +762,33 @@ function drawProfile(track) {
   const focusVisibility = profileFocusVisibility(profileFocusPlacement);
   document.querySelector('#profile-focus-profile').innerHTML = focusVisibility.profile ? focusedRuns.map((run) => {
     const path = profilePath(run);
-    return path ? `<path class="profile-focus-path-outline" d="${path}"></path><path class="profile-focus-path-line" d="${path}" stroke="${run.color}"><title>${run.label}</title></path>` : '';
+    return path ? `<path class="profile-focus-path-outline" d="${path}"></path><path class="profile-focus-path-line" d="${path}" stroke="${run.color}"><title>${escapeHtml(t(run.label))}</title></path>` : '';
   }).join('') : '';
   document.querySelector('#grid').innerHTML = [40, 95, 150, 205, 260].map((y) => `<line x1="0" y1="${y}" x2="1200" y2="${y}" />`).join('');
-  document.querySelector('#axis').innerHTML = Array.from({ length: 6 }, (_, index) => `<span>${(startKm + (endKm - startKm) * index / 5).toFixed(1)} км</span>`).join('');
-  document.querySelector('#min-label').textContent = `${Math.round(min)} м`;
-  document.querySelector('#max-label').textContent = `${Math.round(max)} м`;
+  document.querySelector('#axis').innerHTML = Array.from({ length: 6 }, (_, index) => `<span>${formatMeasurement('distance', startKm + (endKm - startKm) * index / 5)}</span>`).join('');
+  bindText(document.querySelector('#min-label'), () => formatMeasurement('elevation', min));
+  bindText(document.querySelector('#max-label'), () => formatMeasurement('elevation', max));
   document.querySelector('#climb-bands').innerHTML = track.climbs.map((climb) => {
     const from = Math.max(climb.startKm, startKm);
     const to = Math.min(climb.endKm, endKm);
     if (from >= to) return '';
     const x = ((from - startKm) / Math.max(endKm - startKm, 0.001)) * 1200;
     const width = ((to - from) / Math.max(endKm - startKm, 0.001)) * 1200;
-    return `<rect class="climb-band" x="${x}" y="18" width="${width}" height="246" fill="${climb.color}"><title>Подъём: ${(climb.lengthM / 1000).toFixed(1)} км, ${climb.averageGrade.toFixed(1)}%</title></rect>`;
+    return `<rect class="climb-band" x="${x}" y="18" width="${width}" height="246" fill="${climb.color}"><title>${escapeHtml(t('profile.climb', { distance: formatMeasurement('distance', climb.lengthM / 1000), grade: percent(climb.averageGrade) }))}</title></rect>`;
   }).join('');
   const ribbonRuns = colorRunsForMode(track.points, profileColorMode);
   const ribbonRect = (run) => {
     const position = profileRangePosition(track.points, run, startKm, endKm);
     if (!position) return '';
     const { x, width } = position;
-    return `<rect x="${x}" y="269" width="${Math.max(width, 1)}" height="9" fill="${run.color}"><title>${run.label}</title></rect>`;
+    return `<rect x="${x}" y="269" width="${Math.max(width, 1)}" height="9" fill="${run.color}"><title>${escapeHtml(t(run.label))}</title></rect>`;
   };
   document.querySelector('#surface-ribbon').innerHTML = ribbonRuns.map(ribbonRect).join('');
   const focusRect = (run) => {
     const position = profileRangePosition(track.points, run, startKm, endKm);
     if (!position) return '';
     const { x, width } = position;
-    return `<rect class="profile-focus-outline" x="${x}" y="265" width="${Math.max(width, 1)}" height="17" rx="2"></rect><rect class="profile-focus-line" x="${x}" y="268" width="${Math.max(width, 1)}" height="11" rx="1" fill="${run.color}"><title>${run.label}</title></rect>`;
+    return `<rect class="profile-focus-outline" x="${x}" y="265" width="${Math.max(width, 1)}" height="17" rx="2"></rect><rect class="profile-focus-line" x="${x}" y="268" width="${Math.max(width, 1)}" height="11" rx="1" fill="${run.color}"><title>${escapeHtml(t(run.label))}</title></rect>`;
   };
   document.querySelector('#profile-focus-ribbon').innerHTML = focusVisibility.ribbon ? focusedRuns.map(focusRect).join('') : '';
 }
@@ -858,12 +863,12 @@ function setViewRange(range, { remember = true } = {}) {
 }
 
 function renderClimbs(track) {
-  document.querySelector('#climbs-count').textContent = track.climbs.length;
-  document.querySelector('#descents-count').textContent = track.descents.length;
+  bindText(document.querySelector('#climbs-count'), () => track.climbs.length);
+  bindText(document.querySelector('#descents-count'), () => track.descents.length);
   const rows = (items, type) => items.length ? items.map((item, index) => {
     const key = `${type}-${index}`;
-    return `<button class="terrain-row" type="button" data-terrain-range="${key}" data-terrain-type="${type}" data-terrain-index="${index}" aria-pressed="false" style="--terrain-color:${item.color}"><b>#${index + 1}</b><i></i><span>${item.label}</span><span>△ ${item.averageGrade.toFixed(1)}%</span><span>${type === 'climb' ? '↗' : '↘'} ${type === 'climb' ? item.gainM : item.dropM} м</span><span>↔ ${(item.lengthM / 1000).toFixed(2)} км</span></button>`;
-  }).join('') : '<p class="empty-climbs">Подходящие участки не найдены.</p>';
+    return `<button class="terrain-row" type="button" data-terrain-range="${key}" data-terrain-type="${type}" data-terrain-index="${index}" aria-pressed="false" style="--terrain-color:${item.color}"><b>#${index + 1}</b><i></i><span>${escapeHtml(t(item.label))}</span><span>△ ${percent(item.averageGrade)}</span><span>${type === 'climb' ? '↗' : '↘'} ${formatMeasurement('elevation', type === 'climb' ? item.gainM : item.dropM)}</span><span>↔ ${formatMeasurement('distance', item.lengthM / 1000, { digits: 2 })}</span></button>`;
+  }).join('') : `<p class="empty-climbs">${htmlMessage('terrain.empty')}</p>`;
   document.querySelector('#climbs-list').innerHTML = rows(track.climbs, 'climb');
   document.querySelector('#descents-list').innerHTML = rows(track.descents, 'descent');
 }
@@ -873,25 +878,25 @@ function renderSurfaces(track) {
   const wayTypes = summarizeWayTypes(track.points);
   const quality = summarizeRoadQuality(track.points);
   document.querySelector('#surface-bar').innerHTML = summary.filter((item) => item.percent > 0).map((item) =>
-    `<button type="button" data-surface-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${item.label}: ${item.percent.toFixed(1)}%" aria-label="${item.label}: ${item.percent.toFixed(1)}% маршрута" aria-pressed="false"></button>`).join('');
+    `<button type="button" data-surface-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${escapeHtml(t(item.label))}: ${percent(item.percent)}" aria-label="${escapeHtml(t(item.label))}: ${escapeHtml(t('profile.percentRoute', { percent: percent(item.percent) }))}" aria-pressed="false"></button>`).join('');
   document.querySelector('#surface-stats').innerHTML = summary.map((item) => `
-    <button class="surface-stat distribution-row" type="button" data-surface-filter="${item.id}" aria-pressed="false" ${item.distanceKm === 0 ? 'disabled' : ''}>
-      <i style="--surface-color:${item.color}"></i><span>${item.label}</span>
-      <strong>${item.distanceKm.toFixed(1)} км</strong><small>${Math.round(item.percent)}%</small></button>`).join('');
+    <button class="surface-stat distribution-row" type="button" data-surface-filter="${item.id}" data-selected-label="${escapeHtml(t('surface.selected'))}" data-map-label="${escapeHtml(t('surface.onMap'))}" aria-pressed="false" ${item.distanceKm === 0 ? 'disabled' : ''}>
+      <i style="--surface-color:${item.color}"></i><span>${escapeHtml(t(item.label))}</span>
+      <strong>${formatMeasurement('distance', item.distanceKm)}</strong><small>${percent(item.percent, 0)}</small></button>`).join('');
   document.querySelector('#way-type-bar').innerHTML = wayTypes.filter((item) => item.percent > 0).map((item) =>
-    `<button type="button" data-waytype-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${item.label}: ${item.percent.toFixed(1)}%" aria-label="${item.label}: ${item.percent.toFixed(1)}% маршрута" aria-pressed="false"></button>`).join('');
+    `<button type="button" data-waytype-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${escapeHtml(t(item.label))}: ${percent(item.percent)}" aria-label="${escapeHtml(t(item.label))}: ${escapeHtml(t('profile.percentRoute', { percent: percent(item.percent) }))}" aria-pressed="false"></button>`).join('');
   document.querySelector('#way-type-stats').innerHTML = wayTypes.map((item) => `
-    <button class="distribution-row" type="button" data-waytype-filter="${item.id}" aria-pressed="false" ${item.distanceKm === 0 ? 'disabled' : ''}><i style="--surface-color:${item.color}"></i><span>${item.label}</span><strong>${item.distanceKm.toFixed(1)} км</strong><small>${Math.round(item.percent)}%</small></button>`).join('');
+    <button class="distribution-row" type="button" data-waytype-filter="${item.id}" aria-pressed="false" ${item.distanceKm === 0 ? 'disabled' : ''}><i style="--surface-color:${item.color}"></i><span>${escapeHtml(t(item.label))}</span><strong>${formatMeasurement('distance', item.distanceKm)}</strong><small>${percent(item.percent, 0)}</small></button>`).join('');
   document.querySelector('#surface-legend').innerHTML = surfaceCategories.map((item) =>
-    `<span><i style="--surface-color:${item.color}"></i>${item.label}</span>`).join('');
+    `<span><i style="--surface-color:${item.color}"></i>${escapeHtml(t(item.label))}</span>`).join('');
   document.querySelector('#waytype-legend').innerHTML = wayTypeCategories.map((item) =>
-    `<span><i style="--surface-color:${item.color}"></i>${item.label}</span>`).join('');
+    `<span><i style="--surface-color:${item.color}"></i>${escapeHtml(t(item.label))}</span>`).join('');
   document.querySelector('#quality-legend').innerHTML = roadQualityCategories.map((item) =>
-    `<span><i style="--surface-color:${item.color}"></i>${item.label}</span>`).join('');
+    `<span><i style="--surface-color:${item.color}"></i>${escapeHtml(t(item.label))}</span>`).join('');
   document.querySelector('#quality-bar').innerHTML = quality.filter((item) => item.percent > 0).map((item) =>
-    `<button type="button" data-quality-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${item.label}: ${item.percent.toFixed(1)}%" aria-label="${item.label}: ${item.percent.toFixed(1)}% маршрута" aria-pressed="false"></button>`).join('');
+    `<button type="button" data-quality-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${escapeHtml(t(item.label))}: ${percent(item.percent)}" aria-label="${escapeHtml(t(item.label))}: ${escapeHtml(t('profile.percentRoute', { percent: percent(item.percent) }))}" aria-pressed="false"></button>`).join('');
   document.querySelector('#quality-stats').innerHTML = quality.map((item) => `
-    <button class="distribution-row" type="button" data-quality-filter="${item.id}" aria-pressed="false" ${item.distanceKm === 0 ? 'disabled' : ''}><i style="--surface-color:${item.color}"></i><span>${item.label}</span><strong>${item.distanceKm.toFixed(1)} км</strong><small>${Math.round(item.percent)}%</small></button>`).join('');
+    <button class="distribution-row" type="button" data-quality-filter="${item.id}" aria-pressed="false" ${item.distanceKm === 0 ? 'disabled' : ''}><i style="--surface-color:${item.color}"></i><span>${escapeHtml(t(item.label))}</span><strong>${formatMeasurement('distance', item.distanceKm)}</strong><small>${percent(item.percent, 0)}</small></button>`).join('');
   refreshRouteFocus();
 }
 
@@ -956,12 +961,12 @@ async function enrichTrackSurfaces(track, runId) {
 
 function renderSourceInfo(sources = {}) {
   const symbols = { SUCCESS: '✓', FAILED: '×', PENDING: '…' };
-  const labels = { SUCCESS: 'доступен', FAILED: 'недоступен', PENDING: 'обрабатывается' };
+  const labels = { SUCCESS: 'sources.available', FAILED: 'sources.unavailable', PENDING: 'sources.processing' };
   document.querySelectorAll('[data-analysis-source]').forEach((row) => {
     const status = sources[row.dataset.analysisSource] || 'PENDING';
     row.dataset.sourceStatus = status;
-    row.querySelector('.source-state').textContent = symbols[status];
-    row.querySelector('.source-state').setAttribute('aria-label', labels[status]);
+    bindText(row.querySelector('.source-state'), () => symbols[status]);
+    bindAttribute(row.querySelector('.source-state'), 'aria-label', () => t(labels[status]));
   });
 }
 
@@ -989,12 +994,12 @@ function setActivePoint(index, { showContext = false } = {}) {
   document.querySelector('#profile-cursor').setAttribute('x2', chart.x);
   document.querySelector('#profile-dot').setAttribute('cx', chart.x);
   document.querySelector('#profile-dot').setAttribute('cy', chart.y);
-  const grade = Number.isFinite(point.grade) ? `${point.grade >= 0 ? '+' : ''}${point.grade.toFixed(1)}%` : '—';
-  const surfaceLabel = `${point.surface.label}${point.surface.inferred ? ' (оценка)' : ''}`;
-  document.querySelector('#hover-readout').innerHTML = `<b>${point.distanceKm.toFixed(1)} км · ${Math.round(point.ele)} м · ${grade}</b><span>${surfaceLabel} · ${roadTypeLabel(point.surface.highway)} · качество: ${point.surface.quality.label.toLowerCase()}</span><small>${Math.round((point.distanceKm / currentTrack.distanceKm) * 100)}% маршрута</small>`;
+  const grade = percent(point.grade);
+  const surfaceLabel = point.surface.inferred ? t('profile.inferred', { surface: t(point.surface.label) }) : t(point.surface.label);
+  document.querySelector('#hover-readout').innerHTML = `<b>${formatMeasurement('distance', point.distanceKm)} · ${formatMeasurement('elevation', point.ele)} · ${grade}</b><span>${escapeHtml(t('profile.surfaceDetail', { surface: surfaceLabel, road: roadLabel(point.surface.highway), quality: t(point.surface.quality.label) }))}</span><small>${escapeHtml(t('profile.percentRoute', { percent: percent(currentTrack.distanceKm ? point.distanceKm / currentTrack.distanceKm * 100 : 0, 0) }))}</small>`;
   const slider = document.querySelector('#profile-wrap');
-  slider.setAttribute('aria-valuenow', Math.round((point.distanceKm / currentTrack.distanceKm) * 100));
-  slider.setAttribute('aria-valuetext', `${point.distanceKm.toFixed(1)} км, высота ${Math.round(point.ele)} м`);
+  slider.setAttribute('aria-valuenow', currentTrack.distanceKm ? Math.round((point.distanceKm / currentTrack.distanceKm) * 100) : 0);
+  slider.setAttribute('aria-valuetext', t('profile.positionValue', { distance: formatMeasurement('distance', point.distanceKm), elevation: formatMeasurement('elevation', point.ele) }));
   setPointContext(showContext ? point : null);
 }
 
@@ -1009,7 +1014,7 @@ function renderTrack(rawTrack, { persisted = false, analysisSources, routeType =
   pinnedQualityId = null;
   hoveredRange = null;
   pinnedRange = null;
-  currentTrack = persisted ? rawTrack : analyzeTrack(rawTrack);
+  currentTrack = neutralAnalysis(persisted ? rawTrack : analyzeTrack(rawTrack));
   poiSelection = { ...emptyPoiSelection };
   const grades = calculateSegmentGrades(currentTrack.points);
   currentTrack.points = currentTrack.points.map((point, index) => ({
@@ -1026,38 +1031,36 @@ function renderTrack(rawTrack, { persisted = false, analysisSources, routeType =
   viewRange = [0, currentTrack.points.length - 1];
   zoomHistory = [];
   currentViewMetrics = null;
-  document.querySelector('#track-name').textContent = currentTrack.name;
-  document.querySelector('#compact-track-name').textContent = currentTrack.name;
+  bindText(document.querySelector('#track-name'), () => currentTrack.name || t('common.unnamed'));
+  bindText(document.querySelector('#compact-track-name'), () => currentTrack.name || t('common.unnamed'));
   const type = routeTypeDefinition(routeType);
   const typeMetric = document.querySelector('#route-type-metric');
-  typeMetric.innerHTML = `${routeTypeIcon(type.id)}<b>${type.shortLabel}</b>`;
-  typeMetric.setAttribute('aria-label', `Тип маршрута: ${type.label}`);
+  typeMetric.innerHTML = `${routeTypeIcon(type.id)}<b>${htmlMessage(`activity.${type.id}`)}</b>`;
+  bindAttribute(typeMetric, 'aria-label', () => t('route.typeValue', { type: routeTypeDefinition(type.id).label }));
   const compactTypeMetric = document.querySelector('#compact-route-type-metric');
-  compactTypeMetric.innerHTML = `${routeTypeIcon(type.id)}<b>${type.shortLabel}</b>`;
-  compactTypeMetric.setAttribute('aria-label', `Тип маршрута: ${type.label}`);
-  document.querySelector('#distance').textContent = currentTrack.distanceKm.toFixed(1);
-  document.querySelector('#compact-distance').textContent = currentTrack.distanceKm.toFixed(1);
-  document.querySelector('#ascent').textContent = currentTrack.hasElevation ? currentTrack.ascentM.toLocaleString('ru-RU') : '—';
-  document.querySelector('#compact-ascent').textContent = currentTrack.hasElevation ? currentTrack.ascentM.toLocaleString('ru-RU') : '—';
-  document.querySelector('#descent').textContent = currentTrack.hasElevation ? currentTrack.descentM.toLocaleString('ru-RU') : '—';
-  document.querySelector('#compact-descent').textContent = currentTrack.hasElevation ? currentTrack.descentM.toLocaleString('ru-RU') : '—';
-  const [duration, unit] = formatDuration(currentTrack.estimatedDurationMs || currentTrack.movingTimeMs);
-  document.querySelector('#duration').textContent = duration;
-  document.querySelector('#duration-unit').textContent = unit;
-  document.querySelector('#compact-duration').textContent = duration;
-  document.querySelector('#compact-duration-unit').textContent = unit;
-  document.querySelector('#profile-ascent').textContent = currentTrack.ascentM.toLocaleString('ru-RU');
-  document.querySelector('#profile-descent').textContent = currentTrack.descentM.toLocaleString('ru-RU');
+  compactTypeMetric.innerHTML = `${routeTypeIcon(type.id)}<b>${htmlMessage(`activity.${type.id}`)}</b>`;
+  bindAttribute(compactTypeMetric, 'aria-label', () => t('route.typeValue', { type: routeTypeDefinition(type.id).label }));
+  bindText(document.querySelector('#distance'), () => number(distanceValue(currentTrack.distanceKm, preferences.value), preferences.value));
+  bindText(document.querySelector('#compact-distance'), () => number(distanceValue(currentTrack.distanceKm, preferences.value), preferences.value));
+  bindText(document.querySelector('#ascent'), () => currentTrack.hasElevation ? number(elevationValue(currentTrack.ascentM, preferences.value), { ...preferences.value, digits: 0 }) : '—');
+  bindText(document.querySelector('#compact-ascent'), () => currentTrack.hasElevation ? number(elevationValue(currentTrack.ascentM, preferences.value), { ...preferences.value, digits: 0 }) : '—');
+  bindText(document.querySelector('#descent'), () => currentTrack.hasElevation ? number(elevationValue(currentTrack.descentM, preferences.value), { ...preferences.value, digits: 0 }) : '—');
+  bindText(document.querySelector('#compact-descent'), () => currentTrack.hasElevation ? number(elevationValue(currentTrack.descentM, preferences.value), { ...preferences.value, digits: 0 }) : '—');
+  const [duration] = formatDuration(currentTrack.estimatedDurationMs || currentTrack.movingTimeMs);
+  bindText(document.querySelector('#duration'), () => duration);
+  bindText(document.querySelector('#duration-unit'), () => t('common.hour'));
+  bindText(document.querySelector('#compact-duration'), () => duration);
+  bindText(document.querySelector('#compact-duration-unit'), () => t('common.hour'));
+  bindText(document.querySelector('#profile-ascent'), () => number(elevationValue(currentTrack.ascentM, preferences.value), { ...preferences.value, digits: 0 }));
+  bindText(document.querySelector('#profile-descent'), () => number(elevationValue(currentTrack.descentM, preferences.value), { ...preferences.value, digits: 0 }));
   const speedBadge = document.querySelector('#average-speed-badge');
-  const speed = currentTrack.effectiveSpeedKmh || currentTrack.movingAverageSpeedKmh;
-  speedBadge.textContent = speed
-    ? `${speed.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} км/ч` : '— км/ч';
-  document.querySelector('#compact-speed').textContent = speed
-    ? `${speed.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} км/ч` : '— км/ч';
-  speedBadge.title = currentTrack.movingAverageSpeedKmh
-    ? `Средняя скорость движения по данным GPX: ${speed.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} км/ч`
-    : speed ? `Расчётная скорость: ${speed.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} км/ч`
-      : 'В GPX недостаточно данных для расчёта скорости';
+  const routeSpeed = currentTrack.effectiveSpeedKmh || currentTrack.movingAverageSpeedKmh;
+  bindText(speedBadge, () => formatMeasurement('speed', routeSpeed));
+  bindText(document.querySelector('#compact-speed'), () => formatMeasurement('speed', routeSpeed));
+  bindAttribute(speedBadge, 'title', () => currentTrack.movingAverageSpeedKmh
+    ? t('route.recordedSpeed', { speed: formatMeasurement('speed', routeSpeed) })
+    : routeSpeed ? t('route.estimatedSpeed', { speed: formatMeasurement('speed', routeSpeed) }) : t('route.noSpeed'));
+  updatePageLanguage();
   drawMap(currentTrack);
   renderPointsOfInterest(currentTrack.pointsOfInterest);
   if (currentTrack.hasElevation) drawProfile(currentTrack);
@@ -1073,9 +1076,9 @@ function renderTrack(rawTrack, { persisted = false, analysisSources, routeType =
 }
 
 function renderUnavailableTrack(track) {
-  document.querySelector('#track-name').textContent = track.title;
-  document.querySelector('#compact-track-name').textContent = track.title;
-  document.querySelector('#route-state-note').textContent = track.analysisNote;
+  bindText(document.querySelector('#track-name'), () => track.title || t('common.unnamed'));
+  bindText(document.querySelector('#compact-track-name'), () => track.title || t('common.unnamed'));
+  bindText(document.querySelector('#route-state-note'), () => track.analysisNote || t(track.status === 'PROCESSING' ? 'sources.waiting' : 'sources.failed'));
   document.querySelector('#route-state-note').hidden = false;
   document.querySelector('.route-metrics').hidden = true;
   document.querySelector('.route-workspace').hidden = true;
@@ -1087,7 +1090,7 @@ async function loadPublicTrack(trackId) {
   publicTrackOwnershipVerified = false;
   const response = await fetch(`/api/tracks/${trackId}`, { headers: { accept: 'application/json' } });
   if (!response.ok) {
-    renderUnavailableTrack({ title: 'Трек не найден', analysisNote: 'Проверьте публичную ссылку.' });
+    renderUnavailableTrack({ title: t('tracks.notFound'), analysisNote: t('tracks.checkLink') });
     return;
   }
   const { data } = await response.json();
@@ -1123,30 +1126,30 @@ function showProcessingError(error) {
   const failedStep = error.code === 'INVALID_GPX' ? 'PARSING' : error.code === 'ENRICHMENT_UNAVAILABLE' ? 'ENRICHING' : 'UPLOADING';
   updateProcessing(failedStep);
   const message = document.querySelector('#processing-error');
-  message.textContent = error.message;
+  bindText(message, () => errorMessage(error));
   message.hidden = false;
   const details = document.querySelector('#processing-details');
   details.hidden = false;
-  document.querySelector('#processing-code').textContent = error.code;
+  bindText(document.querySelector('#processing-code'), () => /^[A-Z_]{1,50}$/.test(error.code) ? error.code : 'UNKNOWN_ERROR');
   document.querySelector('#retry-processing').hidden = error.code !== 'ENRICHMENT_UNAVAILABLE';
   document.querySelector('#close-processing').hidden = false;
   const status = document.querySelector('#processing-status');
   status.classList.add('is-failed');
-  status.querySelector('strong').textContent = 'Обработка остановлена';
-  document.querySelector('#processing-status-copy').textContent = 'Исправьте ошибку или закройте окно';
+  bindText(status.querySelector('strong'), () => t('upload.stopped'));
+  bindText(document.querySelector('#processing-status-copy'), () => t('upload.fix'));
 }
 
 function renderUploadMetadata() {
   if (!activeUploadMetadata) return;
   document.querySelector('#upload-metadata').hidden = false;
-  document.querySelector('#upload-track-title-value').textContent = activeUploadMetadata.title;
+  bindText(document.querySelector('#upload-track-title-value'), () => activeUploadMetadata.title);
   document.querySelector('#upload-track-title').value = activeUploadMetadata.title;
   setRouteTypeDropdown(document.querySelector('#upload-route-type'), activeUploadMetadata.routeType);
   const links = availableExternalTrackLinks(activeUploadMetadata.externalLinks);
   const linksValue = document.querySelector('#upload-links-value');
   if (links.length) renderExternalTrackLinks(linksValue, activeUploadMetadata.externalLinks, null, { inline: true });
   else {
-    linksValue.replaceChildren('Не добавлены');
+    linksValue.replaceChildren(t('common.noLinks'));
     linksValue.hidden = false;
   }
   const linksForm = document.querySelector('#upload-links-form');
@@ -1181,9 +1184,9 @@ async function loadUploadMetadata(trackId) {
 function showTrackCreated(trackId) {
   const status = document.querySelector('#processing-status');
   status.classList.add('is-complete');
-  status.querySelector('strong').textContent = 'Обработка завершена';
-  document.querySelector('#processing-status-copy').textContent = 'Трек готов к просмотру';
-  document.querySelector('#upload-metadata-hint').textContent = uploadMetadataHint(true);
+  bindText(status.querySelector('strong'), () => t('upload.complete'));
+  bindText(document.querySelector('#processing-status-copy'), () => t('upload.viewReady'));
+  bindText(document.querySelector('#upload-metadata-hint'), () => uploadMetadataHint(true));
   document.querySelector('#open-uploaded-track').hidden = false;
   document.querySelector('#finish-processing').hidden = false;
   document.querySelector('#close-processing').hidden = false;
@@ -1194,7 +1197,7 @@ async function pollTrackStatus(trackId) {
   while (activeUploadTrackId === trackId) {
     await new Promise((resolve) => setTimeout(resolve, 900));
     const response = await fetch(`/api/tracks/${trackId}/status`, { headers: { accept: 'application/json' } });
-    if (!response.ok) throw new Error('Не удалось получить статус обработки.');
+    if (!response.ok) throw new Error(t('errors.status'));
     const { data } = await response.json();
     updateProcessing(data.step);
     if (data.step === 'ENRICHING' || data.status === 'READY') await loadUploadMetadata(trackId);
@@ -1225,9 +1228,9 @@ async function uploadFile(file) {
   document.querySelector('#close-processing').hidden = true;
   document.querySelector('#upload-metadata').hidden = true;
   document.querySelector('#processing-status').classList.remove('is-complete', 'is-failed');
-  document.querySelector('#processing-status').querySelector('strong').textContent = 'Обрабатываем трек';
-  document.querySelector('#processing-status-copy').textContent = 'Это может занять некоторое время';
-  document.querySelector('#upload-metadata-hint').textContent = uploadMetadataHint(false);
+  bindText(document.querySelector('#processing-status').querySelector('strong'), () => t('upload.processing'));
+  bindText(document.querySelector('#processing-status-copy'), () => t('upload.wait'));
+  bindText(document.querySelector('#upload-metadata-hint'), () => uploadMetadataHint(false));
   activeUploadMetadata = null;
   processing.hidden = false;
   updateProcessing('UPLOADING');
@@ -1243,12 +1246,12 @@ async function uploadFile(file) {
       body: file,
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload?.error?.message || 'Не удалось загрузить GPX-файл.');
+    if (!response.ok) throw errorFromPayload(payload);
     activeUploadTrackId = payload.data.id;
     updateProcessing(payload.data.step);
     await pollTrackStatus(activeUploadTrackId);
   } catch (uploadError) {
-    showProcessingError({ message: uploadError.message, code: 'UPLOAD_FAILED' });
+    showProcessingError(uploadError);
   }
 }
 
@@ -1266,12 +1269,12 @@ async function replaceTrackFile(file, trackId = publicTrackId) {
       body: file,
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload?.error?.message || 'Не удалось заменить GPX-файл.');
+    if (!response.ok) throw errorFromPayload(payload);
     activeUploadTrackId = trackId;
     updateProcessing(payload.data.step);
     await pollTrackStatus(trackId);
   } catch (replaceError) {
-    showProcessingError({ message: replaceError.message, code: 'REPLACEMENT_FAILED' });
+    showProcessingError(replaceError);
   }
 }
 
@@ -1607,7 +1610,7 @@ async function saveUploadMetadata({ title, routeType, links }) {
   });
   const responsePayload = await response.json();
   if (!response.ok) {
-    error.textContent = responsePayload?.error?.message || 'Не удалось сохранить изменения.';
+    bindText(error, () => errorMessage(responsePayload?.error));
     error.hidden = false;
     return false;
   }
@@ -1633,7 +1636,7 @@ document.querySelector('#retry-processing').addEventListener('click', async () =
   const response = await fetch(`/api/tracks/${activeUploadTrackId}/retry-analysis`, { method: 'POST', headers: { accept: 'application/json' } });
   const payload = await response.json();
   if (!response.ok) {
-    showProcessingError({ message: payload?.error?.message || 'Не удалось повторить анализ.', code: payload?.error?.code || 'RETRY_FAILED' });
+    showProcessingError({ message: errorMessage(payload?.error), code: payload?.error?.code || 'RETRY_FAILED' });
     return;
   }
   document.querySelector('#processing-error').hidden = true;
@@ -1641,8 +1644,8 @@ document.querySelector('#retry-processing').addEventListener('click', async () =
   document.querySelector('#retry-processing').hidden = true;
   document.querySelector('#close-processing').hidden = true;
   document.querySelector('#processing-status').classList.remove('is-failed');
-  document.querySelector('#processing-status').querySelector('strong').textContent = 'Обрабатываем трек';
-  document.querySelector('#processing-status-copy').textContent = 'Это может занять некоторое время';
+  bindText(document.querySelector('#processing-status').querySelector('strong'), () => t('upload.processing'));
+  bindText(document.querySelector('#processing-status-copy'), () => t('upload.wait'));
   updateProcessing(payload.data.step);
   await pollTrackStatus(activeUploadTrackId);
 });
@@ -1679,13 +1682,20 @@ document.querySelector('#bulk-delete-tracks').addEventListener('click', () => {
 document.querySelector('#edit-track').addEventListener('click', () => openTrackEditor({
   id: publicTrackId,
   title: document.querySelector('#edit-track-title').value,
-  speedKmh: Number(document.querySelector('#edit-track-speed').value),
+  speedKmh: speedDraft.canonical,
   routeType: publicTrackData?.routeType,
   externalLinks: publicTrackData?.externalLinks,
 }));
 document.querySelector('#cancel-track-edit').addEventListener('click', () => document.querySelector('#edit-track-dialog').close());
 document.querySelector('#edit-track-form').addEventListener('submit', async (event) => {
   event.preventDefault();
+  speedDraft.update(speedInput.value, preferences.value);
+  if (!speedDraft.valid) {
+    const validation = document.querySelector('#edit-track-error');
+    bindText(validation, () => errorMessage({ code: 'INVALID_TRACK_SPEED' }));
+    validation.hidden = false;
+    return;
+  }
   const error = document.querySelector('#edit-track-error');
   error.hidden = true;
   const response = await fetch(`/api/tracks/${managedTrackId}`, {
@@ -1693,14 +1703,14 @@ document.querySelector('#edit-track-form').addEventListener('submit', async (eve
     headers: { accept: 'application/json', 'content-type': 'application/json' },
     body: JSON.stringify({
       title: document.querySelector('#edit-track-title').value,
-      speedKmh: Number(document.querySelector('#edit-track-speed').value),
+      speedKmh: speedDraft.canonical,
       routeType: selectedRouteType(document.querySelector('#edit-track-route-type')),
       externalLinks: externalLinksFromEditor(),
     }),
   });
   const payload = await response.json();
   if (!response.ok) {
-    error.textContent = payload?.error?.message || 'Не удалось сохранить изменения.';
+    bindText(error, () => errorMessage(payload?.error));
     error.hidden = false;
     return;
   }
@@ -1737,7 +1747,7 @@ document.querySelector('.source-popover').addEventListener('click', async (event
 });
 document.querySelector('#delete-track').addEventListener('click', () => openTrackDeleteConfirmation({
   id: publicTrackId,
-  title: managedTrackTitle || currentTrack?.name || 'Этот трек',
+  title: managedTrackTitle || currentTrack?.name || t('tracks.thisTrack'),
 }));
 document.querySelector('#cancel-track-delete').addEventListener('click', () => document.querySelector('#confirm-delete-dialog').close());
 document.querySelector('#confirm-track-delete').addEventListener('click', async () => {
@@ -1755,7 +1765,7 @@ document.querySelector('#confirm-track-delete').addEventListener('click', async 
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    error.textContent = payload?.error?.message || (isFavoriteTracksPage ? 'Не удалось убрать трек из избранного.' : 'Не удалось удалить трек.');
+    bindText(error, () => errorMessage(payload?.error));
     error.hidden = false;
     button.disabled = false;
     return;
@@ -1787,11 +1797,11 @@ async function toggleCardFavorite(button, track) {
     if (!response.ok) throw new Error();
     button.classList.toggle('is-favorite', !wasFavorite);
     button.setAttribute('aria-pressed', String(!wasFavorite));
-    button.setAttribute('aria-label', `${wasFavorite ? 'Добавить' : 'Убрать'} ${track.title} ${wasFavorite ? 'в' : 'из'} избранного`);
-    button.title = wasFavorite ? 'Добавить в избранное' : 'Убрать из избранного';
+    bindAttribute(button, 'aria-label', () => t(wasFavorite ? 'tracks.addFavorite' : 'tracks.removeFavorite', { title: track.title }));
+    bindAttribute(button, 'title', () => t(wasFavorite ? 'common.addFavorite' : 'common.removeFavorite'));
   } catch {
     const toast = document.querySelector('#toast');
-    toast.textContent = 'Не удалось изменить избранное';
+    bindText(toast, () => t('notification.favoriteFailed'));
     toast.classList.add('visible');
     setTimeout(() => toast.classList.remove('visible'), 2500);
   } finally {
@@ -1807,9 +1817,9 @@ document.querySelector('#share-track')?.addEventListener('click', async () => {
   const toast = document.querySelector('#toast');
   try {
     await copyPublicTrackLink({ trackId: publicTrackId, origin: window.location.origin, clipboard: navigator.clipboard });
-    toast.textContent = 'Ссылка скопирована в буфер обмена';
+    bindText(toast, () => t('notification.copied'));
   } catch {
-    toast.textContent = 'Не удалось скопировать ссылку';
+    bindText(toast, () => t('notification.copyFailed'));
   }
   toast.classList.add('visible');
   setTimeout(() => toast.classList.remove('visible'), 2500);
@@ -1833,7 +1843,7 @@ document.querySelector('#save-track')?.addEventListener('click', async () => {
     setSavedButton(!saved);
   } catch {
     const toast = document.querySelector('#toast');
-    toast.textContent = 'Не удалось изменить избранное';
+    bindText(toast, () => t('notification.favoriteFailed'));
     toast.classList.add('visible');
     setTimeout(() => toast.classList.remove('visible'), 2500);
   } finally {
@@ -1853,3 +1863,46 @@ if (pathPublicTrackId) {
 if (isHomePage) initHomeExampleMap();
 restoreSession();
 if (pathPublicTrackId) loadPublicTrack(pathPublicTrackId);
+
+function updatePageLanguage() {
+  document.documentElement.lang = preferences.value.language;
+  document.title = currentTrack?.name ? `${currentTrack.name} — GetGPX` : t(isNotFoundPage ? 'notFound.title' : isMyTracksPage ? 'common.myTracks' : isFavoriteTracksPage ? 'common.favorites' : 'app.title');
+}
+const speedInput = document.querySelector('#edit-track-speed');
+let speedDraft = createSpeedDraft(20);
+function setSpeedDraft(value) {
+  speedDraft = createSpeedDraft(value);
+  speedInput.value = speedDraft.display(preferences.value);
+}
+function refreshSpeedInput(previous) {
+  if (previous) speedDraft.update(speedInput.value, previous);
+  speedInput.value = speedDraft.display(preferences.value);
+  speedInput.dataset.min = String(distanceValue(1, preferences.value));
+  speedInput.dataset.max = String(distanceValue(50, preferences.value));
+  speedInput.dataset.step = String(distanceValue(0.1, preferences.value));
+  bindAttribute(speedInput, 'aria-description', () => errorMessage({ code: 'INVALID_TRACK_SPEED' }));
+}
+speedInput.addEventListener('input', () => speedDraft.update(speedInput.value, preferences.value));
+bindText(document.querySelector('#speed-input-label'), () => t('edit.speed', { unit: currentUnit('speed') }));
+setupPreferencesControl(document, { blockedReason: () => {
+  const processing = document.querySelector('#processing-overlay');
+  if (!processing.hidden && document.querySelector('#close-processing').hidden) return 'preferences.blockedProcessing';
+  const editDialog = document.querySelector('#edit-track-dialog');
+  if (editDialog.open && editDialog.querySelector('form')?.dataset.dirty === 'true') return 'preferences.blockedEdits';
+  if (document.querySelector('#upload-title-form:not([hidden])')?.dataset.dirty === 'true' ||
+      document.querySelector('#upload-links-form:not([hidden])')?.dataset.dirty === 'true') return 'preferences.blockedEdits';
+  return null;
+} });
+for (const form of document.querySelectorAll('#edit-track-form, #upload-title-form, #upload-links-form')) {
+  form.addEventListener('input', () => { form.dataset.dirty = 'true'; });
+  form.addEventListener('change', () => { form.dataset.dirty = 'true'; });
+  form.addEventListener('reset', () => { delete form.dataset.dirty; });
+}
+document.querySelector('#edit-track-dialog').addEventListener('close', () => { delete document.querySelector('#edit-track-form').dataset.dirty; });
+refreshSpeedInput();
+updatePageLanguage();
+if (new URLSearchParams(window.location.search).get('auth') === 'error') {
+  const toast = document.querySelector('#toast');
+  bindText(toast, () => t('errors.auth'));
+  toast.classList.add('visible');
+}

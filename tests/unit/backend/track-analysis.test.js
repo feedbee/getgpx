@@ -58,6 +58,7 @@ describe('server track analysis', () => {
       lat: 50.005,
       lon: 19.005,
       name: 'Bakery',
+      nameGenerated: false,
       type: '',
       symbol: '',
     }]);
