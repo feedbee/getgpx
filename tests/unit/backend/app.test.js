@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import pino from 'pino';
 import { describe, expect, it, vi } from 'vitest';
 import { createApp, createHealthHandlers, defaultStaticDirectory, frontendPageStatus } from '../../../src/backend/app.js';
+import { createRequestLogger } from '../../../src/backend/logger.js';
 
 describe('production static files', () => {
   it('allows the browser to identify the site to OpenStreetMap tile servers', async () => {
@@ -69,6 +70,20 @@ describe('health endpoints', () => {
 });
 
 describe('request logging', () => {
+  it('records a Vite page path when no Express route is available', async () => {
+    const entries = [];
+    const log = pino({ level: 'info' }, { write: (line) => entries.push(JSON.parse(line)) });
+    const request = { method: 'GET', url: '/tracks/example?private=SECRET', headers: {} };
+    const response = new EventEmitter();
+    response.statusCode = 200;
+
+    createRequestLogger(log)(request, response, () => {});
+    response.emit('finish');
+
+    expect(entries[0]).toMatchObject({ req: { method: 'GET', path: '/tracks/example' }, durationMs: expect.any(Number) });
+    expect(JSON.stringify(entries)).not.toContain('SECRET');
+  });
+
   it('correlates errors without exposing request credentials or query parameters', async () => {
     const entries = [];
     const log = pino({ level: 'info' }, { write: (line) => entries.push(JSON.parse(line)) });
@@ -86,8 +101,8 @@ describe('request logging', () => {
     response.emit('finish');
 
     expect(entries).toHaveLength(2);
-    expect(entries[0]).toMatchObject({ level: 50, requestId: expect.any(String), req: { method: 'GET', route: '/api/auth/google/callback' } });
-    expect(entries[1]).toMatchObject({ level: 40, requestId: entries[0].requestId, res: { statusCode: 500 } });
+    expect(entries[0]).toMatchObject({ level: 50, requestId: expect.any(String), req: { method: 'GET', path: '/api/auth/google/callback', route: '/api/auth/google/callback' } });
+    expect(entries[1]).toMatchObject({ level: 40, requestId: entries[0].requestId, res: { statusCode: 500 }, durationMs: expect.any(Number) });
     expect(JSON.stringify(entries)).not.toContain('SECRET');
   });
 });

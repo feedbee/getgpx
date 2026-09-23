@@ -16,8 +16,10 @@ export function createRequestLogger(log = logger) {
     wrapSerializers: false,
     genReqId: () => randomUUID(),
     customProps: (request) => ({ requestId: request.id }),
+    customAttributeKeys: { responseTime: 'durationMs' },
     serializers: {
-      req: (request) => ({ method: request.method, route: request.route?.path }),
+      req: (request) => ({ method: request.method, path: new URL(request.originalUrl || request.url || '/', 'http://localhost').pathname,
+        route: request.route?.path }),
       res: (response) => ({ statusCode: response.statusCode }),
     },
     autoLogging: { ignore: (request) => request.url?.startsWith('/health/') },
