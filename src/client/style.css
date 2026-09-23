@@ -356,7 +356,6 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:400; }
 .upload-inline-editor input,.upload-links-form input { width:100%; min-height:42px; padding:0 11px; border:1px solid var(--line); border-radius:8px; background:var(--white); font:inherit; }
 .upload-inline-editor > div,.upload-links-form > div { display:flex; justify-content:flex-end; gap:8px; }
 .upload-inline-editor button,.upload-links-form button { min-height:38px; padding:0 13px; border:1px solid var(--line); border-radius:8px; background:var(--white); cursor:pointer; font-size:11px; font-weight:700; }
-.upload-inline-editor button[type="submit"],.upload-links-form button[type="submit"] { border-color:var(--primary); background:var(--primary); color:var(--white); }
 .upload-links-form fieldset { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:0; padding:0; border:0; }
 .upload-links-form legend { grid-column:1 / -1; margin-bottom:10px; font:600 12px 'Exo 2',sans-serif; }
 .service-link-field > span { min-height:20px; display:flex; align-items:center; gap:7px; }
@@ -382,7 +381,7 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:400; }
 .processing-actions { display:flex; justify-content:flex-end; gap:8px; }
 .processing-actions button { min-height:38px; padding:0 13px; border:1px solid var(--line); background:var(--white); cursor:pointer; font-size:12px; font-weight:700; }
 .processing-actions button:hover,.processing-actions button:focus-visible { border-color:var(--ink); outline:none; }
-.processing-actions #open-uploaded-track { margin-left:auto; border-color:var(--primary); background:var(--primary); color:var(--white); }
+.processing-actions #open-uploaded-track { margin-left:auto; }
 .toast { position:fixed; right:24px; bottom:24px; z-index:3000; max-width:380px; padding:14px 18px; color:white; background:#242821; transform:translateY(140%); transition:.25s; font-size:13px; }
 .toast a { color:var(--white); font-weight:700; }
 .toast.visible { transform:none; }
@@ -417,7 +416,6 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:400; }
 .edit-track-dialog input { min-height:42px; padding:0 12px; border:1px solid var(--line); background:var(--white); color:var(--ink); }
 .edit-track-dialog form > div { display:flex; justify-content:flex-end; gap:8px; }
 .edit-track-dialog button { min-height:40px; padding:0 14px; border:1px solid var(--ink); background:transparent; cursor:pointer; font-weight:700; }
-.edit-track-dialog button[type="submit"] { background:var(--ink); color:var(--white); }
 .form-error { margin:0; color:#8b2e22; font-size:12px; }
 .route-workspace { display:grid; grid-template-columns:minmax(0,1fr) minmax(440px,1fr); max-width:1440px; margin:auto; align-items:start; }
 .route-content { min-width:0; padding:0 40px 72px; }
@@ -683,8 +681,9 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:400; }
 .edit-track-dialog .replace-gpx-control { padding:12px 14px; border-radius:10px; background:transparent; font-size:12px; font-weight:700; }
 .processing-actions button,.edit-track-dialog button { min-height:42px; padding:0 15px; border:1px solid var(--line); border-radius:9px; background:transparent; font-size:12px; font-weight:700; }
 .processing-actions button:hover,.processing-actions button:focus-visible,.edit-track-dialog button:hover,.edit-track-dialog button:focus-visible { border-color:var(--ink); background:#e7ece4; outline:none; }
-.edit-track-dialog button[type="submit"] { border-color:var(--primary); background:var(--primary); color:var(--white); }
-.edit-track-dialog button[type="submit"]:hover,.edit-track-dialog button[type="submit"]:focus-visible { background:var(--primary-hover); }
+.upload-inline-editor button:not(.button-primary):hover,.upload-inline-editor button:not(.button-primary):focus-visible,.upload-links-form button:not(.button-primary):hover,.upload-links-form button:not(.button-primary):focus-visible { border-color:var(--ink); background:var(--control-hover); outline:none; }
+button.button-primary { border:1px solid var(--primary); background:var(--primary); color:var(--white); -webkit-text-fill-color:var(--white); cursor:pointer; }
+button.button-primary:hover,button.button-primary:focus-visible { border-color:var(--primary-hover); background:var(--primary-hover); color:var(--white); -webkit-text-fill-color:var(--white); outline:none; }
 .confirm-delete-dialog { width:min(460px,calc(100% - 32px)); padding:0; }
 .confirm-delete-dialog form { display:grid; grid-template-columns:44px minmax(0,1fr); gap:16px; padding:28px; }
 .confirm-delete-dialog h2 { margin:0; font:700 28px/1.1 'Exo 2',sans-serif; letter-spacing:-.035em; }

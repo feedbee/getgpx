@@ -192,7 +192,7 @@ app.innerHTML = `
       ${renderExternalLinkFields('edit-track')}
       <label class="replace-gpx-control" for="replacement-gpx">${htmlMessage('edit.replace')}</label>
       <p class="form-error" id="edit-track-error" hidden></p>
-      <div><button type="button" id="cancel-track-edit">${htmlMessage('common.cancel')}</button><button type="submit">${htmlMessage('common.save')}</button></div>
+      <div><button type="button" id="cancel-track-edit">${htmlMessage('common.cancel')}</button><button class="button-primary" type="submit">${htmlMessage('common.save')}</button></div>
     </form>
   </dialog>
   <dialog class="confirm-delete-dialog" id="confirm-delete-dialog">

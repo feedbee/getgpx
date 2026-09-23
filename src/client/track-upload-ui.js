@@ -45,14 +45,14 @@ export function renderTrackUploadDialogs() {
             <form class="upload-inline-editor" id="upload-title-form" hidden>
               <label for="upload-track-title">${htmlMessage('common.title')}</label>
               <input id="upload-track-title" name="title" required maxlength="200" />
-              <div><button type="button" id="cancel-upload-title">${htmlMessage('common.cancel')}</button><button type="submit">${htmlMessage('common.save')}</button></div>
+              <div><button type="button" id="cancel-upload-title">${htmlMessage('common.cancel')}</button><button class="button-primary" type="submit">${htmlMessage('common.save')}</button></div>
             </form>
           </div>
           <div class="upload-metadata-row upload-links-summary" id="upload-links-row">
             <div class="upload-metadata-view"><div><span>${htmlMessage('common.links')}</span><div class="upload-links-value" id="upload-links-value">${htmlMessage('common.noLinks')}</div></div><button class="metadata-edit-button" id="edit-upload-links" type="button" ${messageAttribute('aria-label', 'upload.changeLinks')} ${messageAttribute('title', 'upload.changeLinks')}>✎</button></div>
             <form class="upload-links-form" id="upload-links-form" hidden>
               ${renderExternalLinkFields('upload-link')}
-              <div><button type="button" id="cancel-upload-links">${htmlMessage('common.cancel')}</button><button type="submit">${htmlMessage('common.save')}</button></div>
+              <div><button type="button" id="cancel-upload-links">${htmlMessage('common.cancel')}</button><button class="button-primary" type="submit">${htmlMessage('common.save')}</button></div>
             </form>
           </div>
           <p class="form-error" id="upload-metadata-error" hidden></p>
@@ -65,7 +65,7 @@ export function renderTrackUploadDialogs() {
         </ol>
         <p class="processing-error" id="processing-error" hidden></p>
         <details class="processing-details" id="processing-details" hidden><summary>${htmlMessage('upload.details')}</summary><code id="processing-code"></code></details>
-        <div class="processing-actions"><button id="retry-processing" type="button" hidden>${htmlMessage('upload.retry')}</button><button id="finish-processing" type="button" hidden>${htmlMessage('common.close')}</button><button id="open-uploaded-track" type="button" hidden>${htmlMessage('upload.open')}</button></div>
+        <div class="processing-actions"><button id="retry-processing" type="button" hidden>${htmlMessage('upload.retry')}</button><button id="finish-processing" type="button" hidden>${htmlMessage('common.close')}</button><button class="button-primary" id="open-uploaded-track" type="button" hidden>${htmlMessage('upload.open')}</button></div>
       </section>
     </div>`;
 }
