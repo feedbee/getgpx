@@ -3,6 +3,7 @@ import { DEFAULT_USER_TIERS } from './configuration.js';
 import { normalizeTrackName } from './track-repository.js';
 import { normalizeRouteType } from '../route-types.js';
 import { analysisFailure } from './analysis-warning.js';
+import { logger } from './logger.js';
 
 const ERROR_MESSAGES = {
   INVALID_GPX: 'Не удалось прочитать GPX-файл. Проверьте файл и попробуйте снова.',
@@ -183,10 +184,17 @@ export function createTrackService({
   configuration = { userTiers: DEFAULT_USER_TIERS },
   enrichmentTimeoutMs = EXTERNAL_ANALYSIS_TIMEOUT_MS,
   schedule = (job) => setImmediate(job),
-  warn = (details) => console.warn('Track analysis warning', details),
+  warn = (details) => logger.warn(details, 'Track analysis warning'),
 }) {
   if (!trackRepository || !gpxFileStore || !analyzeSource || !enrichAnalysis) {
     throw new Error('Track service dependencies are required.');
+  }
+
+  function scheduleAnalysis(job, track) {
+    schedule(() => Promise.resolve().then(job).catch((error) => {
+      warn({ event: 'track_analysis_job_failed', trackId: String(track._id),
+        revision: track.analysisRevision, ...analysisFailure(error) });
+    }));
   }
 
   async function enrich(track) {
@@ -327,7 +335,7 @@ export function createTrackService({
         await gpxFileStore.delete(sourceFileId).catch(() => undefined);
         throw error;
       }
-      schedule(() => process(track));
+      scheduleAnalysis(() => process(track), track);
       return statusOf(track);
     },
 
@@ -381,7 +389,7 @@ export function createTrackService({
         return null;
       }
       if (existing.replacement?.sourceFileId) await gpxFileStore.delete(existing.replacement.sourceFileId).catch(() => undefined);
-      schedule(() => processReplacement(track));
+      scheduleAnalysis(() => processReplacement(track), track);
       return statusOf(track);
     },
 
@@ -484,12 +492,12 @@ export function createTrackService({
       if (existing?.replacement) {
         const track = await trackRepository.restartReplacementEnrichment({ trackId, ownerId });
         if (!track) return null;
-        schedule(() => enrichReplacement(track));
+        scheduleAnalysis(() => enrichReplacement(track), track);
         return statusOf(track);
       }
       const track = await trackRepository.restartEnrichment({ trackId, ownerId });
       if (!track) return null;
-      schedule(() => enrich(track));
+      scheduleAnalysis(() => enrich(track), track);
       return statusOf(track);
     },
   };

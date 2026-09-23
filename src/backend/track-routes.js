@@ -189,6 +189,7 @@ export function createTrackHandlers(trackService, authService) {
         return status ? send(response, 202, { data: status }) : error(response, 409, 'REPLACEMENT_IN_PROGRESS', 'Замена этого трека уже выполняется.');
       } catch (replaceError) {
         if (replaceError instanceof GpxFileTooLargeError) return error(response, 413, replaceError.code, 'GPX-файл должен быть не больше 25 MiB.');
+        request.log?.error({ reason: replaceError?.name || 'UNKNOWN' }, 'Track replacement failed');
         return error(response, 500, 'REPLACEMENT_FAILED', 'Не удалось сохранить новый GPX-файл.');
       }
     },
@@ -226,7 +227,10 @@ export function createTrackHandlers(trackService, authService) {
       response.setHeader('Content-Type', 'application/gpx+xml');
       response.setHeader('Content-Disposition', contentDisposition(download.filename));
       response.setHeader('Cache-Control', 'private, no-store');
-      download.stream.on('error', () => response.destroy?.());
+      download.stream.on('error', (streamError) => {
+        request.log?.error({ reason: streamError?.name || 'UNKNOWN' }, 'Track download failed');
+        response.destroy?.();
+      });
       download.stream.pipe(response);
     },
 
@@ -267,6 +271,7 @@ export function createTrackHandlers(trackService, authService) {
           error(response, 409, uploadError.code, `Достигнут лимит: ${uploadError.limit} треков.`);
           return;
         }
+        request.log?.error({ reason: uploadError?.name || 'UNKNOWN' }, 'Track upload failed');
         error(response, 500, 'UPLOAD_FAILED', 'Не удалось сохранить GPX-файл. Попробуйте снова.');
       }
     },

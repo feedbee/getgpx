@@ -6,6 +6,7 @@ import { applyValhallaMatches, summarizeRoadQuality, summarizeSurfaces, summariz
 import { fetchOsmWayTags, fetchTrackElevations, matchTrackWithValhalla } from './valhalla.js';
 import { TRACK_UPLOAD_LIMITS } from './track-repository.js';
 import { analysisFailure } from './analysis-warning.js';
+import { logger } from './logger.js';
 
 const DEFAULT_SPEED_KMH = 20;
 
@@ -63,7 +64,7 @@ export async function enrichTrackAnalysis(baseAnalysis, {
   fetchWayTags = fetchOsmWayTags,
   cache,
   signal,
-  warn = (details) => console.warn('Track analysis warning', details),
+  warn = (details) => logger.warn(details, 'Track analysis warning'),
 } = {}) {
   let analysis = baseAnalysis;
   if (baseAnalysis.points.some(({ ele }) => !Number.isFinite(ele))) {

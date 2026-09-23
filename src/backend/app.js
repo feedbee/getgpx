@@ -2,6 +2,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import helmet from 'helmet';
+import pinoHttp from 'pino-http';
+import { randomUUID } from 'node:crypto';
+import { logger } from './logger.js';
 
 const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const defaultStaticDirectory = path.join(rootDirectory, 'dist');
@@ -15,7 +18,7 @@ export function frontendPageStatus(pathname) {
     : 404;
 }
 
-export function createApp({ database, authRouter, trackRouter, staticDirectory = defaultStaticDirectory }) {
+export function createApp({ database, authRouter, trackRouter, staticDirectory = defaultStaticDirectory, log = logger }) {
   if (!database) throw new Error('A database adapter is required.');
 
   const app = express();
@@ -33,6 +36,18 @@ export function createApp({ database, authRouter, trackRouter, staticDirectory =
       },
     },
   }));
+  app.use(pinoHttp({
+    logger: log,
+    wrapSerializers: false,
+    genReqId: () => randomUUID(),
+    customProps: (request) => ({ requestId: request.id }),
+    serializers: {
+      req: (request) => ({ method: request.method, route: request.route?.path }),
+      res: (response) => ({ statusCode: response.statusCode }),
+    },
+    autoLogging: { ignore: (request) => request.url?.startsWith('/health/') },
+    customLogLevel: (_request, response) => response.statusCode >= 500 ? 'warn' : 'info',
+  }));
 
   const health = createHealthHandlers(database);
   app.get('/health/live', health.live);
@@ -44,6 +59,12 @@ export function createApp({ database, authRouter, trackRouter, staticDirectory =
     .status(frontendPageStatus(request.path))
     .sendFile(path.join(staticDirectory, 'index.html')));
 
+  app.use((error, request, response, next) => {
+    request.log.error({ reason: error?.name || 'UNKNOWN' }, 'Unhandled request error');
+    if (response.headersSent) return next(error);
+    response.status(500).json({ error: { code: 'INTERNAL_ERROR' } });
+  });
+
   return app;
 }
 
@@ -54,7 +75,8 @@ export function createHealthHandlers(database) {
       try {
         await database.ping();
         response.json({ status: 'ready' });
-      } catch {
+      } catch (error) {
+        logger.warn({ reason: error?.name || 'UNKNOWN' }, 'Readiness check failed');
         response.status(503).json({ status: 'unavailable' });
       }
     },

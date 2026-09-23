@@ -178,7 +178,8 @@ export function createAuthHandlers(authService, { secureCookies = process.env.NO
           serializeCookie(SESSION_COOKIE, result.sessionToken, { maxAge: SESSION_DURATION_MS / 1_000, secureCookies }),
         ]);
         response.redirect('/');
-      } catch {
+      } catch (authError) {
+        request.log?.warn({ reason: authError?.name || 'UNKNOWN' }, 'Google authentication failed');
         response.setHeader('Set-Cookie', serializeCookie(ATTEMPT_COOKIE, '', { maxAge: 0, secureCookies }));
         response.redirect('/?auth=error');
       }

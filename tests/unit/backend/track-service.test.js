@@ -70,6 +70,18 @@ function dependencies() {
 }
 
 describe('track service', () => {
+  it('records unexpected failures in scheduled analysis jobs', async () => {
+    const { service, scheduled, trackRepository, warn } = dependencies();
+    trackRepository.setAnalysisStep.mockRejectedValue(new Error('database unavailable'));
+
+    await service.upload({ ownerId: new ObjectId(), filename: 'ride.gpx', routeType: 'ROAD', source: Readable.from('') });
+    await scheduled[0]();
+
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'track_analysis_job_failed', trackId: 'track-1', reason: 'Error',
+    }));
+  });
+
   it('adds an existing track to favorites and exposes persisted state', async () => {
     const { service, trackRepository, savedTrackRepository } = dependencies();
     const ownerId = new ObjectId();

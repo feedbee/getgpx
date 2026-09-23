@@ -1,5 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { EventEmitter } from 'node:events';
+import pino from 'pino';
 import { describe, expect, it, vi } from 'vitest';
 import { createApp, createHealthHandlers, defaultStaticDirectory, frontendPageStatus } from '../../../src/backend/app.js';
 
@@ -63,5 +65,29 @@ describe('health endpoints', () => {
     expect(ready.body).toEqual({ status: 'ready' });
     expect(unavailable.statusCode).toBe(503);
     expect(unavailable.body).toEqual({ status: 'unavailable' });
+  });
+});
+
+describe('request logging', () => {
+  it('correlates errors without exposing request credentials or query parameters', async () => {
+    const entries = [];
+    const log = pino({ level: 'info' }, { write: (line) => entries.push(JSON.parse(line)) });
+    const app = createApp({ database: { ping: vi.fn() }, log });
+    const request = {
+      method: 'GET', url: '/api/auth/google/callback?code=SECRET',
+      headers: { authorization: 'Bearer SECRET', cookie: 'session=SECRET' },
+      route: { path: '/api/auth/google/callback' },
+    };
+    const response = new EventEmitter();
+    response.statusCode = 500;
+
+    await new Promise((resolve, reject) => app.router.stack[1].handle(request, response, (error) => error ? reject(error) : resolve()));
+    request.log.error({ reason: 'Error' }, 'Unhandled request error');
+    response.emit('finish');
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({ level: 50, requestId: expect.any(String), req: { method: 'GET', route: '/api/auth/google/callback' } });
+    expect(entries[1]).toMatchObject({ level: 40, requestId: entries[0].requestId, res: { statusCode: 500 } });
+    expect(JSON.stringify(entries)).not.toContain('SECRET');
   });
 });
