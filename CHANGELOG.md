@@ -4,23 +4,24 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-23
+
 ### Added
 
-- Favorite tracks: signed-in users can add and remove their own or other authors'
-  routes, see the persisted button state, and browse a searchable collection with
-  author names.
-- Favorite list controls now support selecting tracks and removing them together;
-  removing a single favorite from its card also asks for confirmation. My Tracks
-  cards show a favorite toggle beside the edit action.
-- Google SSO with persisted users, hashed server-side sessions, login/avatar/logout header controls, and setup documentation.
-- Production Node.js runtime with liveness/readiness endpoints and security headers.
-- MongoDB connection lifecycle and infrastructure integration test.
-- Docker, devcontainer, CI quality gates, dependency updates, and tag-triggered Docker Hub publishing.
-- Project onboarding, architecture, testing, operations, and production-readiness documentation.
+- GPX upload and persistent track processing with distance, elevation, climbs, descents, road and surface analysis, points of interest, and synchronized map and elevation profile views.
+- Google sign-in and a personal track collection with search, editing, GPX replacement and download, retry after failed analysis, and individual or bulk deletion.
+- Public, shareable track pages and a configurable homepage featuring selected tracks.
+- Favorite tracks for signed-in users, including a searchable collection and confirmed individual or bulk removal.
+- Route types, external service links, track limits by user tier, and profile highlighting and color controls.
+- Interface translations and browser preferences for language and measurement units.
+- Production Node.js and MongoDB runtime with health endpoints, security headers, Docker image, CI checks, and tag-triggered Docker Hub publication workflow.
 
-### Changed
+### Fixed
 
-- Updated the development toolchain to ESLint 10 and Vite 8; the minimum supported Node.js version is now 22.13.
-- Renamed the npm package from the PoC identifier to `track-hub`.
-- Routed all road-enrichment calls through the server instead of calling Overpass from the browser.
-- Renamed the project from **Track Hub** (`track-hub`) to **GetGPX** (`getgpx`): updated brand identity in the UI (logo mark, topbar label, page title, favicon), session/attempt cookie names, MongoDB default database name, and all documentation and configuration references.
+- Missing elevations in saved tracks, incorrect owner attribution, and layout issues in the homepage and track collection.
+- Unknown public track links now show a 404 page instead of a demo route.
+- Production container now includes the route-analysis modules required by the API at startup.
+
+### Upgrade notes
+
+- This is the first release; there is no earlier version to migrate from. Deployment requires MongoDB and Google OAuth configuration as described in `README.md`.

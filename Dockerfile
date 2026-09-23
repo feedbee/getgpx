@@ -13,6 +13,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node src/backend ./src/backend
+COPY --chown=node:node src/client/domain ./src/client/domain
+COPY --chown=node:node src/route-types.js ./src/route-types.js
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
