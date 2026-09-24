@@ -127,7 +127,7 @@ app.innerHTML = `
         </div>
       </div>
     </header>
-    <div class="route-workspace">
+    <div class="route-workspace" hidden>
       <div class="route-content">
         <nav class="section-nav route-tabs" ${messageAttribute('aria-label', 'route.contents')}>
           <a href="#external-track-links-section" id="external-track-links-nav" hidden>${htmlMessage('route.services')}</a><a href="#points-of-interest" id="poi-nav-link" hidden>${htmlMessage('common.pois')}</a><a href="#details">${htmlMessage('common.elevationProfile')}</a><a href="#way-types">${htmlMessage('common.routeInfo')}</a><a href="#climbs">${htmlMessage('common.terrain')}</a>
@@ -566,7 +566,11 @@ async function initHomeExampleMap() {
   const loading = document.querySelector('#home-map-loading');
   if (!container) return;
   try {
-    const track = homepageTracks[0]?.analysis;
+    const analysisUrl = homepageTracks[0]?.analysisUrl;
+    if (!analysisUrl) throw new Error('Track unavailable');
+    const response = await fetch(analysisUrl, { headers: { accept: 'application/json' } });
+    if (!response.ok) throw new Error('Track unavailable');
+    const track = (await response.json()).analysis;
     if (!track?.points?.length) throw new Error('Track unavailable');
     const coordinates = track.points.map((point) => [point.lat, point.lon]);
     [container, previewContainer].filter(Boolean).forEach((mapContainer) => {
@@ -985,6 +989,9 @@ function setActivePoint(index, { showContext = false } = {}) {
 
 function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
   document.querySelector('#track-name').classList.remove('inline-loading', 'is-loading');
+  document.querySelector('.route-metrics').hidden = false;
+  document.querySelector('.route-workspace').hidden = false;
+  document.querySelector('#route-state-note').hidden = true;
   clearRangeFocus();
   hoveredSurfaceId = null;
   pinnedSurfaceId = null;
@@ -1059,11 +1066,62 @@ function renderUnavailableTrack(track) {
   bindText(document.querySelector('#route-state-note'), () => track.analysisNote || t(track.status === 'PROCESSING' ? 'sources.waiting' : 'sources.failed'));
   document.querySelector('#route-state-note').hidden = false;
   document.querySelector('#route-state-note').classList.toggle('is-processing', track.status === 'PROCESSING');
-  document.querySelector('.route-metrics').hidden = true;
+  const metrics = track.metrics;
+  document.querySelector('.route-metrics').hidden = !metrics;
+  if (metrics) {
+    const type = routeTypeDefinition(track.routeType);
+    document.querySelector('#route-type-metric').innerHTML = `${routeTypeIcon(type.id)}<b>${htmlMessage(`activity.${type.id}`)}</b>`;
+    bindText(document.querySelector('#distance'), () => metrics.distanceKm == null ? '—'
+      : number(distanceValue(metrics.distanceKm, preferences.value), preferences.value));
+    bindText(document.querySelector('#ascent'), () => metrics.ascentM == null ? '—'
+      : number(elevationValue(metrics.ascentM, preferences.value), { ...preferences.value, digits: 0 }));
+    bindText(document.querySelector('#descent'), () => metrics.descentM == null ? '—'
+      : number(elevationValue(metrics.descentM, preferences.value), { ...preferences.value, digits: 0 }));
+    bindText(document.querySelector('#duration'), () => formatDuration(metrics.estimatedDurationMs)[0]);
+    bindText(document.querySelector('#duration-unit'), () => t('common.hour'));
+    bindText(document.querySelector('#average-speed-badge'), () => metrics.effectiveSpeedKmh == null ? '—'
+      : formatMeasurement('speed', metrics.effectiveSpeedKmh));
+  }
   document.querySelector('.route-workspace').hidden = true;
 }
 
-async function loadPublicTrack(trackId) {
+function renderBasicTrackHeader(track) {
+  document.querySelector('#track-name').classList.remove('inline-loading', 'is-loading');
+  bindText(document.querySelector('#track-name'), () => track.title || t('common.unnamed'));
+  bindText(document.querySelector('#compact-track-name'), () => track.title || t('common.unnamed'));
+  const type = routeTypeDefinition(track.routeType);
+  for (const selector of ['#route-type-metric', '#compact-route-type-metric']) {
+    const element = document.querySelector(selector);
+    element.innerHTML = `${routeTypeIcon(type.id)}<b>${htmlMessage(`activity.${type.id}`)}</b>`;
+    bindAttribute(element, 'aria-label', () => t('route.typeValue', { type: routeTypeDefinition(type.id).label }));
+  }
+  const metrics = track.metrics;
+  document.querySelector('.route-metrics').hidden = !metrics;
+  if (metrics) {
+    const distance = () => metrics.distanceKm == null ? '—'
+      : number(distanceValue(metrics.distanceKm, preferences.value), preferences.value);
+    const elevation = (value) => value == null ? '—'
+      : number(elevationValue(value, preferences.value), { ...preferences.value, digits: 0 });
+    for (const selector of ['#distance', '#compact-distance']) bindText(document.querySelector(selector), distance);
+    for (const selector of ['#ascent', '#compact-ascent']) bindText(document.querySelector(selector), () => elevation(metrics.ascentM));
+    for (const selector of ['#descent', '#compact-descent']) bindText(document.querySelector(selector), () => elevation(metrics.descentM));
+    const duration = () => metrics.estimatedDurationMs == null ? '—' : formatDuration(metrics.estimatedDurationMs)[0];
+    for (const selector of ['#duration', '#compact-duration']) bindText(document.querySelector(selector), duration);
+    for (const selector of ['#duration-unit', '#compact-duration-unit']) bindText(document.querySelector(selector), () => t('common.hour'));
+    const speed = () => metrics.effectiveSpeedKmh == null ? '—' : formatMeasurement('speed', metrics.effectiveSpeedKmh);
+    for (const selector of ['#average-speed-badge', '#compact-speed']) bindText(document.querySelector(selector), speed);
+    bindAttribute(document.querySelector('#average-speed-badge'), 'title', () => metrics.effectiveSpeedKmh == null
+      ? t('route.noSpeed') : t('route.estimatedSpeed', { speed: speed() }));
+  }
+  updatePageLanguage();
+  document.querySelector('.route-workspace').hidden = true;
+  const note = document.querySelector('#route-state-note');
+  bindText(note, () => t('common.loadingRoute'));
+  note.classList.add('is-processing');
+  note.hidden = false;
+}
+
+async function loadPublicTrack(trackId, retries = 0) {
   publicTrackId = trackId;
   publicTrackData = null;
   publicTrackOwnershipVerified = false;
@@ -1074,20 +1132,30 @@ async function loadPublicTrack(trackId) {
   }
   const { data } = await response.json();
   publicTrackData = data;
+  renderBasicTrackHeader(data);
   renderExternalTrackLinks(document.querySelector('#external-track-links'), data.externalLinks);
   const linksSection = document.querySelector('#external-track-links-section');
   linksSection.hidden = availableExternalTrackLinks(data.externalLinks).length === 0;
   document.querySelector('#external-track-links-nav').hidden = linksSection.hidden;
   renderTrackAttribution();
   const download = document.querySelector('#download-track');
-  download.href = data.downloadUrl;
-  download.hidden = false;
-  if (!data.analysis) {
-    renderUnavailableTrack(data);
+  download.href = data.downloadUrl || '#';
+  download.hidden = !data.downloadUrl;
+  if (!data.analysisUrl) {
+    renderUnavailableTrack(data.status === 'READY' ? { ...data, analysisNote: t('errors.fileUnavailable') } : data);
     return;
   }
-  data.analysis.name = data.title;
-  renderTrack(data.analysis, { analysisSources: data.analysisSources, routeType: data.routeType });
+  try {
+    const analysisResponse = await fetch(data.analysisUrl, { headers: { accept: 'application/json' } });
+    if (!analysisResponse.ok) throw new Error('Track analysis unavailable');
+    const detail = await analysisResponse.json();
+    if (detail.revision !== data.revision && retries < 2) return loadPublicTrack(trackId, retries + 1);
+    if (detail.revision !== data.revision) throw new Error('Track revision changed');
+    const analysis = { ...detail.analysis, ...data.metrics, name: data.title };
+    renderTrack(analysis, { analysisSources: data.analysisSources, routeType: data.routeType });
+  } catch {
+    renderUnavailableTrack({ ...data, analysisNote: t('errors.fileUnavailable') });
+  }
 }
 
 const processingOrder = ['UPLOADING', 'QUEUED', 'PARSING', 'ENRICHING', 'COMPLETE'];
@@ -1102,7 +1170,9 @@ function updateProcessing(step) {
 }
 
 function showProcessingError(error) {
-  const failedStep = error.code === 'INVALID_GPX' ? 'PARSING' : error.code === 'ENRICHMENT_UNAVAILABLE' ? 'ENRICHING' : 'UPLOADING';
+  const failedStep = ['INVALID_GPX', 'GPX_POINT_LIMIT'].includes(error.code) ? 'PARSING'
+    : ['ENRICHMENT_UNAVAILABLE', 'PROCESSING_INTERRUPTED', 'ANALYSIS_STORAGE_UNAVAILABLE'].includes(error.code)
+      ? 'ENRICHING' : 'UPLOADING';
   updateProcessing(failedStep);
   const message = document.querySelector('#processing-error');
   bindText(message, () => errorMessage(error));
@@ -1110,7 +1180,9 @@ function showProcessingError(error) {
   const details = document.querySelector('#processing-details');
   details.hidden = false;
   bindText(document.querySelector('#processing-code'), () => /^[A-Z_]{1,50}$/.test(error.code) ? error.code : 'UNKNOWN_ERROR');
-  document.querySelector('#retry-processing').hidden = error.code !== 'ENRICHMENT_UNAVAILABLE';
+  document.querySelector('#retry-processing').hidden = ![
+    'ENRICHMENT_UNAVAILABLE', 'PROCESSING_INTERRUPTED', 'ANALYSIS_STORAGE_UNAVAILABLE', 'TRACK_FILE_UNAVAILABLE',
+  ].includes(error.code);
   document.querySelector('#close-processing').hidden = false;
   const status = document.querySelector('#processing-status');
   status.classList.add('is-failed');
@@ -1720,8 +1792,7 @@ document.querySelector('#edit-track-form').addEventListener('submit', async (eve
         const linksSection = document.querySelector('#external-track-links-section');
         linksSection.hidden = availableExternalTrackLinks(payload.data.externalLinks).length === 0;
         document.querySelector('#external-track-links-nav').hidden = linksSection.hidden;
-        payload.data.analysis.name = payload.data.title;
-        renderTrack(payload.data.analysis, { analysisSources: payload.data.analysisSources, routeType: payload.data.routeType });
+        await loadPublicTrack(publicTrackId);
       }
     });
   } catch (saveError) {

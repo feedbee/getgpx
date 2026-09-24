@@ -347,5 +347,10 @@
   "preferences.blockedProcessing": "Finish the current upload or processing before changing preferences.",
   "preferences.blockedEdits": "Save or discard your edits before changing preferences.",
   "surface.selected": "SELECTED",
-  "surface.onMap": "ON MAP"
+  "surface.onMap": "ON MAP",
+  "errors.pointLimit": "The GPX file has more than 100,000 route points.",
+  "errors.interrupted": "Processing was interrupted. Retry analysis to finish the track.",
+  "errors.fileUnavailable": "The track file is temporarily unavailable. Try again later.",
+  "errors.analysisNotReady": "Track analysis is not ready yet.",
+  "errors.editConflict": "Wait for track processing to finish before editing."
 }

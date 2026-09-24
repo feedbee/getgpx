@@ -6,6 +6,22 @@
 
 The devcontainer uses Node.js 22 and a private MongoDB sidecar. The production image runs as the unprivileged `node` user and exposes port 3000.
 
+Track storage requires `TRACK_S3_BUCKET` and `AWS_REGION` in both Vite development
+and the production Node process. The default `TRACK_S3_PREFIX=dev`,
+`TRACK_PREVIEW_MAX_POINTS=200`, and `TRACK_FILE_DELIVERY=stream` work without Nginx.
+For local S3 access, supply `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; add
+`AWS_SESSION_TOKEN` for temporary credentials. The AWS SDK also supports a standard
+AWS profile and EC2 role credentials. Keep these values server-side and outside
+version control. `.env.example` lists the complete application configuration.
+
+Production must set `TRACK_S3_PREFIX=prod` explicitly. In nginx delivery mode,
+also supply `TRACK_CLOUDFRONT_DOMAIN`, `TRACK_CLOUDFRONT_PUBLIC_KEY_ID`, and
+`TRACK_CLOUDFRONT_PRIVATE_KEY_PATH`. The application serves
+`/internal/track-files/:id/:kind` on its normal HTTP listener in nginx mode.
+Nginx must deny direct browser requests to this path while allowing its own
+internal subrequests. Nginx, CloudFront, bucket policy, and IAM setup
+are maintained in the separate infrastructure deployment.
+
 Set `HOMEPAGE_TRACK_CACHE_ENABLED=true` to cache the homepage tracks response in each
 server process. It is disabled by default. The process attempts an initial load,
 refreshes one hour after each attempt, and rereads `homepageTrackIds` on refresh.

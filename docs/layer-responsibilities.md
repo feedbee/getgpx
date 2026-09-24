@@ -12,4 +12,8 @@
 - `tests/integration/`: tests that require MongoDB or other real infrastructure.
 - `docs/changes/`: historical design context, not living architecture.
 
-Future user and track work should be split into route/controller, service/domain, and repository layers. Ownership checks belong in the service boundary and every saved track must carry an immutable owner identifier. Do not expose raw MongoDB documents or accept client-provided query operators.
+Track work is split into route/controller, service/domain, and repository layers. Ownership checks belong in the service boundary and every saved track must carry an immutable owner identifier. Do not expose raw MongoDB documents or accept client-provided query operators.
+
+- `src/backend/track-object-store.js` and `s3-track-persistence.js`: S3 adapter and persistence wiring.
+- `src/backend/s3-track-repository.js` and `s3-track-service.js`: compact MongoDB track state and processing orchestration.
+- `src/backend/track-internal-router.js`: nginx-mode signing handoff mounted on the application listener; Nginx blocks direct external access.

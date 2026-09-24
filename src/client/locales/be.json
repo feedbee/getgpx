@@ -347,5 +347,10 @@
   "preferences.blockedProcessing": "Дачакайцеся заканчэння загрузкі або апрацоўкі, перш чым змяняць налады.",
   "preferences.blockedEdits": "Захавайце або скасуйце змены, перш чым змяняць налады.",
   "surface.selected": "АБРАНА",
-  "surface.onMap": "НА КАРЦЕ"
+  "surface.onMap": "НА КАРЦЕ",
+  "errors.pointLimit": "У GPX-файле больш за 100 000 пунктаў маршруту.",
+  "errors.interrupted": "Апрацоўка перарвалася. Паўтарыце аналіз, каб завяршыць трэк.",
+  "errors.fileUnavailable": "Файл трэка часова недаступны. Паспрабуйце пазней.",
+  "errors.analysisNotReady": "Аналіз трэка яшчэ не гатовы.",
+  "errors.editConflict": "Дачакайцеся завяршэння апрацоўкі трэка перад рэдагаваннем."
 }

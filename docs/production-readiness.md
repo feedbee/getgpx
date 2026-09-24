@@ -13,7 +13,7 @@
 1. Provision owned/rate-limited Valhalla and Overpass capacity; community endpoints are not an SLA.
 2. Choose hosting, TLS termination, allowed proxy topology, log/metric/error collection, alert thresholds, backups, restore drills, and MongoDB retention/location.
 3. Design authentication separately: Argon2id password hashing, verified email policy, httpOnly/secure/sameSite sessions, CSRF defense, login/reset rate limits, session revocation, and audit events.
-4. Design track persistence separately: owner-based authorization on every operation, GPX size/point limits, canonical schema version, indexes, quotas, deletion/export, and privacy policy.
+4. Provision the private S3 bucket, CloudFront signing keys and distribution, Nginx internal handoff, IAM permissions, and deployment secrets for track delivery; exercise the production path before launch.
 5. Add API-wide request IDs, structured logs, rate limiting, timeout/bulkhead policy, and tests for malformed/slow upstream responses.
 6. Add browser E2E coverage for GPX upload and the critical analysis journey, plus accessibility and supported-browser checks.
 

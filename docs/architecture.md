@@ -15,9 +15,10 @@ Node.js / Express
   ├─ calls Valhalla and enriches matches from Overpass
   ├─ serves the static production bundle
   ├─ owns MongoDB lifecycle and readiness
-  └─ initializes saved-track, GridFS, enrichment-cache, and application configuration persistence
+  └─ initializes saved-track, S3, enrichment-cache, and application configuration adapters
               │
-MongoDB (users, sessions, tracks, GPX GridFS files, and enrichment cache)
+MongoDB (users, sessions, compact track metadata, and enrichment cache)
+S3 (original GPX files and detailed analysis JSON)
 ```
 
 At startup the backend creates the `configuration` collection entry keyed by
@@ -41,10 +42,10 @@ fills the cache. Unset or `false` leaves the per-request database behavior in pl
 Track documents keep MongoDB `_id` values for persistence and configuration references.
 Public track URLs use the separately indexed `publicId`; changing the generation format
 does not invalidate ids already stored on tracks.
-Unmigrated records can still be opened through their legacy MongoDB id during a rolling
-deployment, but migrated records are addressed only by `publicId`.
+Existing track records are recreated rather than migrated to the S3 schema. Public
+access uses `publicId`.
 
-Authenticated uploads are parsed and analysed by the backend, which stores owner-bound track records and source GPX files through MongoDB GridFS. Public track views read the persisted analysis, while a shared 30-day enrichment cache keeps successful Valhalla checkpoints and fully enriched OpenStreetMap results. MongoDB also stores Google-linked users and hashed opaque sessions; Google OAuth tokens are discarded after profile lookup.
+Authenticated uploads are parsed and analysed by the backend. It stores owner-bound compact track records in MongoDB and immutable source/analysis revisions in S3. Basic track views and lists read MongoDB; detailed views read authorized S3 objects through the API. A shared 30-day enrichment cache keeps successful Valhalla checkpoints and fully enriched OpenStreetMap results. MongoDB also stores Google-linked users and hashed opaque sessions; Google OAuth tokens are discarded after profile lookup.
 
 The production process fails startup when MongoDB configuration or connectivity is absent. Liveness deliberately avoids dependencies; readiness performs a MongoDB ping so an orchestrator can stop routing traffic to an unhealthy instance.
 

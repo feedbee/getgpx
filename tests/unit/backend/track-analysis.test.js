@@ -9,6 +9,11 @@ const unnamedGpx = `
 `;
 
 describe('server track analysis', () => {
+  it('rejects more than 100,000 source points without reducing the accepted count', () => {
+    const points = '<trkpt lat="50" lon="19"/>'.repeat(100_001);
+    expect(() => analyzeGpxSource(`<gpx><trk><trkseg>${points}</trkseg></trk></gpx>`, { filename: 'large.gpx' }))
+      .toThrow('GPX_POINT_LIMIT');
+  });
   it('uses the original filename and 20 km/h when timestamps are unavailable', () => {
     const analysis = analyzeGpxSource(unnamedGpx, { filename: 'Weekend Ride.gpx' });
 

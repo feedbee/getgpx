@@ -5,7 +5,7 @@ import { createPublicId as generatePublicId } from './public-id.js';
 export const TRACK_SCHEMA_VERSION = 2;
 export const TRACK_UPLOAD_LIMITS = Object.freeze({
   maxBytes: 25 * 1024 * 1024,
-  maxPoints: 500_000,
+  maxPoints: 100_000,
 });
 
 export const TRACK_ANALYSIS_STATUS = Object.freeze({

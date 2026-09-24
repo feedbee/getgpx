@@ -5,8 +5,21 @@ import pino from 'pino';
 import { describe, expect, it, vi } from 'vitest';
 import { createApp, createHealthHandlers, defaultStaticDirectory, frontendPageStatus } from '../../../src/backend/app.js';
 import { createRequestLogger } from '../../../src/backend/logger.js';
+import { createTrackInternalRouter } from '../../../src/backend/track-internal-router.js';
 
 describe('production static files', () => {
+  it('mounts the internal nginx handoff in the API application', () => {
+    const internalTrackRouter = createTrackInternalRouter(
+      { fileDescriptor: async () => ({ key: 'dev/tracks/0123456789abcdef01234567/r1/analysis.json', revision: 'r1' }) },
+      { getUser: async () => null },
+      { delivery: 'nginx', cloudFrontDomain: 'example.cloudfront.net' },
+      { sign: () => 'https://example.cloudfront.net/signed' },
+    );
+    const app = createApp({ database: { ping: vi.fn() }, internalTrackRouter });
+    expect(app.router.stack.some((layer) => layer.handle === internalTrackRouter)).toBe(true);
+    expect(internalTrackRouter.stack.some((layer) => layer.route?.path === '/internal/track-files/:id/:kind')).toBe(true);
+  });
+
   it('allows the browser to identify the site to OpenStreetMap tile servers', async () => {
     const app = createApp({ database: { ping: vi.fn() } });
     const headers = new Map();

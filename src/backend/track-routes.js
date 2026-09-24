@@ -45,7 +45,7 @@ function contentDisposition(filename) {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
-export function createTrackHandlers(trackService, authService) {
+export function createTrackHandlers(trackService, authService, { delivery = 'stream' } = {}) {
   if (!trackService || !authService) throw new Error('Track and authentication services are required.');
 
   async function authenticatedOwner(request, response) {
@@ -174,7 +174,14 @@ export function createTrackHandlers(trackService, authService) {
       if (!Number.isFinite(speedKmh) || speedKmh < 1 || speedKmh > 50) return error(response, 422, 'INVALID_TRACK_SPEED', 'Скорость должна быть от 1 до 50 км/ч.');
       if (!isRouteType(routeType)) return error(response, 422, 'INVALID_ROUTE_TYPE', 'Выберите тип маршрута.');
       if (!externalLinks) return error(response, 422, 'INVALID_EXTERNAL_LINKS', 'Проверьте ссылки на внешние сервисы. Допустимы только HTTPS-ссылки на соответствующий сервис.');
-      const track = await trackService.updateDetails({ publicId, ownerId, title, speedKmh, routeType, externalLinks });
+      let track;
+      try { track = await trackService.updateDetails({ publicId, ownerId, title, speedKmh, routeType, externalLinks }); }
+      catch (updateError) {
+        if (updateError?.code === 'TRACK_EDIT_CONFLICT') {
+          return error(response, 409, 'TRACK_EDIT_CONFLICT', 'Дождитесь окончания обработки трека.');
+        }
+        throw updateError;
+      }
       return track ? send(response, 200, { data: track }) : error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
     },
 
@@ -225,16 +232,56 @@ export function createTrackHandlers(trackService, authService) {
     async download(request, response) {
       const publicId = isPublicId(request.params.id) ? request.params.id : null;
       if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
-      const download = await trackService.getPublicDownload(publicId);
+      if (delivery === 'nginx') return error(response, 503, 'TRACK_DELIVERY_UNAVAILABLE', 'Файл временно недоступен.');
+      if (request.method === 'HEAD' && trackService.fileDescriptor) {
+        const descriptor = await trackService.fileDescriptor(publicId, 'download');
+        if (!descriptor) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
+        if (!descriptor.key) return error(response, 409, 'TRACK_ANALYSIS_NOT_READY', 'Файл ещё не готов.');
+        response.setHeader('Content-Type', 'application/gpx+xml');
+        response.setHeader('Content-Disposition', contentDisposition(descriptor.filename));
+        response.setHeader('Cache-Control', 'private, no-store');
+        return response.status(200).end();
+      }
+      let download;
+      try { download = await trackService.getPublicDownload(publicId); }
+      catch { return error(response, 502, 'TRACK_FILE_UNAVAILABLE', 'Файл временно недоступен.'); }
       if (!download) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
       response.setHeader('Content-Type', 'application/gpx+xml');
       response.setHeader('Content-Disposition', contentDisposition(download.filename));
       response.setHeader('Cache-Control', 'private, no-store');
+      response.on?.('close', () => { if (!response.writableEnded) download.stream.destroy?.(); });
       download.stream.on('error', (streamError) => {
         request.log?.error({ reason: streamError?.name || 'UNKNOWN' }, 'Track download failed');
         response.destroy?.();
       });
       download.stream.pipe(response);
+    },
+
+    async analysis(request, response) {
+      const publicId = isPublicId(request.params.id) ? request.params.id : null;
+      if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
+      if (delivery === 'nginx') return error(response, 503, 'TRACK_DELIVERY_UNAVAILABLE', 'Анализ временно недоступен.');
+      if (request.method === 'HEAD' && trackService.fileDescriptor) {
+        const descriptor = await trackService.fileDescriptor(publicId, 'analysis');
+        if (!descriptor) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
+        if (!descriptor.key) return error(response, 409, 'TRACK_ANALYSIS_NOT_READY', 'Анализ ещё не готов.');
+        response.setHeader('Content-Type', 'application/json');
+        response.setHeader('Cache-Control', 'private, no-store');
+        return response.status(200).end();
+      }
+      let result;
+      try { result = await trackService.getPublicAnalysis(publicId); }
+      catch { return error(response, 502, 'TRACK_FILE_UNAVAILABLE', 'Анализ временно недоступен.'); }
+      if (!result) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
+      if (result.unavailable) return error(response, 409, 'TRACK_ANALYSIS_NOT_READY', 'Анализ ещё не готов.');
+      response.setHeader('Content-Type', 'application/json');
+      response.setHeader('Cache-Control', 'private, no-store');
+      response.on?.('close', () => { if (!response.writableEnded) result.stream.destroy?.(); });
+      result.stream.on('error', (streamError) => {
+        request.log?.error({ reason: streamError?.name || 'UNKNOWN' }, 'Track analysis delivery failed');
+        response.destroy?.();
+      });
+      result.stream.pipe(response);
     },
 
     async upload(request, response) {
@@ -306,8 +353,8 @@ export function createTrackHandlers(trackService, authService) {
   };
 }
 
-export function createTrackRouter(trackService, authService) {
-  const handlers = createTrackHandlers(trackService, authService);
+export function createTrackRouter(trackService, authService, options) {
+  const handlers = createTrackHandlers(trackService, authService, options);
   const router = Router();
   router.post('/api/tracks', handlers.upload);
   router.get('/api/tracks/homepage', handlers.homepageTracks);
@@ -325,6 +372,7 @@ export function createTrackRouter(trackService, authService) {
   router.post('/api/tracks/:id/retry-analysis', handlers.retry);
   router.delete('/api/tracks/:id', handlers.remove);
   router.get('/api/tracks/:id/download', handlers.download);
+  router.get('/api/tracks/:id/analysis', handlers.analysis);
   router.get('/api/tracks/:id', handlers.publicTrack);
   return router;
 }

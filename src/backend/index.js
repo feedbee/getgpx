@@ -3,9 +3,11 @@ import { createAuthentication } from './authentication.js';
 import { loadConfiguration, loadHomepageTrackIds } from './configuration.js';
 import { createDatabase } from './database.js';
 import { analyzeGpxSource, enrichTrackAnalysis } from './track-analysis.js';
-import { createTrackPersistence } from './track-persistence.js';
+import { createS3TrackPersistence } from './s3-track-persistence.js';
 import { createTrackRouter } from './track-routes.js';
-import { createTrackService } from './track-service.js';
+import { createS3TrackService } from './s3-track-service.js';
+import { loadTrackStorageConfig } from './track-storage-config.js';
+import { createTrackInternalRouter } from './track-internal-router.js';
 import { logger } from './logger.js';
 import { createHomepageTrackCache } from './homepage-track-cache.js';
 
@@ -15,16 +17,17 @@ const homepageCacheEnabled = process.env.HOMEPAGE_TRACK_CACHE_ENABLED === 'true'
 const database = createDatabase();
 
 async function start() {
+  const trackConfig = loadTrackStorageConfig();
   await database.connect();
   const [authentication, trackPersistence, configuration] = await Promise.all([
     createAuthentication(database),
-    createTrackPersistence(database),
+    createS3TrackPersistence(database, trackConfig),
     loadConfiguration(database, { loadHomepage: !homepageCacheEnabled }),
   ]);
-  const trackService = createTrackService({
+  const trackService = createS3TrackService({
     ...trackPersistence,
     userRepository: authentication.userRepository,
-    analyzeSource: analyzeGpxSource,
+    analyzeSource: (source, options) => analyzeGpxSource(source, { ...options, previewMaxPoints: trackConfig.previewMaxPoints }),
     enrichAnalysis: enrichTrackAnalysis,
     configuration,
   });
@@ -38,8 +41,12 @@ async function start() {
   const trackRouter = createTrackRouter(
     homepageCache ? { ...trackService, getHomepageTracks: homepageCache.getHomepageTracks } : trackService,
     authentication.service,
+    { delivery: trackConfig.delivery },
   );
-  const server = createApp({ database, authRouter: authentication.middleware, trackRouter }).listen(port, host, () => {
+  const internalTrackRouter = trackConfig.delivery === 'nginx'
+    ? createTrackInternalRouter(trackService, authentication.service, trackConfig)
+    : null;
+  const server = createApp({ database, authRouter: authentication.middleware, trackRouter, internalTrackRouter }).listen(port, host, () => {
     logger.info({ host, port }, 'Server listening');
   });
 

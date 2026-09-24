@@ -347,5 +347,10 @@
   "preferences.blockedProcessing": "Завершіть завантаження або обробку, перш ніж змінювати налаштування.",
   "preferences.blockedEdits": "Збережіть або скасуйте зміни, перш ніж змінювати налаштування.",
   "surface.selected": "ВИБРАНО",
-  "surface.onMap": "НА МАПІ"
+  "surface.onMap": "НА МАПІ",
+  "errors.pointLimit": "У GPX-файлі понад 100 000 точок маршруту.",
+  "errors.interrupted": "Обробку перервано. Повторіть аналіз, щоб завершити трек.",
+  "errors.fileUnavailable": "Файл треку тимчасово недоступний. Спробуйте пізніше.",
+  "errors.analysisNotReady": "Аналіз треку ще не готовий.",
+  "errors.editConflict": "Дочекайтеся завершення обробки треку перед редагуванням."
 }

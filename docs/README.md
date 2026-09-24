@@ -9,8 +9,13 @@ Living documents describe the current system:
 5. [Operations](operations.md) — local containers, health, CI, and releases.
 6. [Production readiness](production-readiness.md) — resolved and remaining MVP risks.
 7. [ADR-001: MongoDB](decisions/001-mongodb.md) — persistence decision and consequences.
-8. [Google authentication](authentication.md) — current sign-in contract and security boundaries.
-9. [Saved tracks](tracks.md) — target UX, persistence, API outline, and staged delivery plan.
+8. [ADR-002: S3 track objects](decisions/002-track-objects-in-s3.md) — immutable track source/analysis storage.
+9. [Google authentication](authentication.md) — current sign-in contract and security boundaries.
+10. [Saved tracks](tracks.md) — current UX, persistence, and API.
+
+Implementation specification:
+
+- [Track storage and delivery through S3](specs/track-s3-storage.md) — contracts, failure handling, and acceptance criteria.
 
 Current client localization:
 

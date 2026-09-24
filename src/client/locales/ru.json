@@ -347,5 +347,10 @@
   "preferences.blockedProcessing": "Дождитесь завершения загрузки или обработки перед сменой настроек.",
   "preferences.blockedEdits": "Сохраните или отмените изменения перед сменой настроек.",
   "surface.selected": "ВЫБРАНО",
-  "surface.onMap": "НА КАРТЕ"
+  "surface.onMap": "НА КАРТЕ",
+  "errors.pointLimit": "В GPX-файле больше 100 000 точек маршрута.",
+  "errors.interrupted": "Обработка прервалась. Повторите анализ, чтобы завершить трек.",
+  "errors.fileUnavailable": "Файл трека временно недоступен. Попробуйте позже.",
+  "errors.analysisNotReady": "Анализ трека ещё не готов.",
+  "errors.editConflict": "Дождитесь окончания обработки трека перед редактированием."
 }

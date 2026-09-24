@@ -1,6 +1,10 @@
 import { t, formatMeasurement } from './i18n.js';
 const messages = {
-  INVALID_GPX: 'errors.gpx', ENRICHMENT_UNAVAILABLE: 'errors.enrichment',
+  INVALID_GPX: 'errors.gpx', GPX_POINT_LIMIT: 'errors.pointLimit', ENRICHMENT_UNAVAILABLE: 'errors.enrichment',
+  PROCESSING_INTERRUPTED: 'errors.interrupted', TRACK_FILE_UNAVAILABLE: 'errors.fileUnavailable',
+  ANALYSIS_STORAGE_UNAVAILABLE: 'errors.fileUnavailable',
+  TRACK_EDIT_CONFLICT: 'errors.editConflict',
+  TRACK_DELIVERY_UNAVAILABLE: 'errors.fileUnavailable', TRACK_ANALYSIS_NOT_READY: 'errors.analysisNotReady',
   AUTHENTICATION_REQUIRED: 'errors.session', INVALID_SESSION: 'errors.session',
   INVALID_SEARCH_QUERY: 'errors.search', INVALID_CURSOR: 'errors.cursor', TRACK_NOT_FOUND: 'errors.notFound',
   INVALID_TRACK_IDS: 'errors.selection', INVALID_TRACK_TITLE: 'errors.title', INVALID_ROUTE_TYPE: 'errors.routeType',

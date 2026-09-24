@@ -347,5 +347,10 @@
   "preferences.blockedProcessing": "Poczekaj na zakończenie przesyłania lub przetwarzania przed zmianą ustawień.",
   "preferences.blockedEdits": "Zapisz lub odrzuć zmiany przed zmianą ustawień.",
   "surface.selected": "WYBRANE",
-  "surface.onMap": "NA MAPIE"
+  "surface.onMap": "NA MAPIE",
+  "errors.pointLimit": "Plik GPX zawiera ponad 100 000 punktów trasy.",
+  "errors.interrupted": "Przetwarzanie zostało przerwane. Ponów analizę, aby ukończyć trasę.",
+  "errors.fileUnavailable": "Plik trasy jest chwilowo niedostępny. Spróbuj ponownie później.",
+  "errors.analysisNotReady": "Analiza trasy nie jest jeszcze gotowa.",
+  "errors.editConflict": "Zaczekaj na zakończenie przetwarzania trasy przed edycją."
 }

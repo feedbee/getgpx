@@ -68,7 +68,7 @@ export function createSavedTrackRepository(savedTracks, tracks = null, users = n
           savedAt: 1,
           track: {
             _id: 1, publicId: 1, title: 1, routeType: 1, createdAt: 1, externalLinks: 1,
-            analysisStatus: 1, analysisStep: 1, analysis: 1,
+            analysisStatus: 1, analysisStep: 1, analysis: 1, active: 1, diagnostic: 1, attempt: 1,
           },
           author: { displayName: 1, avatarUrl: 1 },
         } },

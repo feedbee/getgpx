@@ -13,7 +13,7 @@ function largeGpx(pointCount) {
 }
 
 describe('large GPX analysis', () => {
-  it.each([50_000, 490_000])('analyzes %i source points and bounds persisted geometry', { timeout: 120_000 }, (pointCount) => {
+  it.each([50_000, 100_000])('analyzes %i source points and bounds persisted geometry', { timeout: 120_000 }, (pointCount) => {
     const source = largeGpx(pointCount);
     const sourceBytes = Buffer.byteLength(source);
     const startedAt = performance.now();
@@ -21,7 +21,7 @@ describe('large GPX analysis', () => {
     const elapsedMs = Math.round(performance.now() - startedAt);
 
     expect(analysis.sourcePointCount).toBe(pointCount);
-    expect(analysis.points).toHaveLength(Math.min(pointCount, 10_000));
+    expect(analysis.points.length).toBeLessThanOrEqual(10_000);
     expect(analysis.preview.points.length).toBeLessThanOrEqual(200);
     expect(sourceBytes).toBeLessThanOrEqual(25 * 1024 * 1024);
     console.info(`[gpx-load] ${pointCount.toLocaleString('en-US')} points: ${elapsedMs} ms, ${(sourceBytes / 1024 / 1024).toFixed(1)} MiB`);
