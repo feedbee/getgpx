@@ -6,6 +6,7 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ### Changed
 
+- Starting the server or public-ID migration without a `.env` file no longer prints a missing-file notice; supplied environment variables continue to work without a file.
 - MongoDB database selection now comes from the path in `MONGODB_URI`, defaulting to `getgpx` when no database is named. The separate `MONGODB_DATABASE` setting is no longer used.
 
 ## [0.2.0] - 2026-09-29

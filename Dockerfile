@@ -14,6 +14,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node src/backend ./src/backend
+COPY --chown=node:node scripts/run-with-optional-env.js ./scripts/run-with-optional-env.js
 COPY --chown=node:node src/client/domain ./src/client/domain
 COPY --chown=node:node src/route-types.js ./src/route-types.js
 USER node
