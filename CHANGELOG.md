@@ -4,6 +4,12 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-29
+
+### Fixed
+
+- CloudFront track file links now sign the viewer URL path without the S3 origin prefix, so protected GPX and analysis downloads validate correctly.
+
 ## [0.2.1] - 2026-09-29
 
 ### Changed
