@@ -4,8 +4,7 @@ This is the complete application configuration reference. “Required” means t
 
 | Variable | Default when unset | Required? | Purpose and behavior |
 | --- | --- | --- | --- |
-| `MONGODB_URI` | None | Yes, for the server, Vite API, and database migration | MongoDB connection string. Startup fails without it or when MongoDB cannot be reached. Integration tests need it to run their MongoDB cases. |
-| `MONGODB_DATABASE` | `getgpx` | No | Database name for the app and `migrate:track-public-ids`; integration tests use `getgpx_test` when unset. |
+| `MONGODB_URI` | None; database name defaults to `getgpx` when the URI has no path | Yes, for the server, Vite API, and database migration | MongoDB connection string. Its path names the database, for example `mongodb://localhost:27017/getgpx`. Startup fails without it or when MongoDB cannot be reached. Integration tests need a URI pointing to an isolated test database. |
 | `HOST` | `0.0.0.0` | No | Address bound by the production HTTP server. Vite uses its own host setting. |
 | `PORT` | `3000` | No | Port bound by the production HTTP server. Vite uses its own port (normally `5173`). |
 | `LOG_LEVEL` | `warn` | No | Pino minimum log level. `info` adds routine HTTP requests; `debug` adds step timings for homepage, public track, and upload requests. |

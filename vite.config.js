@@ -20,7 +20,7 @@ export default defineConfig(({ command, mode }) => {
         if (environment[name]) process.env[name] = environment[name];
       }
       server.middlewares.use(createRequestLogger());
-      const database = createDatabase({ uri: environment.MONGODB_URI, databaseName: environment.MONGODB_DATABASE });
+      const database = createDatabase({ uri: environment.MONGODB_URI });
       await database.connect();
       const authentication = await createAuthentication(database, {
         clientId: environment.GOOGLE_CLIENT_ID,

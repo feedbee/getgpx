@@ -1,12 +1,17 @@
 import { MongoClient } from 'mongodb';
 
+export function databaseNameFromUri(uri) {
+  const encodedName = /^mongodb(?:\+srv)?:\/\/[^/?]+\/([^?]*)/.exec(uri)?.[1];
+  return encodedName ? decodeURIComponent(encodedName) : 'getgpx';
+}
+
 export function createDatabase({
   uri = process.env.MONGODB_URI,
-  databaseName = process.env.MONGODB_DATABASE || 'getgpx',
   createClient = (connectionUri) => new MongoClient(connectionUri, { serverSelectionTimeoutMS: 5_000 }),
 } = {}) {
   if (!uri) throw new Error('MONGODB_URI is required.');
 
+  const databaseName = databaseNameFromUri(uri);
   const client = createClient(uri);
   let database;
   let connection;

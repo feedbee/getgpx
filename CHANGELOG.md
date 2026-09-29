@@ -4,6 +4,10 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+### Changed
+
+- MongoDB database selection now comes from the path in `MONGODB_URI`, defaulting to `getgpx` when no database is named. The separate `MONGODB_DATABASE` setting is no longer used.
+
 ## [0.2.0] - 2026-09-29
 
 ### Added

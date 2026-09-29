@@ -1,12 +1,13 @@
 import { MongoClient } from 'mongodb';
 import process from 'node:process';
 import { createPublicId } from '../src/backend/public-id.js';
+import { databaseNameFromUri } from '../src/backend/database.js';
 
 const uri = process.env.MONGODB_URI;
-const databaseName = process.env.MONGODB_DATABASE || 'getgpx';
 
 if (!uri) throw new Error('MONGODB_URI is required.');
 
+const databaseName = databaseNameFromUri(uri);
 const client = new MongoClient(uri, { serverSelectionTimeoutMS: 5_000 });
 
 function isPublicIdCollision(error) {

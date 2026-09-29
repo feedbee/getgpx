@@ -15,7 +15,7 @@ describeWithMongo('MongoDB integration', () => {
   let database;
 
   beforeAll(() => {
-    database = createDatabase({ uri, databaseName: process.env.MONGODB_DATABASE || 'getgpx_test' });
+    database = createDatabase({ uri });
     return database.connect();
   });
   afterAll(() => database?.close());

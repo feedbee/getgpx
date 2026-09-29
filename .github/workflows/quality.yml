@@ -47,5 +47,4 @@ jobs:
       - run: npm ci
       - run: npm run test:integration
         env:
-          MONGODB_URI: mongodb://localhost:27017
-          MONGODB_DATABASE: track_hub_test
+          MONGODB_URI: mongodb://localhost:27017/track_hub_test

@@ -11,7 +11,7 @@ describeWithMongo('MongoDB S3 track contract', () => {
   let tracks;
   let repository;
   beforeAll(async () => {
-    database = createDatabase({ uri, databaseName: process.env.MONGODB_DATABASE || 'getgpx_test' });
+    database = createDatabase({ uri });
     tracks = await database.collection('tracksS3Integration');
     repository = createS3TrackRepository(tracks);
     await repository.ensureIndexes();
