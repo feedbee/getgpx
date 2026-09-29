@@ -4,6 +4,21 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-29
+
+### Added
+
+- Track source GPX files and analysis results are stored as immutable objects in S3, with MongoDB retaining track metadata and the active revision.
+- Track pages load a compact summary before detailed map analysis, so basic track information appears sooner.
+
+### Changed
+
+- GPX downloads and track analysis delivery now use the configured S3 storage path. Streaming works without a reverse proxy; nginx and CloudFront delivery can be configured separately.
+
+### Upgrade notes
+
+- Configure `TRACK_S3_BUCKET` and `AWS_REGION` before starting the app. Production also requires `TRACK_S3_PREFIX=prod` and access to the S3 bucket. Existing MongoDB-only tracks are not migrated; recreate them in S3 before relying on them in this release. See `docs/operations.md` and `docs/specs/track-s3-storage.md`.
+
 ## [0.1.5] - 2026-09-23
 
 ### Changed
