@@ -29,19 +29,7 @@ Vite development runs at `http://localhost:5173`. For the production-shaped path
 
 ## Configuration
 
-Copy `.env.example` locally; never commit `.env`. The Node process reads environment variables from its environment (it does not load `.env` itself).
-
-| Variable | Required | Default / role |
-| --- | --- | --- |
-| `GOOGLE_CLIENT_ID` | Yes | Google OAuth 2.0 web client ID |
-| `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth client secret; keep only in the secret store / local `.env` |
-| `GOOGLE_REDIRECT_URI` | Yes | Exact callback registered at Google; use port `5173` for Vite development and `3000` for the production-shaped local server |
-| `SESSION_SECRET` | Yes | At least 32 random characters used to sign short-lived OAuth state |
-| `MONGODB_URI` | Production: yes | MongoDB connection string |
-| `MONGODB_DATABASE` | No | `getgpx` |
-| `PORT` / `HOST` | No | `3000` / `0.0.0.0` |
-| `VALHALLA_URL` | No | Public Valhalla endpoint |
-| `OVERPASS_URL` | No | Public Overpass endpoints |
+Copy `.env.example` locally; never commit `.env`. The production Node process loads it through `npm start`; Vite loads it for `npm run dev`. See the [complete environment variable table](docs/environment-variables.md) for defaults, required settings, and behavior.
 
 Health endpoints are `/health/live` (process) and `/health/ready` (MongoDB dependency).
 

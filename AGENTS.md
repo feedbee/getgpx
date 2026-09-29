@@ -6,5 +6,6 @@
 - Keep all tests under `tests/`, mirroring the source boundary; do not colocate tests with production files.
 - Do not commit `.env`, credentials, GPX user data, or generated `dist/` output.
 - Treat `docs/` living documents as current truth; treat `docs/changes/` files as immutable historical context.
+- When adding, removing, or changing a supported environment variable, update the table in `docs/environment-variables.md` in the same change, including its default, requirement condition, and behavior. Keep `.env.example` aligned.
 - Read [docs/README.md](docs/README.md), especially architecture and testing conventions, before changing boundaries.
 - For every new or changed user-facing string, follow [docs/localization.md](docs/localization.md): update all registered language catalogs in the same change, localize formatting and units, and run the catalog check included in `npm run check`.

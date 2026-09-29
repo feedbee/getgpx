@@ -7,11 +7,12 @@ Living documents describe the current system:
 3. [Testing conventions](testing-conventions.md) — suite selection and commands.
 4. [Coding preferences](coding-preferences.md) — repository-specific rules.
 5. [Operations](operations.md) — local containers, health, CI, and releases.
-6. [Production readiness](production-readiness.md) — resolved and remaining MVP risks.
-7. [ADR-001: MongoDB](decisions/001-mongodb.md) — persistence decision and consequences.
-8. [ADR-002: S3 track objects](decisions/002-track-objects-in-s3.md) — immutable track source/analysis storage.
-9. [Google authentication](authentication.md) — current sign-in contract and security boundaries.
-10. [Saved tracks](tracks.md) — current UX, persistence, and API.
+6. [Environment variables](environment-variables.md) — complete runtime configuration, defaults, and required settings.
+7. [Production readiness](production-readiness.md) — resolved and remaining MVP risks.
+8. [ADR-001: MongoDB](decisions/001-mongodb.md) — persistence decision and consequences.
+9. [ADR-002: S3 track objects](decisions/002-track-objects-in-s3.md) — immutable track source/analysis storage.
+10. [Google authentication](authentication.md) — current sign-in contract and security boundaries.
+11. [Saved tracks](tracks.md) — current UX, persistence, and API.
 
 Implementation specification:
 
