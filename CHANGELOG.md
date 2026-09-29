@@ -4,10 +4,20 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-29
+
 ### Changed
 
 - Starting the server or public-ID migration without a `.env` file no longer prints a missing-file notice; supplied environment variables continue to work without a file.
 - MongoDB database selection now comes from the path in `MONGODB_URI`, defaulting to `getgpx` when no database is named. The separate `MONGODB_DATABASE` setting is no longer used.
+
+### Fixed
+
+- Track upload, replacement, S3 delivery, CloudFront handoff, background worker, and cleanup failures now include safe provider codes and HTTP status in server logs without exposing provider messages or user data.
+
+### Upgrade notes
+
+- If the deployment used `MONGODB_DATABASE` to select a database other than `getgpx`, append that name to `MONGODB_URI` before upgrading (for example, `mongodb://host:27017/mydb`).
 
 ## [0.2.0] - 2026-09-29
 
