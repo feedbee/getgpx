@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "start": "node scripts/run-with-optional-env.js src/backend/index.js",
-    "migrate:track-public-ids": "node scripts/run-with-optional-env.js scripts/migrate-track-public-ids.js",
+    "start": "node src/backend/index.js",
+    "migrate:track-public-ids": "node scripts/migrate-track-public-ids.js",
     "preview": "vite preview",
     "test": "npm run test:fast",
     "test:fast": "vitest run tests/unit",

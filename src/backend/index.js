@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import process from 'node:process';
 import { createApp } from './app.js';
 import { createAuthentication } from './authentication.js';
 import { loadConfiguration, loadHomepageTrackIds } from './configuration.js';
@@ -10,6 +12,9 @@ import { loadTrackStorageConfig } from './track-storage-config.js';
 import { createTrackInternalRouter } from './track-internal-router.js';
 import { logger } from './logger.js';
 import { createHomepageTrackCache } from './homepage-track-cache.js';
+
+if (existsSync('.env')) process.loadEnvFile('.env');
+logger.level = process.env.LOG_LEVEL || 'warn';
 
 const host = process.env.HOST || '0.0.0.0';
 const port = Number(process.env.PORT || 3000);

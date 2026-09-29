@@ -1,7 +1,10 @@
 import { MongoClient } from 'mongodb';
+import { existsSync } from 'node:fs';
 import process from 'node:process';
 import { createPublicId } from '../src/backend/public-id.js';
 import { databaseNameFromUri } from '../src/backend/database.js';
+
+if (existsSync('.env')) process.loadEnvFile('.env');
 
 const uri = process.env.MONGODB_URI;
 
