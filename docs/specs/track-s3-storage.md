@@ -472,6 +472,10 @@ The infrastructure forwards the original identity to this endpoint. Successful r
 HTTP 200, no body, Cache-Control: no-store, and these internal response headers:
 
 - `X-Track-File-URL`: complete HTTPS signed URL on the configured CloudFront domain.
+  The viewer path omits `TRACK_S3_PREFIX`: with `TRACK_S3_PREFIX=prod`, the S3 key
+  `prod/tracks/<id>/<revision>/analysis.json` is signed as
+  `/tracks/<id>/<revision>/analysis.json`. CloudFront's matching origin path `/prod`
+  supplies the prefix when requesting S3. Reject keys outside the configured prefix.
 - `X-Track-File-Content-Type`: controlled file content type.
 - `X-Track-File-Content-Disposition`: safe disposition for GPX, omitted for JSON.
 - `X-Track-File-Revision`: selected opaque revision for diagnostics/contract testing.

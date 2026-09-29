@@ -88,7 +88,8 @@ The same public file URLs work in development and production. `TRACK_FILE_DELIVE
 (default) streams S3 data through Node and works through Vite without Nginx.
 `TRACK_FILE_DELIVERY=nginx` makes Node authorize and expose a short-lived signed
 CloudFront URL through an internal route on the same application listener for Nginx
-to consume; the public Node file route does not reveal the URL. Nginx must block
+to consume. The signed viewer path omits `TRACK_S3_PREFIX` because the CloudFront
+origin path supplies it for S3; the public Node file route does not reveal the URL. Nginx must block
 direct browser access to `/internal/`. The Nginx and AWS infrastructure is managed separately.
 Read authorization is centralized so a future private-track policy can keep these URLs.
 

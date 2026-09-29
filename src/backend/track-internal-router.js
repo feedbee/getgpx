@@ -33,8 +33,12 @@ export function createTrackInternalHandler(trackService, authService, config, { 
     if (!descriptor.key) return fileError(response, 409, 'TRACK_ANALYSIS_NOT_READY');
     let url;
     try {
+      const prefix = `${config.prefix}/`;
+      if (!descriptor.key.startsWith(prefix)) throw new Error('Track object key is outside configured prefix.');
+      // CloudFront's originPath supplies the S3 prefix; the viewer URL starts at tracks/.
+      const viewerKey = descriptor.key.slice(prefix.length);
       url = sign({
-        url: `https://${config.cloudFrontDomain}/${descriptor.key.split('/').map(encodeURIComponent).join('/')}`,
+        url: `https://${config.cloudFrontDomain}/${viewerKey.split('/').map(encodeURIComponent).join('/')}`,
         keyPairId: config.cloudFrontKeyPairId,
         privateKey: config.cloudFrontPrivateKey,
         dateLessThan: new Date(Date.now() + 60_000).toISOString(),
