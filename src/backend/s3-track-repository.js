@@ -2,19 +2,16 @@ import { ObjectId } from 'mongodb';
 import { createPublicId } from './public-id.js';
 import { normalizeTrackName } from './track-repository.js';
 import { normalizeRouteType } from '../route-types.js';
+import { createTrackSummary } from './track-summary.js';
 
 const LEASE_MS = 120_000;
 
 function compact(analysis, sourceKey, analysisKey, revision, originalFilename, analysisSources, completeness) {
+  const summary = createTrackSummary(analysis, { analysisSources, completeness });
   return {
     revision, sourceKey, analysisKey, originalFilename,
-    metrics: {
-      distanceKm: analysis.distanceKm ?? null,
-      ascentM: analysis.ascentM ?? null,
-      descentM: analysis.descentM ?? null,
-      effectiveSpeedKmh: analysis.effectiveSpeedKmh ?? null,
-      estimatedDurationMs: analysis.estimatedDurationMs ?? null,
-    },
+    metrics: summary.metrics,
+    summary,
     sourcePointCount: analysis.sourcePointCount ?? null,
     pointsOfInterestCount: analysis.pointsOfInterest?.length ?? 0,
     preview: analysis.preview ?? null,
@@ -113,6 +110,8 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
       if (previous.attempt.kind === 'RETRY' && previous.active) {
         active.metrics.effectiveSpeedKmh = previous.active.metrics.effectiveSpeedKmh;
         active.metrics.estimatedDurationMs = previous.active.metrics.estimatedDurationMs;
+        active.summary.metrics.effectiveSpeedKmh = previous.active.metrics.effectiveSpeedKmh;
+        active.summary.metrics.estimatedDurationMs = previous.active.metrics.estimatedDurationMs;
       }
       const effectiveTitle = previous.attempt.kind === 'RETRY' && previous.active ? previous.title : title;
       const result = await tracks.updateOne(attemptFilter(identity), {
@@ -147,7 +146,9 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
         $or: [{ attempt: { $exists: false } }, { 'attempt.status': 'FAILED' }] },
       { $set: { title, normalizedName: normalizeTrackName(title), routeType: normalizeRouteType(routeType),
         externalLinks, 'active.metrics.effectiveSpeedKmh': speedKmh,
-        'active.metrics.estimatedDurationMs': estimatedDurationMs, updatedAt: now } },
+        'active.metrics.estimatedDurationMs': estimatedDurationMs,
+        'active.summary.metrics.effectiveSpeedKmh': speedKmh,
+        'active.summary.metrics.estimatedDurationMs': estimatedDurationMs, updatedAt: now } },
       { returnDocument: 'after' });
     },
     deleteOwned(trackId, ownerId) { return tracks.findOneAndDelete({ _id: trackId, ownerId }); },

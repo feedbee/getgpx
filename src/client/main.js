@@ -23,7 +23,7 @@ import { emptyPoiSelection, updatePoiSelection } from './domain/poi-selection.js
 import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot, profileFocusVisibility, profileRangePosition, visibleRangeIndices } from './domain/profile-math.js';
 import { colorRunsForMode, highlightRunsForFilter, profileColorRuns } from './domain/route-color.js';
 import { isClosedRoute } from './domain/route-shape.js';
-import { classifySurface, classifyWayType, roadQualityCategories, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
+import { classifySurface, classifyWayType, roadQualityCategories, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
 
 const app = document.querySelector('#app');
 let map;
@@ -72,7 +72,7 @@ app.innerHTML = `
   <header class="topbar">
     <div class="topbar-inner"><a class="brand" href="/" ${messageAttribute('aria-label', 'header.home')}><img class="brand-mark" src="/getgpx-mark-30.png" srcset="/getgpx-mark-60.png 2x, /getgpx-mark-90.png 3x" alt="" width="30" height="30" /><span>GETGPX</span></a>
     <section class="compact-route-header" ${messageAttribute('aria-label', 'header.currentRoute')} aria-hidden="true">
-      <strong id="compact-track-name">${htmlMessage('common.loadingRoute')}</strong>
+      <strong id="compact-track-name"></strong>
       <div class="compact-route-metrics" ${messageAttribute('aria-label', 'header.metrics')}>
         <span class="route-type-metric" id="compact-route-type-metric" ${messageAttribute('aria-label', 'common.routeType')}>${routeTypeIcon('other')}<b>${htmlMessage('activity.other')}</b></span>
         <span class="distance-metric" ${messageAttribute('aria-label', 'route.distance')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M7 9l-3 3 3 3m10-6 3 3-3 3"/></svg><b id="compact-distance">—</b> ${unitMarkup('distance')}</span>
@@ -103,7 +103,7 @@ app.innerHTML = `
       <p class="route-state-note" id="route-state-note" hidden></p>
       <div class="route-heading">
         <div class="route-heading-copy">
-          <h1 id="track-name" class="inline-loading is-loading"><span class="loading-spinner" aria-hidden="true"></span>${htmlMessage('common.loadingRoute')}</h1>
+          <h1 id="track-name"></h1>
         </div>
         <div class="track-attribution" id="track-attribution" hidden>
           <span class="track-attribution-avatar" aria-hidden="true"><img id="track-uploader-avatar" alt="" hidden /><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0"/></svg></span>
@@ -143,6 +143,7 @@ app.innerHTML = `
         <section class="content-section profile-section" id="details">
           <div class="compact-heading"><h2>${htmlMessage('common.elevationProfile')}</h2></div>
           <div class="analysis-card profile-card">
+            <p class="detail-load-state is-processing" id="profile-load-state" role="status">${htmlMessage('common.loadingRoute')}</p>
             <div class="profile-toolbar"><div class="profile-mode segmented-control" ${messageAttribute('aria-label', 'profile.color')}><button class="active" type="button" data-color-scope="profile" data-color-mode="gradient">${htmlMessage('common.gradient')}</button><button type="button" data-color-scope="profile" data-color-mode="surface">${htmlMessage('common.surface')}</button><button type="button" data-color-scope="profile" data-color-mode="waytype">${htmlMessage('common.roadType')}</button><button type="button" data-color-scope="profile" data-color-mode="quality">${htmlMessage('common.quality')}</button></div><div class="profile-toolbar-actions"><div class="profile-overlay-settings"><button class="profile-settings-trigger" id="profile-settings-trigger" type="button" ${messageAttribute('aria-label', 'profile.overlaySettings')} aria-expanded="false" aria-controls="profile-settings-popover"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="M19 13.2v-2.4l-2-.7a7 7 0 0 0-.6-1.4l.9-1.9-1.7-1.7-1.9.9a7 7 0 0 0-1.4-.6l-.7-2H9.2l-.7 2a7 7 0 0 0-1.4.6l-1.9-.9-1.7 1.7.9 1.9a7 7 0 0 0-.6 1.4l-2 .7v2.4l2 .7a7 7 0 0 0 .6 1.4l-.9 1.9 1.7 1.7 1.9-.9a7 7 0 0 0 1.4.6l.7 2h2.4l.7-2a7 7 0 0 0 1.4-.6l1.9.9 1.7-1.7-.9-1.9a7 7 0 0 0 .6-1.4l2-.7Z"/></svg></button><div class="profile-settings-popover" id="profile-settings-popover" role="dialog" aria-labelledby="profile-settings-title" hidden><strong id="profile-settings-title">${htmlMessage('profile.showOverlay')}</strong><div class="profile-focus-placement segmented-control" ${messageAttribute('aria-label', 'profile.highlightPosition')}><button type="button" data-profile-focus-placement="profile" aria-pressed="false">${htmlMessage('profile.onProfile')}</button><button class="active" type="button" data-profile-focus-placement="ribbon" aria-pressed="true">${htmlMessage('profile.onRibbon')}</button></div></div></div><div class="profile-actions segmented-control"><button id="zoom-back" type="button" disabled>${htmlMessage('profile.back')}</button><button id="zoom-reset" type="button" disabled>${htmlMessage('common.cancel')}</button></div></div></div>
             <div class="profile-wrap" id="profile-wrap" tabindex="0" role="slider" ${messageAttribute('aria-label', 'profile.position')} aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <svg id="profile" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ebc35" stop-opacity=".24"/><stop offset="1" stop-color="#7ebc35" stop-opacity=".02"/></linearGradient></defs><g id="grid"></g><g id="climb-bands"></g><path id="profile-area" class="profile-area"></path><g id="profile-gradient-area"></g><g id="gradient-line"></g><g id="profile-focus-profile"></g><g id="surface-ribbon"></g><g id="profile-focus-ribbon"></g><rect id="profile-selection" class="profile-selection" x="0" y="18" width="0" height="246"></rect><line id="profile-cursor" class="profile-cursor" y1="18" y2="264"></line><circle id="profile-dot" class="profile-dot" r="6"></circle></svg>
@@ -170,7 +171,7 @@ app.innerHTML = `
           </div>
         </section>
       </div>
-      <aside class="map-column"><section class="map-shell" ${messageAttribute('aria-label', 'map.route')}><div id="map"></div><div class="map-mode segmented-control" ${messageAttribute('aria-label', 'map.color')}><button class="active" type="button" data-color-scope="map" data-color-mode="gradient">${htmlMessage('common.gradient')}</button><button type="button" data-color-scope="map" data-color-mode="surface">${htmlMessage('common.surface')}</button><button type="button" data-color-scope="map" data-color-mode="waytype">${htmlMessage('common.roadType')}</button><button type="button" data-color-scope="map" data-color-mode="quality">${htmlMessage('common.quality')}</button></div><div class="map-note" id="map-note"></div><div class="hover-readout" id="hover-readout" aria-live="polite"><b>${htmlMessage('map.hover')}</b></div></section></aside>
+      <aside class="map-column"><section class="map-shell" ${messageAttribute('aria-label', 'map.route')}><p class="detail-load-state is-processing" id="map-load-state" role="status">${htmlMessage('common.loadingRoute')}</p><div id="map" hidden></div><div class="map-mode segmented-control" ${messageAttribute('aria-label', 'map.color')} hidden><button class="active" type="button" data-color-scope="map" data-color-mode="gradient">${htmlMessage('common.gradient')}</button><button type="button" data-color-scope="map" data-color-mode="surface">${htmlMessage('common.surface')}</button><button type="button" data-color-scope="map" data-color-mode="waytype">${htmlMessage('common.roadType')}</button><button type="button" data-color-scope="map" data-color-mode="quality">${htmlMessage('common.quality')}</button></div><div class="map-note" id="map-note" hidden></div><div class="hover-readout" id="hover-readout" aria-live="polite" hidden><b>${htmlMessage('map.hover')}</b></div></section></aside>
     </div>
   </main>
   ${renderTrackUploadDialogs()}
@@ -527,6 +528,7 @@ function renderPointsOfInterest(pointsOfInterest = []) {
     row.type = 'button';
     row.className = 'poi-row';
     row.dataset.poiIndex = String(index);
+    row.disabled = !currentTrack;
     row.setAttribute('aria-pressed', 'false');
     const number = document.createElement('b');
     bindText(number, () => String(index + 1));
@@ -539,6 +541,11 @@ function renderPointsOfInterest(pointsOfInterest = []) {
       const meta = document.createElement('small');
       bindText(meta, () => poiType(point));
       copy.append(meta);
+    }
+    if (Number.isFinite(point.distanceKm)) {
+      const distance = document.createElement('small');
+      bindText(distance, () => formatMeasurement('distance', point.distanceKm));
+      copy.append(distance);
     }
     row.append(number, copy);
     list.append(row);
@@ -737,7 +744,9 @@ function renderProfilePointsOfInterest(track, startKm, endKm) {
 function drawProfile(track) {
   currentViewMetrics = visibleMetrics();
   const { startIndex, endIndex, startKm, endKm, min, max } = currentViewMetrics;
-  const { ascentM, descentM } = elevationGainLoss(track.points, startIndex, endIndex);
+  const isFullRange = startIndex === 0 && endIndex === track.points.length - 1;
+  const summaryMetrics = isFullRange ? publicTrackData?.summary?.metrics : null;
+  const { ascentM, descentM } = summaryMetrics || elevationGainLoss(track.points, startIndex, endIndex);
   bindText(document.querySelector('#profile-ascent'), () => number(elevationValue(ascentM, preferences.value), { ...preferences.value, digits: 0 }));
   bindText(document.querySelector('#profile-descent'), () => number(elevationValue(descentM, preferences.value), { ...preferences.value, digits: 0 }));
   const visiblePoints = track.points.slice(startIndex, endIndex + 1).filter((point) => Number.isFinite(point.ele));
@@ -779,8 +788,8 @@ function drawProfile(track) {
   }).join('') : '';
   document.querySelector('#grid').innerHTML = [40, 95, 150, 205, 260].map((y) => `<line x1="0" y1="${y}" x2="1200" y2="${y}" />`).join('');
   document.querySelector('#axis').innerHTML = Array.from({ length: 6 }, (_, index) => `<span>${formatMeasurement('distance', startKm + (endKm - startKm) * index / 5)}</span>`).join('');
-  bindText(document.querySelector('#min-label'), () => formatMeasurement('elevation', min));
-  bindText(document.querySelector('#max-label'), () => formatMeasurement('elevation', max));
+  bindText(document.querySelector('#min-label'), () => formatMeasurement('elevation', summaryMetrics?.minElevationM ?? min));
+  bindText(document.querySelector('#max-label'), () => formatMeasurement('elevation', summaryMetrics?.maxElevationM ?? max));
   document.querySelector('#climb-bands').innerHTML = track.climbs.map((climb) => {
     const from = Math.max(climb.startKm, startKm);
     const to = Math.min(climb.endKm, endKm);
@@ -886,10 +895,15 @@ function renderClimbs(track) {
   document.querySelector('#descents-list').innerHTML = rows(track.descents, 'descent');
 }
 
-function renderSurfaces(track) {
-  const summary = summarizeSurfaces(track.points);
-  const wayTypes = summarizeWayTypes(track.points);
-  const quality = summarizeRoadQuality(track.points);
+function renderSurfaces(trackSummary) {
+  const categoryRows = (items, categories) => categories.map((category) => ({
+    ...category, ...(items || []).find((item) => item.id === category.id),
+    distanceKm: (items || []).find((item) => item.id === category.id)?.distanceKm ?? 0,
+    percent: (items || []).find((item) => item.id === category.id)?.percent ?? 0,
+  }));
+  const summary = categoryRows(trackSummary.distributions.surfaces, surfaceCategories);
+  const wayTypes = categoryRows(trackSummary.distributions.wayTypes, wayTypeCategories);
+  const quality = categoryRows(trackSummary.distributions.roadQualities, roadQualityCategories);
   document.querySelector('#surface-bar').innerHTML = summary.filter((item) => item.percent > 0).map((item) =>
     `<button type="button" data-surface-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${escapeHtml(t(item.label))}: ${percent(item.percent)}" aria-label="${escapeHtml(t(item.label))}: ${escapeHtml(t('profile.percentRoute', { percent: percent(item.percent) }))}" aria-pressed="false"></button>`).join('');
   document.querySelector('#surface-stats').innerHTML = summary.map((item) => `
@@ -910,6 +924,8 @@ function renderSurfaces(track) {
     `<button type="button" data-quality-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${escapeHtml(t(item.label))}: ${percent(item.percent)}" aria-label="${escapeHtml(t(item.label))}: ${escapeHtml(t('profile.percentRoute', { percent: percent(item.percent) }))}" aria-pressed="false"></button>`).join('');
   document.querySelector('#quality-stats').innerHTML = quality.map((item) => `
     <button class="distribution-row" type="button" data-quality-filter="${item.id}" aria-pressed="false" ${item.distanceKm === 0 ? 'disabled' : ''}><i style="--surface-color:${item.color}"></i><span>${escapeHtml(t(item.label))}</span><strong>${formatMeasurement('distance', item.distanceKm)}</strong><small>${percent(item.percent, 0)}</small></button>`).join('');
+  document.querySelectorAll('[data-surface-filter],[data-waytype-filter],[data-quality-filter]')
+    .forEach((control) => { control.dataset.summaryEmpty = String(control.disabled); });
   refreshRouteFocus();
 }
 
@@ -992,6 +1008,7 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
   document.querySelector('.route-metrics').hidden = false;
   document.querySelector('.route-workspace').hidden = false;
   document.querySelector('#route-state-note').hidden = true;
+  setDetailedView('ready');
   clearRangeFocus();
   hoveredSurfaceId = null;
   pinnedSurfaceId = null;
@@ -1049,10 +1066,7 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
     : routeSpeed ? t('route.estimatedSpeed', { speed: formatMeasurement('speed', routeSpeed) }) : t('route.noSpeed'));
   updatePageLanguage();
   drawMap(currentTrack);
-  renderPointsOfInterest(currentTrack.pointsOfInterest);
   if (currentTrack.hasElevation) drawProfile(currentTrack);
-  renderClimbs(currentTrack);
-  renderSurfaces(currentTrack);
   renderSourceInfo(analysisSources || { gpx: 'SUCCESS', valhalla: 'PENDING', openStreetMap: 'PENDING' });
   document.querySelector('#zoom-back').disabled = true;
   document.querySelector('#zoom-reset').disabled = true;
@@ -1066,7 +1080,7 @@ function renderUnavailableTrack(track) {
   bindText(document.querySelector('#route-state-note'), () => track.analysisNote || t(track.status === 'PROCESSING' ? 'sources.waiting' : 'sources.failed'));
   document.querySelector('#route-state-note').hidden = false;
   document.querySelector('#route-state-note').classList.toggle('is-processing', track.status === 'PROCESSING');
-  const metrics = track.metrics;
+  const metrics = track.summary?.metrics || track.metrics;
   document.querySelector('.route-metrics').hidden = !metrics;
   if (metrics) {
     const type = routeTypeDefinition(track.routeType);
@@ -1082,7 +1096,8 @@ function renderUnavailableTrack(track) {
     bindText(document.querySelector('#average-speed-badge'), () => metrics.effectiveSpeedKmh == null ? '—'
       : formatMeasurement('speed', metrics.effectiveSpeedKmh));
   }
-  document.querySelector('.route-workspace').hidden = true;
+  document.querySelector('.route-workspace').hidden = !track.summary;
+  if (track.summary) setDetailedView(track.status === 'PROCESSING' ? 'loading' : 'failed');
 }
 
 function renderBasicTrackHeader(track) {
@@ -1095,7 +1110,7 @@ function renderBasicTrackHeader(track) {
     element.innerHTML = `${routeTypeIcon(type.id)}<b>${htmlMessage(`activity.${type.id}`)}</b>`;
     bindAttribute(element, 'aria-label', () => t('route.typeValue', { type: routeTypeDefinition(type.id).label }));
   }
-  const metrics = track.metrics;
+  const metrics = track.summary?.metrics || track.metrics;
   document.querySelector('.route-metrics').hidden = !metrics;
   if (metrics) {
     const distance = () => metrics.distanceKm == null ? '—'
@@ -1114,17 +1129,53 @@ function renderBasicTrackHeader(track) {
       ? t('route.noSpeed') : t('route.estimatedSpeed', { speed: speed() }));
   }
   updatePageLanguage();
-  document.querySelector('.route-workspace').hidden = true;
-  const note = document.querySelector('#route-state-note');
-  bindText(note, () => t('common.loadingRoute'));
-  note.classList.add('is-processing');
-  note.hidden = false;
+  document.querySelector('.route-workspace').hidden = !track.summary;
+  document.querySelector('#route-state-note').hidden = true;
+  if (track.summary) {
+    const hasRoadSummary = Object.values(track.summary.distributions).some((items) => items.length);
+    document.querySelector('.surface-section').hidden = !hasRoadSummary;
+    document.querySelector('.route-tabs a[href="#way-types"]').hidden = !hasRoadSummary;
+    const hasTerrainSummary = track.resultKind !== 'DIAGNOSTIC'
+      || track.summary.climbs.length || track.summary.descents.length;
+    document.querySelector('.climbs-section').hidden = !hasTerrainSummary;
+    document.querySelector('.route-tabs a[href="#climbs"]').hidden = !hasTerrainSummary;
+    renderClimbs(track.summary);
+    renderPointsOfInterest(track.summary.pointsOfInterest);
+    renderSurfaces(track.summary);
+    renderSourceInfo(track.summary.analysisSources);
+    bindText(document.querySelector('#profile-ascent'), () => metrics.ascentM == null ? '—' : formatMeasurement('elevation', metrics.ascentM, { digits: 0 }));
+    bindText(document.querySelector('#profile-descent'), () => metrics.descentM == null ? '—' : formatMeasurement('elevation', metrics.descentM, { digits: 0 }));
+    bindText(document.querySelector('#min-label'), () => metrics.minElevationM == null ? '—' : formatMeasurement('elevation', metrics.minElevationM));
+    bindText(document.querySelector('#max-label'), () => metrics.maxElevationM == null ? '—' : formatMeasurement('elevation', metrics.maxElevationM));
+    setDetailedView('loading');
+  }
+}
+
+function setDetailedView(state) {
+  const ready = state === 'ready';
+  for (const selector of ['#map', '.map-mode', '#map-note', '#hover-readout', '.profile-toolbar', '#profile-wrap']) {
+    document.querySelector(selector).hidden = !ready;
+  }
+  for (const legend of document.querySelectorAll('.profile-card .route-legend')) {
+    legend.hidden = !ready || legend.id !== `${profileColorMode}-legend`;
+  }
+  for (const selector of ['#map-load-state', '#profile-load-state']) {
+    const element = document.querySelector(selector);
+    element.hidden = ready;
+    element.classList.toggle('is-processing', state === 'loading');
+    if (!ready) bindText(element, () => t(state === 'loading' ? 'common.loadingRoute' : 'errors.fileUnavailable'));
+  }
+  document.querySelectorAll('[data-surface-filter],[data-waytype-filter],[data-quality-filter],[data-terrain-range]')
+    .forEach((control) => { control.disabled = !ready || control.dataset.summaryEmpty === 'true'; });
+  document.querySelectorAll('[data-poi-index]').forEach((control) => { control.disabled = !ready; });
+  if (ready) map.invalidateSize();
 }
 
 async function loadPublicTrack(trackId, retries = 0) {
   publicTrackId = trackId;
   publicTrackData = null;
   publicTrackOwnershipVerified = false;
+  currentTrack = null;
   const response = await fetch(`/api/tracks/${trackId}`, { headers: { accept: 'application/json' } });
   if (!response.ok) {
     renderUnavailableTrack({ title: t('tracks.notFound'), analysisNote: t('tracks.checkLink') });

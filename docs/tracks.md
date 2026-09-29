@@ -22,7 +22,13 @@ The source GPX and analysis are stored under revisioned keys in a private S3 buc
 ```
 
 MongoDB stores ownership, title, status, object keys, editable fields, basic metrics,
-source point count, provenance, and compact previews. It does not store the full
+source point count, provenance, compact previews, and an active-revision `summary`.
+The summary contains canonical route/elevation metrics, category IDs with distances
+and percentages, climbs and descents with display metrics, POI names/types and
+nearest route distances, and source/completeness status. It contains no route-point
+array or map geometry. It is built from the
+completed analysis and published with the active revision in one conditional MongoDB
+update. A diagnostic failure may have its own clearly separate summary. It does not store the full
 analysis or route-point arrays. A source upload completes before the processing
 record is inserted. The analysis object completes before the MongoDB record becomes
 READY. An initial failure can retain a diagnostic partial analysis with a clear
@@ -52,16 +58,20 @@ orphan objects after a failure are possible and are not swept automatically.
 - `GET /api/tracks/mine`, `GET /api/tracks/saved`, `GET /api/tracks/homepage`: compact
   MongoDB-backed lists. The featured homepage track has an `analysisUrl` rather than
   embedded analysis.
-- `GET /api/tracks/:id`: public basic information, including distance, ascent,
-  descent, effective speed, estimated duration, point counts, provenance, preview,
-  current revision, analysisUrl, and downloadUrl. No S3 read is required.
+- `GET /api/tracks/:id`: public basic information and the complete point-free
+  `summary`, including height extrema, surface/road/quality distributions, climbs,
+  descents, POI metadata and route distances, current revision, analysisUrl, and
+  downloadUrl. No S3 read is required.
 - `GET /api/tracks/:id/analysis`: current active detailed JSON, or completed partial
   diagnostic JSON when no active version exists. The client does not choose a revision.
 
-The track page renders its title, route type, basic metrics, attribution, and download
-action as soon as the MongoDB-backed basic response arrives. A loading indicator
-remains for the map and detailed sections until the separate analysis response is
-available. If analysis delivery fails, the basic header remains visible.
+The track page renders its title, route type, metrics, elevation summary, road and
+surface distributions, climbs, descents, POI list, attribution, and download action
+as soon as the MongoDB-backed basic response arrives. Map, elevation chart, POI
+placement and selection, and segment highlighting wait for the separate analysis response. Their controls remain
+disabled while waiting. If analysis delivery fails, the summary stays visible and
+the map/chart show localized errors. Existing track records are recreated; no legacy
+summary fallback or backfill is provided.
 - `GET /api/tracks/:id/download`: current active source GPX, or the initial source
   before first publication. The original bytes and safe filename are retained.
 - `GET /api/tracks/:id/status`, `GET /api/tracks/:id/manage`: owner-only processing,

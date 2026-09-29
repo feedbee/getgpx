@@ -194,19 +194,20 @@ an alternate authoritative source for editable speed or estimated duration.
 
 Keep schemaVersion, ownerId, publicId, title, normalizedName, routeType, externalLinks,
 timestamps, basic metrics, preview, sourcePointCount, pointsOfInterestCount,
-source/provenance statuses, and current object references. Do not persist route points,
-POI arrays, segment arrays, or full/partial analysis in the track document.
+source/provenance statuses, and current object references. The active summary also
+stores point-free POI names, types, and distances. Do not persist route points,
+POI coordinates, segment arrays, or full/partial analysis in the track document.
 
 Logical state groups:
 
 - `active`: the last successfully published revision, sourceKey, analysisKey,
-  originalFilename, basic metrics, preview, and provenance. Absent before first success.
+  originalFilename, basic metrics, compact summary, preview, and provenance. Absent before first success.
 - `attempt`: unique revision token, sourceKey, originalFilename, kind
   (`INITIAL`, `REPLACE`, `RETRY`), status, step, safe error code, start/update times,
   and worker lease information. Optional analysisKey only after a complete JSON write.
 - `diagnostic`: the last completely written partial FAILED snapshot needed to display
   a first-upload failure or preserve that display while retrying. Holds references
-  and compact metrics/provenance only. It never replaces an existing active result.
+  and compact metrics/summary/provenance only. It never replaces an existing active result.
 
 A READY active version remains READY while a replacement/retry is PROCESSING or
 FAILED. Publish attempt state separately so the owner can see pending work or errors.
@@ -242,7 +243,7 @@ preserving track identity, owner, route type, and external links.
    the separate compact preview. Large intermediate values stay in the job, never
    in the track document.
 5. Completely write analysis.json and conditionally commit the active references,
-   compact metrics, preview, provenance, and READY in one Mongo update.
+   compact metrics and summary, preview, provenance, and READY in one Mongo update.
 
 Source upload failure creates no record. Mongo insert failure triggers best-effort
 cleanup of the just-uploaded source. Orphans are acceptable.
@@ -343,7 +344,7 @@ the resulting compact preview in MongoDB; cards do not request analysis or S3.
 
 Clients must not discover or supply a revision to access the current track.
 `GET /api/tracks/:id` is the complete basic-information endpoint, including all header
-metrics, suitable for other services without downloading detailed geometry. There
+metrics and the compact analysis summary, suitable for other services without downloading detailed geometry. There
 is no additional metadata/metrics request.
 
 ```json
@@ -364,7 +365,14 @@ is no additional metadata/metrics request.
     },
     "originalFilename": "example.gpx",
     "sourcePointCount": 24500,
-    "pointsOfInterestCount": 4,
+    "pointsOfInterestCount": 1,
+    "summary": {
+      "metrics": { "distanceKm": 82.4, "ascentM": 930, "descentM": 915 },
+      "distributions": { "surfaces": [], "roadQualities": [], "wayTypes": [] },
+      "climbs": [], "descents": [],
+      "pointsOfInterest": [{ "name": "Water", "type": "WATER", "distanceKm": 12.6 }],
+      "pointsOfInterestCount": 1
+    },
     "preview": { "viewBox": "0 0 100 100", "points": [] },
     "analysisUrl": "/api/tracks/public-track-id/analysis",
     "downloadUrl": "/api/tracks/public-track-id/download"
@@ -380,7 +388,7 @@ Do not expose internal IDs/keys, owner secrets, or CloudFront URLs/signatures.
 
 | Endpoint | Behavior |
 | --- | --- |
-| GET /api/tracks/:id | Basic information and header metrics directly from MongoDB |
+| GET /api/tracks/:id | Basic information and compact summary directly from MongoDB |
 | GET /api/tracks/:id/analysis | Detailed JSON for the currently active revision, with diagnostic fallback as specified below |
 | GET /api/tracks/:id/download | Original GPX for the current active revision, with initial-source fallback |
 | GET /api/tracks/:id/status | Owner-only attempt status, active availability, canRetry/interrupted |
@@ -590,7 +598,7 @@ credentials, databases, and open ports. Use synthetic GPX fixtures, not user dat
 | Basic metrics | Initial metrics use all accepted source points and are not recomputed merely due to simplification |
 | Provider compatibility | Existing Valhalla sampling/splitting, elevation/Overpass requests, cache behavior, concurrency, and timeouts remain unchanged |
 | Detailed calculations | Enrichment, gradients, climbs, descents, and persisted geometry use the selected analysis points |
-| Basic API | GET /api/tracks/:id returns distance/ascent/descent/time/speed with no S3 access |
+| Basic API | GET /api/tracks/:id returns metrics, elevation summary, distributions, climbs, descents, and POI metadata with no S3 access |
 | Current analysis | Plain /analysis resolves active automatically; callers need not know a revision |
 | Lists/previews | mine/saved/homepage function without S3; preview point cap, proportions, and turns are correct |
 | Detailed page | Separate basic/analysis requests render the selected route geometry, POI, profile, road data, and climb/descent tables |
@@ -623,7 +631,8 @@ Run a joint end-to-end acceptance check when that environment is supplied; do no
 claim application contract tests prove the full production path.
 
 Large synthetic analyses must demonstrate that the track BSON document does not grow
-with source-point count except bounded preview and fixed-size metrics. Adapt existing
+with source-point count except bounded preview and compact summary lists. The summary
+contains no points, geometry, or per-segment data. Adapt existing
 50,000/490,000-point performance fixtures to the new acceptance boundary: exercise
 50,000 and 100,000 accepted points and rejection above the limit. Measure memory/time
 for full-source basic metrics, 10,000-point selection, JSON, unchanged provider calls,

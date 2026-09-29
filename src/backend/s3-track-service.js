@@ -49,6 +49,7 @@ function publicTrack(track, uploader = null) {
     status: track.analysisStatus, processing: track.attempt ? statusOf(track) : null,
     resultKind: track.active ? 'ACTIVE' : result ? 'DIAGNOSTIC' : 'NONE',
     revision: result?.revision || null, metrics: result?.metrics || null,
+    summary: result?.summary || null,
     originalFilename: result?.originalFilename || track.attempt?.originalFilename || null,
     sourcePointCount: result?.sourcePointCount ?? null,
     pointsOfInterestCount: result?.pointsOfInterestCount ?? 0,

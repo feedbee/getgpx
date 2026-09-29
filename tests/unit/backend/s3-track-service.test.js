@@ -121,12 +121,15 @@ describe('S3 track service', () => {
     track.analysisStatus = 'READY';
     track.active = { revision: 'active', sourceKey: 'source', analysisKey: 'analysis',
       metrics: { distanceKm: 25, ascentM: 300, descentM: 280, effectiveSpeedKmh: 20, estimatedDurationMs: 4_500_000 },
+      summary: { metrics: { distanceKm: 25 }, distributions: { surfaces: [], wayTypes: [], roadQualities: [] },
+        climbs: [], descents: [] },
       preview: { viewBox: '0 0 100 100', points: [[0, 0], [100, 100]] } };
     delete track.attempt;
     repository.listOwned = vi.fn(async () => [track]);
     const basic = await service.getPublicTrack(track.publicId);
     const list = await service.listMyTracks({ ownerId: 'owner' });
     expect(basic.metrics.distanceKm).toBe(25);
+    expect(basic.summary.metrics.distanceKm).toBe(25);
     expect(basic.analysisUrl).toBe(`/api/tracks/${track.publicId}/analysis`);
     expect(list.items[0].preview.points).toHaveLength(2);
     expect(store.openRead).not.toHaveBeenCalled();
