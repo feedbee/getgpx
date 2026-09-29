@@ -2,6 +2,7 @@ import express from 'express';
 import { getSignedUrl } from '@aws-sdk/cloudfront-signer';
 import { isPublicId } from './public-id.js';
 import { sessionTokenFromRequest } from './auth.js';
+import { safeErrorDetails } from './safe-error-details.js';
 
 function fileError(response, status, code) {
   const messages = {
@@ -23,7 +24,9 @@ export function createTrackInternalHandler(trackService, authService, config, { 
     try {
       const user = await authService.getUser(sessionTokenFromRequest(request));
       descriptor = await trackService.fileDescriptor(id, kind, user);
-    } catch {
+    } catch (lookupError) {
+      request.log?.error({ event: 'track_file_handoff_failed', kind, stage: 'descriptor',
+        ...safeErrorDetails(lookupError) }, 'Track file handoff failed');
       return fileError(response, 502, 'TRACK_FILE_UNAVAILABLE');
     }
     if (!descriptor) return fileError(response, 404, 'TRACK_NOT_FOUND');
@@ -36,7 +39,9 @@ export function createTrackInternalHandler(trackService, authService, config, { 
         privateKey: config.cloudFrontPrivateKey,
         dateLessThan: new Date(Date.now() + 60_000).toISOString(),
       });
-    } catch {
+    } catch (signError) {
+      request.log?.error({ event: 'track_file_handoff_failed', kind, stage: 'sign',
+        ...safeErrorDetails(signError) }, 'Track file handoff failed');
       return fileError(response, 502, 'TRACK_FILE_UNAVAILABLE');
     }
     response.setHeader('Cache-Control', 'no-store');

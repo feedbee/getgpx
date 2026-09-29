@@ -35,12 +35,29 @@ describe('internal track handoff', () => {
 
   it('does not sign when identity lookup fails', async () => {
     const sign = vi.fn();
+    const log = { error: vi.fn() };
     const handler = createTrackInternalHandler({ fileDescriptor: vi.fn() },
-      { getUser: async () => { throw new Error('database unavailable'); } }, { delivery: 'nginx' }, { sign });
+      { getUser: async () => { throw Object.assign(new Error('database unavailable'), { name: 'MongoServerError', code: 91 }); } }, { delivery: 'nginx' }, { sign });
     const result = response();
-    await handler({ params: { id: 'publicTrackId00000001', kind: 'download' }, headers: {} }, result);
+    await handler({ params: { id: 'publicTrackId00000001', kind: 'download' }, headers: {}, log }, result);
     expect(result.statusCode).toBe(502);
     expect(result.headers['X-Track-File-URL']).toBeUndefined();
     expect(sign).not.toHaveBeenCalled();
+    expect(log.error).toHaveBeenCalledWith({ event: 'track_file_handoff_failed', kind: 'download',
+      stage: 'descriptor', errorName: 'MongoServerError', errorCode: 91 }, 'Track file handoff failed');
+  });
+
+  it('logs signing failures without returning the signing error or URL', async () => {
+    const log = { error: vi.fn() };
+    const handler = createTrackInternalHandler({ fileDescriptor: async () => ({ key: 'dev/tracks/0123456789abcdef01234567/r1/analysis.json' }) },
+      { getUser: async () => null }, { delivery: 'nginx', cloudFrontDomain: 'example.cloudfront.net' },
+      { sign: () => { throw Object.assign(new Error('private key contents'), { name: 'InvalidKey' }); } });
+    const result = response();
+    await handler({ params: { id: 'publicTrackId00000001', kind: 'analysis' }, headers: {}, log }, result);
+    expect(result.statusCode).toBe(502);
+    expect(log.error).toHaveBeenCalledWith({ event: 'track_file_handoff_failed', kind: 'analysis',
+      stage: 'sign', errorName: 'InvalidKey' }, 'Track file handoff failed');
+    expect(JSON.stringify(log.error.mock.calls)).not.toContain('private key contents');
+    expect(result.headers['X-Track-File-URL']).toBeUndefined();
   });
 });

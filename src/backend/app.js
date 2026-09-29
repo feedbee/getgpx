@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import helmet from 'helmet';
 import { createRequestLogger, logger } from './logger.js';
+import { safeErrorDetails } from './safe-error-details.js';
 
 const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const defaultStaticDirectory = path.join(rootDirectory, 'dist');
@@ -48,7 +49,7 @@ export function createApp({ database, authRouter, trackRouter, internalTrackRout
     .sendFile(path.join(staticDirectory, 'index.html')));
 
   app.use((error, request, response, next) => {
-    request.log.error({ reason: error?.name || 'UNKNOWN' }, 'Unhandled request error');
+    request.log.error({ event: 'unhandled_request_error', ...safeErrorDetails(error) }, 'Unhandled request error');
     if (response.headersSent) return next(error);
     response.status(500).json({ error: { code: 'INTERNAL_ERROR' } });
   });
@@ -64,7 +65,7 @@ export function createHealthHandlers(database) {
         await database.ping();
         response.json({ status: 'ready' });
       } catch (error) {
-        logger.warn({ reason: error?.name || 'UNKNOWN' }, 'Readiness check failed');
+        logger.warn({ event: 'readiness_check_failed', ...safeErrorDetails(error) }, 'Readiness check failed');
         response.status(503).json({ status: 'unavailable' });
       }
     },

@@ -8,6 +8,7 @@ import { normalizeExternalTrackLinks } from './external-track-links.js';
 import { isRouteType } from '../route-types.js';
 import { isPublicId } from './public-id.js';
 import { createRequestProfiler, profileStep } from './request-profile.js';
+import { safeErrorDetails } from './safe-error-details.js';
 
 const GPX_CONTENT_TYPES = new Set(['application/gpx+xml', 'application/xml', 'text/xml']);
 
@@ -194,12 +195,15 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
       const contentType = String(request.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
       const filename = filenameFromRequest(request);
       if (!GPX_CONTENT_TYPES.has(contentType) || !filename) return error(response, 422, 'INVALID_GPX_FILE', 'Выберите GPX-файл.');
+      let replacementStage = 'track_lookup';
       try {
-        const status = await trackService.replaceFile({ publicId, ownerId, filename, source: request });
+        const status = await trackService.replaceFile({ publicId, ownerId, filename, source: request,
+          onStage: (stage) => { replacementStage = stage; } });
         return status ? send(response, 202, { data: status }) : error(response, 409, 'REPLACEMENT_IN_PROGRESS', 'Замена этого трека уже выполняется.');
       } catch (replaceError) {
         if (replaceError instanceof GpxFileTooLargeError) return error(response, 413, replaceError.code, 'GPX-файл должен быть не больше 25 MiB.');
-        request.log?.error({ reason: replaceError?.name || 'UNKNOWN' }, 'Track replacement failed');
+        request.log?.error({ event: 'track_replacement_failed', stage: replacementStage,
+          ...safeErrorDetails(replaceError) }, 'Track replacement failed');
         return error(response, 500, 'REPLACEMENT_FAILED', 'Не удалось сохранить новый GPX-файл.');
       }
     },
@@ -244,14 +248,19 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
       }
       let download;
       try { download = await trackService.getPublicDownload(publicId); }
-      catch { return error(response, 502, 'TRACK_FILE_UNAVAILABLE', 'Файл временно недоступен.'); }
+      catch (readError) {
+        request.log?.error({ event: 'track_file_delivery_failed', kind: 'download', stage: 'open',
+          ...safeErrorDetails(readError) }, 'Track download failed');
+        return error(response, 502, 'TRACK_FILE_UNAVAILABLE', 'Файл временно недоступен.');
+      }
       if (!download) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
       response.setHeader('Content-Type', 'application/gpx+xml');
       response.setHeader('Content-Disposition', contentDisposition(download.filename));
       response.setHeader('Cache-Control', 'private, no-store');
       response.on?.('close', () => { if (!response.writableEnded) download.stream.destroy?.(); });
       download.stream.on('error', (streamError) => {
-        request.log?.error({ reason: streamError?.name || 'UNKNOWN' }, 'Track download failed');
+        request.log?.error({ event: 'track_file_delivery_failed', kind: 'download', stage: 'stream',
+          ...safeErrorDetails(streamError) }, 'Track download failed');
         response.destroy?.();
       });
       download.stream.pipe(response);
@@ -271,14 +280,19 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
       }
       let result;
       try { result = await trackService.getPublicAnalysis(publicId); }
-      catch { return error(response, 502, 'TRACK_FILE_UNAVAILABLE', 'Анализ временно недоступен.'); }
+      catch (readError) {
+        request.log?.error({ event: 'track_file_delivery_failed', kind: 'analysis', stage: 'open',
+          ...safeErrorDetails(readError) }, 'Track analysis delivery failed');
+        return error(response, 502, 'TRACK_FILE_UNAVAILABLE', 'Анализ временно недоступен.');
+      }
       if (!result) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
       if (result.unavailable) return error(response, 409, 'TRACK_ANALYSIS_NOT_READY', 'Анализ ещё не готов.');
       response.setHeader('Content-Type', 'application/json');
       response.setHeader('Cache-Control', 'private, no-store');
       response.on?.('close', () => { if (!response.writableEnded) result.stream.destroy?.(); });
       result.stream.on('error', (streamError) => {
-        request.log?.error({ reason: streamError?.name || 'UNKNOWN' }, 'Track analysis delivery failed');
+        request.log?.error({ event: 'track_file_delivery_failed', kind: 'analysis', stage: 'stream',
+          ...safeErrorDetails(streamError) }, 'Track analysis delivery failed');
         response.destroy?.();
       });
       result.stream.pipe(response);
@@ -308,9 +322,10 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
         error(response, 413, 'GPX_FILE_TOO_LARGE', 'GPX-файл должен быть не больше 25 MiB.');
         return;
       }
+      let uploadStage = 'quota_check';
       try {
         const status = await trackService.upload({ ownerId, tier, filename, routeType, source: request,
-          profile: createRequestProfiler(request.log) });
+          profile: createRequestProfiler(request.log), onStage: (stage) => { uploadStage = stage; } });
         response.setHeader('Location', `/api/tracks/${status.id}/status`);
         send(response, 202, { data: status });
       } catch (uploadError) {
@@ -322,7 +337,8 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
           error(response, 409, uploadError.code, `Достигнут лимит: ${uploadError.limit} треков.`);
           return;
         }
-        request.log?.error({ reason: uploadError?.name || 'UNKNOWN' }, 'Track upload failed');
+        request.log?.error({ event: 'track_upload_failed', stage: uploadStage,
+          ...safeErrorDetails(uploadError) }, 'Track upload failed');
         error(response, 500, 'UPLOAD_FAILED', 'Не удалось сохранить GPX-файл. Попробуйте снова.');
       }
     },

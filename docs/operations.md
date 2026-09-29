@@ -68,3 +68,18 @@ Probe `/health/live` for process restarts and `/health/ready` for traffic routin
 The backend writes newline-delimited JSON logs to stdout with Pino, including when its API middleware runs inside Vite via `npm run dev`. `LOG_LEVEL` controls the minimum severity (`warn` by default; set `info` for ordinary requests or `debug` for temporary diagnosis). In Vite development, set it in `.env` or the shell; `npm start` reads `.env` through Node. HTTP logs contain a generated `requestId`, method, pathname without query parameters, route template when available, status, and `durationMs` in milliseconds; health request logs are omitted. Unexpected errors and track-analysis failures produce separate events at `error` or `warn`. Query parameters, headers, GPX contents, and OAuth or session values must not be added to log fields. Collect, retain, and search stdout logs outside the application container.
 
 At `LOG_LEVEL=debug`, the homepage tracks, public track, and GPX upload API requests also log individual server steps with `step`, `durationMs`, and the same `requestId`. These timers are inactive at higher log levels. The measurements cover server work only; browser rendering and network transfer require browser tools.
+
+An unexpected `POST /api/tracks` failure emits a separate `track_upload_failed` error
+event with the current `stage` (`quota_check`, `source_upload`,
+`track_record_create`, or `processing_schedule`), a safe error name/code, and the
+upstream HTTP status when available. Find it by the request ID from the HTTP 500
+log. Provider error messages and stack traces are deliberately omitted because they
+may contain user or credential data. The public API retains its generic
+`UPLOAD_FAILED` response.
+
+Replacement failures use `track_replacement_failed` with the same stage fields.
+File delivery failures use `track_file_delivery_failed` (`kind` and `stage=open|stream`)
+or `track_file_handoff_failed` (`stage=descriptor|sign`) in nginx mode. Background
+worker, heartbeat, diagnostic-write, and cleanup failures have separate event names
+and track/revision identifiers where available. These events include only validated
+error names/codes and upstream HTTP status, never raw provider messages or stacks.

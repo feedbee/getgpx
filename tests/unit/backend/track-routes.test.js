@@ -111,7 +111,8 @@ describe('track HTTP handlers', () => {
 
     await handlers.upload(source, result);
 
-    expect(trackService.upload).toHaveBeenCalledWith({ ownerId, tier: 'BASIC', filename: 'Заезд.gpx', routeType: 'gravel-cycling', source, profile: null });
+    expect(trackService.upload).toHaveBeenCalledWith({ ownerId, tier: 'BASIC', filename: 'Заезд.gpx', routeType: 'gravel-cycling', source, profile: null,
+      onStage: expect.any(Function) });
     expect(result.statusCode).toBe(202);
     expect(result.headers.location).toBe('/api/tracks/track-1/status');
   });
@@ -127,6 +128,71 @@ describe('track HTTP handlers', () => {
 
     expect(result.statusCode).toBe(409);
     expect(result.body.error.code).toBe('TRACK_LIMIT_REACHED');
+  });
+
+  it('logs the upload stage and safe upstream error details without exposing the provider message', async () => {
+    const ownerId = new ObjectId();
+    const upstream = Object.assign(new Error('secret from provider'), {
+      name: 'AccessDenied', Code: 'AccessDenied', $metadata: { httpStatusCode: 403 },
+    });
+    const trackService = { upload: vi.fn(async ({ onStage }) => {
+      onStage('source_upload');
+      throw upstream;
+    }) };
+    const log = { error: vi.fn(), isLevelEnabled: vi.fn(() => false) };
+    const source = request({ headers: {
+      'content-type': 'application/gpx+xml', 'x-gpx-filename': 'ride.gpx', 'x-track-type': 'cycling',
+    } });
+    source.log = log;
+    const handlers = createTrackHandlers(trackService, { getUser: vi.fn().mockResolvedValue({ id: ownerId.toString() }) });
+    const result = response();
+
+    await handlers.upload(source, result);
+
+    expect(result.statusCode).toBe(500);
+    expect(result.body.error.code).toBe('UPLOAD_FAILED');
+    expect(log.error).toHaveBeenCalledWith({ event: 'track_upload_failed', stage: 'source_upload',
+      errorName: 'AccessDenied', errorCode: 'AccessDenied', upstreamStatusCode: 403 }, 'Track upload failed');
+    expect(JSON.stringify(log.error.mock.calls)).not.toContain('secret from provider');
+  });
+
+  it('logs the replacement stage and provider code before returning a generic 500', async () => {
+    const log = { error: vi.fn() };
+    const trackService = { replaceFile: vi.fn(async ({ onStage }) => {
+      onStage('source_upload');
+      throw Object.assign(new Error('provider secret'), { name: 'AccessDenied', Code: 'AccessDenied' });
+    }) };
+    const handlers = createTrackHandlers(trackService,
+      { getUser: vi.fn().mockResolvedValue({ id: new ObjectId().toString() }) });
+    const source = request({ params: { id: 'publicTrackId00000001' }, headers: {
+      'content-type': 'application/gpx+xml', 'x-gpx-filename': 'ride.gpx',
+    } });
+    source.log = log;
+    const result = response();
+
+    await handlers.replace(source, result);
+
+    expect(result.statusCode).toBe(500);
+    expect(log.error).toHaveBeenCalledWith({ event: 'track_replacement_failed', stage: 'source_upload',
+      errorName: 'AccessDenied', errorCode: 'AccessDenied' }, 'Track replacement failed');
+    expect(JSON.stringify(log.error.mock.calls)).not.toContain('provider secret');
+  });
+
+  it('logs S3 open failures for analysis before returning a generic 502', async () => {
+    const log = { error: vi.fn() };
+    const source = request({ params: { id: 'publicTrackId00000001' } });
+    source.log = log;
+    const handlers = createTrackHandlers({ getPublicAnalysis: vi.fn().mockRejectedValue(
+      Object.assign(new Error('private S3 URL'), { name: 'NoSuchKey', $metadata: { httpStatusCode: 404 } }),
+    ) }, { getUser: vi.fn() });
+    const result = response();
+
+    await handlers.analysis(source, result);
+
+    expect(result.statusCode).toBe(502);
+    expect(log.error).toHaveBeenCalledWith({ event: 'track_file_delivery_failed', kind: 'analysis', stage: 'open',
+      errorName: 'NoSuchKey', upstreamStatusCode: 404 }, 'Track analysis delivery failed');
+    expect(JSON.stringify(log.error.mock.calls)).not.toContain('private S3 URL');
   });
 
   it('rejects an absent or unknown route type before storing an upload', async () => {

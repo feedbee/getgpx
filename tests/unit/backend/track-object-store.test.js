@@ -34,4 +34,19 @@ describe('S3 track object store', () => {
     await expect(store.writeSource({ trackId: '0123456789abcdef01234567', revision: 'large',
       source: Readable.from(Buffer.alloc(25 * 1024 * 1024 + 1)) })).rejects.toMatchObject({ code: 'GPX_FILE_TOO_LARGE' });
   });
+
+  it('logs a failed best-effort cleanup without replacing the original upload error', async () => {
+    const warn = vi.fn();
+    const store = createTrackObjectStore({ bucket: 'track-files', prefix: 'dev', warn,
+      upload: async () => { throw Object.assign(new Error('source upload failed'), { name: 'AccessDenied' }); },
+      send: async () => { throw Object.assign(new Error('secret in cleanup response'), { name: 'ServiceUnavailable',
+        $metadata: { httpStatusCode: 503 } }); },
+    });
+    await expect(store.writeSource({ trackId: '0123456789abcdef01234567', revision: 'one',
+      source: Readable.from('<gpx/>') })).rejects.toMatchObject({ name: 'AccessDenied' });
+    expect(warn).toHaveBeenCalledWith({ event: 'track_source_cleanup_failed',
+      trackId: '0123456789abcdef01234567', revision: 'one', errorName: 'ServiceUnavailable',
+      upstreamStatusCode: 503 });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('secret in cleanup response');
+  });
 });

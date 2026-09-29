@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual, randomBytes as nodeRandomBytes } from 'node:crypto';
 import { Router } from 'express';
+import { safeErrorDetails } from './safe-error-details.js';
 
 const GOOGLE_AUTHORIZATION_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -179,7 +180,7 @@ export function createAuthHandlers(authService, { secureCookies = process.env.NO
         ]);
         response.redirect('/');
       } catch (authError) {
-        request.log?.warn({ reason: authError?.name || 'UNKNOWN' }, 'Google authentication failed');
+        request.log?.warn({ event: 'google_authentication_failed', ...safeErrorDetails(authError) }, 'Google authentication failed');
         response.setHeader('Set-Cookie', serializeCookie(ATTEMPT_COOKIE, '', { maxAge: 0, secureCookies }));
         response.redirect('/?auth=error');
       }

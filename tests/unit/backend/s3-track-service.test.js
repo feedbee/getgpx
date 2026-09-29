@@ -45,6 +45,22 @@ describe('S3 track service', () => {
     expect(repository.createProcessing).not.toHaveBeenCalled();
   });
 
+  it('reports whether a failed upload stopped at quota, S3, or MongoDB', async () => {
+    const { service, store, repository } = fixture();
+    const onStage = vi.fn();
+    store.writeSource.mockRejectedValueOnce(new Error('S3 failed'));
+    await expect(service.upload({ ownerId: 'owner', filename: 'ride.gpx', routeType: 'cycling',
+      source: Readable.from('GPX'), onStage })).rejects.toThrow('S3 failed');
+    expect(onStage.mock.calls).toEqual([['quota_check'], ['source_upload']]);
+
+    onStage.mockClear();
+    repository.createProcessing.mockRejectedValueOnce(new Error('MongoDB failed'));
+    repository.findById.mockResolvedValueOnce(null);
+    await expect(service.upload({ ownerId: 'owner', filename: 'ride.gpx', routeType: 'cycling',
+      source: Readable.from('GPX'), onStage })).rejects.toThrow('MongoDB failed');
+    expect(onStage.mock.calls).toEqual([['quota_check'], ['source_upload'], ['track_record_create']]);
+  });
+
   it('cleans up an uploaded source when MongoDB confirms insertion failed', async () => {
     const { service, repository, store } = fixture();
     repository.createProcessing.mockRejectedValueOnce(new Error('insert failed'));

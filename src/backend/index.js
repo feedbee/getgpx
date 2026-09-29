@@ -12,6 +12,7 @@ import { loadTrackStorageConfig } from './track-storage-config.js';
 import { createTrackInternalRouter } from './track-internal-router.js';
 import { logger } from './logger.js';
 import { createHomepageTrackCache } from './homepage-track-cache.js';
+import { safeErrorDetails } from './safe-error-details.js';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 logger.level = process.env.LOG_LEVEL || 'warn';
@@ -61,10 +62,10 @@ async function start() {
     server.close(async (error) => {
       try {
         await database.close();
-        if (error) logger.error({ reason: error.name }, 'Server shutdown failed');
+        if (error) logger.error({ event: 'server_shutdown_failed', ...safeErrorDetails(error) }, 'Server shutdown failed');
         process.exitCode = error ? 1 : 0;
       } catch (closeError) {
-        logger.error({ reason: closeError?.name || 'UNKNOWN' }, 'Database shutdown failed');
+        logger.error({ event: 'database_close_failed', ...safeErrorDetails(closeError) }, 'Database shutdown failed');
         process.exitCode = 1;
       }
     });
@@ -75,6 +76,6 @@ async function start() {
 }
 
 start().catch((error) => {
-  logger.error({ reason: error?.name || 'UNKNOWN' }, 'Server startup failed');
+  logger.error({ event: 'server_startup_failed', ...safeErrorDetails(error) }, 'Server startup failed');
   process.exitCode = 1;
 });

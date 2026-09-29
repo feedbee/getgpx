@@ -4,11 +4,14 @@ import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, PutObjectComm
 import { Upload } from '@aws-sdk/lib-storage';
 import { GpxFileTooLargeError } from './gpx-file-store.js';
 import { TRACK_UPLOAD_LIMITS } from './track-repository.js';
+import { logger } from './logger.js';
+import { safeErrorDetails } from './safe-error-details.js';
 
 const TRACK_ID = /^[a-f\d]{24}$/i;
 const REVISION = /^[A-Za-z0-9_-]+$/;
 
-export function createTrackObjectStore({ s3, send = (command) => s3.send(command), upload, bucket, prefix }) {
+export function createTrackObjectStore({ s3, send = (command) => s3.send(command), upload, bucket, prefix,
+  warn = (details) => logger.warn(details, 'Track object cleanup failed') }) {
   if (!bucket || !prefix || !/^[A-Za-z0-9_-]+$/.test(prefix)) throw new Error('Invalid track object store configuration.');
   const base = `${prefix}/tracks/`;
   const keyFor = (trackId, revision, filename) => {
@@ -42,7 +45,10 @@ export function createTrackObjectStore({ s3, send = (command) => s3.send(command
         return key;
       } catch (error) {
         body.destroy(error);
-        await this.delete(key).catch(() => undefined);
+        await this.delete(key).catch((cleanupError) => {
+          warn({ event: 'track_source_cleanup_failed', trackId: String(trackId), revision,
+            ...safeErrorDetails(cleanupError) });
+        });
         throw error;
       }
     },

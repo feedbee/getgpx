@@ -1,3 +1,5 @@
+import { safeErrorDetails } from './safe-error-details.js';
+
 const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
 export function createHomepageTrackCache({ load, log }) {
@@ -24,7 +26,7 @@ export function createHomepageTrackCache({ load, log }) {
     try {
       await loadOnce();
     } catch (error) {
-      log.warn({ event: 'homepage_track_cache_refresh_failed', reason: error?.name || 'UNKNOWN' }, 'Homepage track cache refresh failed');
+      log.warn({ event: 'homepage_track_cache_refresh_failed', ...safeErrorDetails(error) }, 'Homepage track cache refresh failed');
     } finally {
       scheduleNext();
     }

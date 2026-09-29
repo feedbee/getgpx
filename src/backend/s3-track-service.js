@@ -6,6 +6,7 @@ import { InvalidTrackCursorError, TrackLimitReachedError, EXTERNAL_ANALYSIS_TIME
 import { hasExpiredAttempt, trackObjectKeys } from './s3-track-repository.js';
 import { analysisFailure } from './analysis-warning.js';
 import { logger } from './logger.js';
+import { safeErrorDetails } from './safe-error-details.js';
 
 const PAGE_SIZE = 24;
 function cursorOf(value, field) {
@@ -91,11 +92,12 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
   const cleanup = async (keys) => {
     const results = await Promise.allSettled([...new Set(keys.filter(Boolean))].map((key) => objectStore.delete(key)));
     for (const result of results) if (result.status === 'rejected') {
-      warn({ event: 'track_object_cleanup_failed', reason: result.reason?.name || 'UNKNOWN' });
+      warn({ event: 'track_object_cleanup_failed', ...safeErrorDetails(result.reason) });
     }
   };
   const scheduleProcessing = (track) => schedule(() => process(track).catch((error) => {
-    warn({ event: 'track_analysis_job_failed', trackId: String(track._id), reason: error?.name || 'UNKNOWN' });
+    warn({ event: 'track_analysis_job_failed', trackId: String(track._id),
+      revision: track.attempt?.revision, ...safeErrorDetails(error) });
   }));
 
   async function process(track) {
@@ -106,7 +108,11 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
     let lost = false;
     const heartbeat = setInterval(() => {
       trackRepository.heartbeat(identity, now()).then((result) => { if (!result.modifiedCount) lost = true; })
-        .catch(() => { lost = true; });
+        .catch((heartbeatError) => {
+          if (!lost) warn({ event: 'track_heartbeat_failed', trackId: String(track._id),
+            revision: identity.revision, ...safeErrorDetails(heartbeatError) });
+          lost = true;
+        });
     }, 30_000);
     heartbeat.unref?.();
     let base;
@@ -154,7 +160,8 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
             revision: identity.revision, analysis: base, status: 'FAILED', completeness: 'PARTIAL', analysisSources });
           diagnostic = { analysis: base, analysisKey, analysisSources };
         } catch (writeError) {
-          warn({ event: 'track_diagnostic_write_failed', trackId: String(track._id), reason: writeError?.name || 'UNKNOWN' });
+          warn({ event: 'track_diagnostic_write_failed', trackId: String(track._id),
+            revision: identity.revision, ...safeErrorDetails(writeError) });
         }
       }
       await trackRepository.fail(identity, { errorCode, failedStep: step, diagnostic }, now());
@@ -180,7 +187,7 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
     const results = await Promise.allSettled([cleanup(trackObjectKeys(removed)), savedTrackRepository.removeForTrack(removed._id)]);
     if (results[1].status === 'rejected') {
       warn({ event: 'track_saved_relations_cleanup_failed', trackId: String(removed._id),
-        reason: results[1].reason?.name || 'UNKNOWN' });
+        ...safeErrorDetails(results[1].reason) });
     }
     return true;
   }
@@ -191,22 +198,29 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
       const ids = homepageTrackIds?.map((id) => ObjectId.createFromHexString(id));
       return (await trackRepository.listHomepage(ids)).map(homepage);
     },
-    async upload({ ownerId, tier = 'BASIC', filename, routeType, source }) {
+    async upload({ ownerId, tier = 'BASIC', filename, routeType, source, onStage = () => {} }) {
+      onStage('quota_check');
       const limit = configuration.userTiers[tier]?.limits?.tracks ?? configuration.userTiers.BASIC.limits.tracks;
       if (await trackRepository.countOwned(ownerId) >= limit) throw new TrackLimitReachedError(limit);
       const trackId = new ObjectId();
       const revision = randomUUID();
+      onStage('source_upload');
       const sourceKey = await objectStore.writeSource({ trackId: String(trackId), revision, source });
       try {
+        onStage('track_record_create');
         const track = await trackRepository.createProcessing({ trackId, ownerId, sourceKey, revision,
           originalFilename: filename, title: titleFromFilename(filename), routeType });
+        onStage('processing_schedule');
         scheduleProcessing(track);
         return statusOf(track);
       } catch (error) {
         try {
           const stored = await trackRepository.findById(trackId);
           if (!stored) await cleanup([sourceKey]);
-        } catch { /* Ambiguous MongoDB outcome: retain source. */ }
+        } catch (lookupError) {
+          warn({ event: 'track_upload_cleanup_check_failed', trackId: String(trackId), revision,
+            ...safeErrorDetails(lookupError) });
+        }
         throw error;
       }
     },
@@ -259,22 +273,29 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
         ? await userRepository.findPublicProfileById(updated.ownerId) : null;
       return publicTrack(updated, uploader);
     },
-    async replaceFile({ publicId, ownerId, filename, source }) {
+    async replaceFile({ publicId, ownerId, filename, source, onStage = () => {} }) {
+      onStage('track_lookup');
       const existing = await trackRepository.findOwnedByPublicId(publicId, ownerId);
       if (!existing || existing.attempt?.status === 'PROCESSING' && !hasExpiredAttempt(existing)) return null;
       const revision = randomUUID();
+      onStage('source_upload');
       const sourceKey = await objectStore.writeSource({ trackId: String(existing._id), revision, source });
       try {
+        onStage('track_record_create');
         const track = await trackRepository.beginAttempt({ trackId: existing._id, ownerId, revision,
           sourceKey, originalFilename: filename, kind: 'REPLACE' }, now());
         if (!track) { await cleanup([sourceKey]); return null; }
+        onStage('processing_schedule');
         scheduleProcessing(track);
         return statusOf(track);
       } catch (error) {
         try {
           const current = await trackRepository.findById(existing._id);
           if (current?.attempt?.revision !== revision) await cleanup([sourceKey]);
-        } catch { /* Ambiguous MongoDB outcome: retain source. */ }
+        } catch (lookupError) {
+          warn({ event: 'track_replacement_cleanup_check_failed', trackId: String(existing._id), revision,
+            ...safeErrorDetails(lookupError) });
+        }
         throw error;
       }
     },
@@ -297,7 +318,10 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
         try {
           const current = await trackRepository.findById(existing._id);
           if (current?.attempt?.revision !== revision) await cleanup([sourceKey]);
-        } catch { /* Ambiguous MongoDB outcome: retain copied source. */ }
+        } catch (lookupError) {
+          warn({ event: 'track_retry_cleanup_check_failed', trackId: String(existing._id), revision,
+            ...safeErrorDetails(lookupError) });
+        }
         throw error;
       }
     },
