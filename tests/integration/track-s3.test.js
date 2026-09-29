@@ -40,6 +40,28 @@ describeWithMongo('MongoDB S3 track contract', () => {
     await tracks.deleteOne({ _id: trackId });
   });
 
+  it('keeps edits made during initial processing through parsing and publication', async () => {
+    const trackId = new ObjectId();
+    const ownerId = new ObjectId();
+    await repository.createProcessing({ trackId, ownerId, revision: 'first',
+      sourceKey: `dev/tracks/${trackId}/first/source.gpx`, originalFilename: 'file.gpx',
+      title: 'File', routeType: 'cycling' });
+    const identity = { trackId, ownerId, revision: 'first', workerId: 'worker' };
+    await repository.claim(identity);
+    const edited = await repository.updateProcessingDetails({ trackId, ownerId, title: 'My title',
+      speedKmh: 25, routeType: 'road-cycling', externalLinks: { komoot: 'https://komoot.com/tour/1' } });
+    expect(edited.title).toBe('My title');
+    expect(edited.active).toBeUndefined();
+    await repository.setStep(identity, 'ENRICHING', new Date(), 'GPX title');
+    expect((await repository.findById(trackId)).title).toBe('My title');
+    await repository.publish(identity, { title: 'GPX title', analysis: { distanceKm: 50, effectiveSpeedKmh: 20 },
+      analysisKey: `dev/tracks/${trackId}/first/analysis.json`, analysisSources: {} });
+    expect(await repository.findById(trackId)).toMatchObject({ title: 'My title', routeType: 'road-cycling',
+      externalLinks: { komoot: 'https://komoot.com/tour/1' }, analysisStatus: 'READY',
+      active: { metrics: { effectiveSpeedKmh: 25, estimatedDurationMs: 7_200_000 } } });
+    await tracks.deleteOne({ _id: trackId });
+  });
+
   it('keeps a failed attempt summary separate from an active revision', async () => {
     const trackId = new ObjectId();
     const ownerId = new ObjectId();

@@ -96,31 +96,43 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
     setStep(identity, step, now = new Date(), parsedTitle = null) {
       const fields = { 'attempt.step': step, analysisStep: step, updatedAt: now };
       if (parsedTitle) {
-        fields.title = parsedTitle;
-        fields.normalizedName = normalizeTrackName(parsedTitle);
+        // The edit and the parsed title are applied atomically. A user edit wins.
+        return tracks.findOneAndUpdate(attemptFilter(identity), [{ $set: {
+          ...fields,
+          title: { $ifNull: ['$attempt.metadataOverrides.title', parsedTitle] },
+          normalizedName: { $ifNull: ['$attempt.metadataOverrides.normalizedName', normalizeTrackName(parsedTitle)] },
+        } }], { returnDocument: 'after' });
       }
       return tracks.findOneAndUpdate(attemptFilter(identity),
         { $set: fields }, { returnDocument: 'after' });
     },
     async publish(identity, { analysis, analysisKey, title, analysisSources, completeness = 'FULL' }, now = new Date()) {
-      const previous = await tracks.findOne(attemptFilter(identity));
-      if (!previous) return null;
-      const active = compact(analysis, previous.attempt.sourceKey, analysisKey,
-        identity.revision, previous.attempt.originalFilename, analysisSources, completeness);
-      if (previous.attempt.kind === 'RETRY' && previous.active) {
-        active.metrics.effectiveSpeedKmh = previous.active.metrics.effectiveSpeedKmh;
-        active.metrics.estimatedDurationMs = previous.active.metrics.estimatedDurationMs;
-        active.summary.metrics.effectiveSpeedKmh = previous.active.metrics.effectiveSpeedKmh;
-        active.summary.metrics.estimatedDurationMs = previous.active.metrics.estimatedDurationMs;
+      for (;;) {
+        const previous = await tracks.findOne(attemptFilter(identity));
+        if (!previous) return null;
+        const active = compact(analysis, previous.attempt.sourceKey, analysisKey,
+          identity.revision, previous.attempt.originalFilename, analysisSources, completeness);
+        const override = previous.attempt.metadataOverrides;
+        const speedKmh = override?.speedKmh ?? (previous.attempt.kind === 'RETRY' && previous.active
+          ? previous.active.metrics.effectiveSpeedKmh : null);
+        if (speedKmh != null) {
+          const duration = active.metrics.distanceKm / speedKmh * 3_600_000;
+          active.metrics.effectiveSpeedKmh = speedKmh;
+          active.metrics.estimatedDurationMs = duration;
+          active.summary.metrics.effectiveSpeedKmh = speedKmh;
+          active.summary.metrics.estimatedDurationMs = duration;
+        }
+        const effectiveTitle = override?.title ?? (previous.attempt.kind === 'RETRY' && previous.active ? previous.title : title);
+        const filter = { ...attemptFilter(identity), 'attempt.metadataVersion': previous.attempt.metadataVersion ?? { $exists: false } };
+        const result = await tracks.updateOne(filter, {
+          $set: { active, title: effectiveTitle, normalizedName: normalizeTrackName(effectiveTitle),
+            originalFilename: active.originalFilename, analysisStatus: 'READY', analysisStep: 'COMPLETE',
+            updatedAt: now },
+          $unset: { attempt: '', diagnostic: '' },
+        });
+        if (result.modifiedCount) return previous;
+        // A metadata edit won the race. Read it again before publishing.
       }
-      const effectiveTitle = previous.attempt.kind === 'RETRY' && previous.active ? previous.title : title;
-      const result = await tracks.updateOne(attemptFilter(identity), {
-        $set: { active, title: effectiveTitle, normalizedName: normalizeTrackName(effectiveTitle),
-          originalFilename: active.originalFilename, analysisStatus: 'READY', analysisStep: 'COMPLETE',
-          updatedAt: now },
-        $unset: { attempt: '', diagnostic: '' },
-      });
-      return result.modifiedCount ? previous : null;
     },
     async fail(identity, { errorCode, failedStep, diagnostic = null }, now = new Date()) {
       const existing = await tracks.findOne(attemptFilter(identity));
@@ -150,6 +162,15 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
         'active.summary.metrics.effectiveSpeedKmh': speedKmh,
         'active.summary.metrics.estimatedDurationMs': estimatedDurationMs, updatedAt: now } },
       { returnDocument: 'after' });
+    },
+    updateProcessingDetails({ trackId, ownerId, title, speedKmh, routeType, externalLinks }, now = new Date()) {
+      return tracks.findOneAndUpdate({ _id: trackId, ownerId, active: { $exists: false },
+        'attempt.status': 'PROCESSING' }, {
+        $set: { title, normalizedName: normalizeTrackName(title), routeType: normalizeRouteType(routeType),
+          externalLinks, 'attempt.metadataOverrides': { title, normalizedName: normalizeTrackName(title), speedKmh },
+          updatedAt: now },
+        $inc: { 'attempt.metadataVersion': 1 },
+      }, { returnDocument: 'after' });
     },
     deleteOwned(trackId, ownerId) { return tracks.findOneAndDelete({ _id: trackId, ownerId }); },
   };

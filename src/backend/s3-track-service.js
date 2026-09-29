@@ -258,20 +258,28 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
       return { stream: await objectStore.openRead(descriptor.key) };
     },
     async updateDetails({ publicId, ownerId, title, speedKmh, routeType, externalLinks }) {
-      const existing = await trackRepository.findOwnedByPublicId(publicId, ownerId);
-      if (!existing?.active) return null;
-      if (existing.attempt?.status === 'PROCESSING') {
-        const conflict = new Error('Track processing is in progress.');
-        conflict.code = 'TRACK_EDIT_CONFLICT';
-        throw conflict;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const existing = await trackRepository.findOwnedByPublicId(publicId, ownerId);
+        if (!existing) return null;
+        if (existing.active && existing.attempt?.status === 'PROCESSING') {
+          const conflict = new Error('Track processing is in progress.');
+          conflict.code = 'TRACK_EDIT_CONFLICT';
+          throw conflict;
+        }
+        const updated = !existing.active && existing.attempt?.status === 'PROCESSING'
+          ? await trackRepository.updateProcessingDetails({ trackId: existing._id, ownerId,
+            title, speedKmh, routeType, externalLinks })
+          : existing.active ? await trackRepository.updateDetails({ trackId: existing._id, ownerId,
+            title, speedKmh, estimatedDurationMs: existing.active.metrics.distanceKm / speedKmh * 3_600_000,
+            routeType, externalLinks }) : null;
+        if (updated) {
+          const uploader = userRepository?.findPublicProfileById
+            ? await userRepository.findPublicProfileById(updated.ownerId) : null;
+          return publicTrack(updated, uploader);
+        }
+        // The first publication may have finished between the read and update.
       }
-      const updated = await trackRepository.updateDetails({ trackId: existing._id, ownerId,
-        title, speedKmh, estimatedDurationMs: existing.active.metrics.distanceKm / speedKmh * 3_600_000,
-        routeType, externalLinks });
-      if (!updated) return null;
-      const uploader = userRepository?.findPublicProfileById
-        ? await userRepository.findPublicProfileById(updated.ownerId) : null;
-      return publicTrack(updated, uploader);
+      return null;
     },
     async replaceFile({ publicId, ownerId, filename, source, onStage = () => {} }) {
       onStage('track_lookup');
