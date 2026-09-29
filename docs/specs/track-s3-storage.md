@@ -226,8 +226,9 @@ projections and saved-track aggregations to read compact fields directly.
 Title, route type, external links, effective speed, and estimated duration remain
 editable according to existing validation. PATCH updates MongoDB only, without
 reading or rewriting S3. Reject metadata edits while a processing attempt is active
-with 409 to prevent job completion from overwriting concurrent edits. Replacement
-keeps the current behavior of deriving the new title/speed from the new GPX while
+with 409 when an active revision already exists. During initial processing, allow
+metadata edits and preserve them through parsed-title updates and publication.
+Replacement keeps the current behavior of deriving the new title/speed from the new GPX while
 preserving track identity, owner, route type, and external links.
 
 ## Processing, publication, and failures

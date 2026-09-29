@@ -98,6 +98,29 @@ describe('S3 track service', () => {
     await running;
   });
 
+  it('accepts metadata edits before the first analysis is ready', async () => {
+    const { service, repository, track } = fixture();
+    repository.updateProcessingDetails = vi.fn(async ({ title, routeType, externalLinks }) => ({
+      ...track, title, routeType, externalLinks,
+    }));
+    const result = await service.updateDetails({ publicId: track.publicId, ownerId: track.ownerId,
+      title: 'Edited during upload', speedKmh: 25, routeType: 'road-cycling', externalLinks: {} });
+    expect(result.title).toBe('Edited during upload');
+    expect(repository.updateProcessingDetails).toHaveBeenCalledWith(expect.objectContaining({ speedKmh: 25 }));
+  });
+
+  it('retries a metadata edit when the first publication wins the race', async () => {
+    const { service, repository, track } = fixture();
+    const ready = { ...track, attempt: undefined, active: { metrics: { distanceKm: 10 } } };
+    repository.findOwnedByPublicId.mockResolvedValueOnce(track).mockResolvedValueOnce(ready);
+    repository.updateProcessingDetails = vi.fn().mockResolvedValueOnce(null);
+    repository.updateDetails = vi.fn(async () => ({ ...ready, title: 'Edited' }));
+    const result = await service.updateDetails({ publicId: track.publicId, ownerId: track.ownerId,
+      title: 'Edited', speedKmh: 20, routeType: 'cycling', externalLinks: {} });
+    expect(result.title).toBe('Edited');
+    expect(repository.updateDetails).toHaveBeenCalledWith(expect.objectContaining({ estimatedDurationMs: 1_800_000 }));
+  });
+
   it('marks a failed analysis and stores usable diagnostic data separately', async () => {
     const { store, repository, jobs, track } = fixture();
     const service = createS3TrackService({ trackRepository: repository, objectStore: store,
