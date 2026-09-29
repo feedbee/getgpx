@@ -4,6 +4,12 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-29
+
+### Fixed
+
+- Track owners can edit title, route type, external links, and speed while an initial upload is still processing. Edits remain intact when analysis finishes, including if publication races with an edit.
+
 ## [0.2.2] - 2026-09-29
 
 ### Fixed
