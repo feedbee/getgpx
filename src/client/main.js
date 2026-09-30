@@ -1,6 +1,7 @@
 import { setupPreferencesControl } from './preferences-ui.js';
 import { renderAppShell } from './app-shell.js';
 import { createTrackApi } from './track-api.js';
+import { createUploadFlow } from './track-upload-flow.js';
 import { distanceValue, elevationValue, number, createSpeedDraft } from './measurements.js';
 import { neutralAnalysis, poiName, poiType, roadLabel } from './analysis-presentation.js';
 import { errorMessage, errorFromPayload } from './errors-ui.js';
@@ -14,7 +15,6 @@ import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, createTrackCa
 import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, favoriteButtonState, publicTrackIdFromPath } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js';
-import { uploadMetadataHint, uploadMetadataPayload } from './track-upload-ui.js';
 import { setButtonLoading, withButtonLoading } from './button-loading-ui.js';
 import { closeRouteTypeDropdownOnEscape, closeRouteTypeDropdownsOutside, routeTypeDefinition, routeTypeIcon, selectedRouteType, setRouteTypeDropdown } from './route-type-ui.js';
 import { availableExternalTrackLinks, renderExternalTrackLinks } from './external-track-links-ui.js';
@@ -52,8 +52,6 @@ let pinnedQualityId = null;
 let hoveredRange = null;
 let pinnedRange = null;
 let currentUser = null;
-let activeUploadTrackId = null;
-let activeUploadMetadata = null;
 const isMyTracksPage = window.location.pathname === '/my-tracks';
 const isFavoriteTracksPage = window.location.pathname === '/favorite-tracks';
 const isTrackCollectionPage = isMyTracksPage || isFavoriteTracksPage;
@@ -64,6 +62,7 @@ let homepageTracks = [];
 let myTracksCursor = null;
 let myTracksLoading = false;
 let publicTrackId = null;
+const uploadFlow = createUploadFlow({ trackApi, isAuthenticated: () => Boolean(currentUser), getPublicTrackId: () => publicTrackId });
 let publicTrackData = null;
 let publicTrackOwnershipVerified = false;
 let managedTrackId = null;
@@ -1080,164 +1079,6 @@ async function loadPublicTrack(trackId, retries = 0) {
   }
 }
 
-const processingOrder = ['UPLOADING', 'QUEUED', 'PARSING', 'ENRICHING', 'COMPLETE'];
-
-function updateProcessing(step) {
-  const activeIndex = processingOrder.indexOf(step);
-  document.querySelectorAll('[data-processing-step]').forEach((item) => {
-    const index = processingOrder.indexOf(item.dataset.processingStep);
-    item.classList.toggle('is-complete', activeIndex >= 0 && index < activeIndex);
-    item.classList.toggle('is-active', item.dataset.processingStep === step);
-  });
-}
-
-function showProcessingError(error) {
-  const failedStep = ['INVALID_GPX', 'GPX_POINT_LIMIT'].includes(error.code) ? 'PARSING'
-    : ['ENRICHMENT_UNAVAILABLE', 'PROCESSING_INTERRUPTED', 'ANALYSIS_STORAGE_UNAVAILABLE'].includes(error.code)
-      ? 'ENRICHING' : 'UPLOADING';
-  updateProcessing(failedStep);
-  const message = document.querySelector('#processing-error');
-  bindText(message, () => errorMessage(error));
-  message.hidden = false;
-  const details = document.querySelector('#processing-details');
-  details.hidden = false;
-  bindText(document.querySelector('#processing-code'), () => /^[A-Z_]{1,50}$/.test(error.code) ? error.code : 'UNKNOWN_ERROR');
-  document.querySelector('#retry-processing').hidden = ![
-    'ENRICHMENT_UNAVAILABLE', 'PROCESSING_INTERRUPTED', 'ANALYSIS_STORAGE_UNAVAILABLE', 'TRACK_FILE_UNAVAILABLE',
-  ].includes(error.code);
-  document.querySelector('#close-processing').hidden = false;
-  const status = document.querySelector('#processing-status');
-  status.classList.add('is-failed');
-  bindText(status.querySelector('strong'), () => t('upload.stopped'));
-  bindText(document.querySelector('#processing-status-copy'), () => t('upload.fix'));
-}
-
-function renderUploadMetadata() {
-  if (!activeUploadMetadata) return;
-  document.querySelector('#upload-metadata').hidden = false;
-  bindText(document.querySelector('#upload-track-title-value'), () => activeUploadMetadata.title);
-  document.querySelector('#upload-track-title').value = activeUploadMetadata.title;
-  setRouteTypeDropdown(document.querySelector('#upload-route-type'), activeUploadMetadata.routeType);
-  const links = availableExternalTrackLinks(activeUploadMetadata.externalLinks);
-  const linksValue = document.querySelector('#upload-links-value');
-  if (links.length) renderExternalTrackLinks(linksValue, activeUploadMetadata.externalLinks, null, { inline: true });
-  else {
-    linksValue.replaceChildren(t('common.noLinks'));
-    linksValue.hidden = false;
-  }
-  const linksForm = document.querySelector('#upload-links-form');
-  [...linksForm.elements].forEach((field) => {
-    if (field instanceof HTMLInputElement) field.value = activeUploadMetadata.externalLinks[field.name] || '';
-  });
-}
-
-function setUploadMetadataEditing(rowSelector, editing) {
-  const row = document.querySelector(rowSelector);
-  row.classList.toggle('is-editing', editing);
-  row.querySelector('.upload-metadata-view').hidden = editing;
-  row.querySelector('form').hidden = !editing;
-}
-
-async function loadUploadMetadata(trackId) {
-  if (activeUploadMetadata?.id === trackId) return;
-  const response = await trackApi.management(trackId);
-  if (!response.ok) return;
-  const { data } = await response.json();
-  if (activeUploadTrackId !== trackId) return;
-  activeUploadMetadata = {
-    id: trackId,
-    title: data.title,
-    speedKmh: data.speedKmh || 20,
-    routeType: data.routeType,
-    externalLinks: data.externalLinks || {},
-  };
-  renderUploadMetadata();
-}
-
-function showTrackCreated(trackId) {
-  const status = document.querySelector('#processing-status');
-  status.classList.add('is-complete');
-  bindText(status.querySelector('strong'), () => t('upload.complete'));
-  bindText(document.querySelector('#processing-status-copy'), () => t('upload.viewReady'));
-  bindText(document.querySelector('#upload-metadata-hint'), () => uploadMetadataHint(true));
-  document.querySelector('#open-uploaded-track').hidden = false;
-  document.querySelector('#finish-processing').hidden = false;
-  document.querySelector('#close-processing').hidden = false;
-  document.querySelector('#open-uploaded-track').dataset.trackId = trackId;
-}
-
-async function pollTrackStatus(trackId) {
-  while (activeUploadTrackId === trackId) {
-    await new Promise((resolve) => setTimeout(resolve, 900));
-    const response = await trackApi.status(trackId);
-    if (!response.ok) throw new Error(t('errors.status'));
-    const { data } = await response.json();
-    updateProcessing(data.step);
-    if (data.step === 'ENRICHING' || data.status === 'READY') await loadUploadMetadata(trackId);
-    if (data.status === 'READY') {
-      activeUploadTrackId = null;
-      updateProcessing('COMPLETE');
-      showTrackCreated(trackId);
-      return;
-    }
-    if (data.status === 'FAILED') {
-      activeUploadTrackId = trackId;
-      showProcessingError(data.error);
-      return;
-    }
-  }
-}
-
-async function uploadFile(file) {
-  if (!currentUser) return;
-  const processing = document.querySelector('#processing-overlay');
-  const error = document.querySelector('#processing-error');
-  const details = document.querySelector('#processing-details');
-  error.hidden = true;
-  details.hidden = true;
-  document.querySelector('#retry-processing').hidden = true;
-  document.querySelector('#open-uploaded-track').hidden = true;
-  document.querySelector('#finish-processing').hidden = true;
-  document.querySelector('#close-processing').hidden = true;
-  document.querySelector('#upload-metadata').hidden = true;
-  document.querySelector('#processing-status').classList.remove('is-complete', 'is-failed');
-  bindText(document.querySelector('#processing-status').querySelector('strong'), () => t('upload.processing'));
-  bindText(document.querySelector('#processing-status-copy'), () => t('upload.wait'));
-  bindText(document.querySelector('#upload-metadata-hint'), () => uploadMetadataHint(false));
-  activeUploadMetadata = null;
-  processing.hidden = false;
-  updateProcessing('UPLOADING');
-  try {
-    const response = await trackApi.upload({ file, routeType: 'cycling' });
-    const payload = await response.json();
-    if (!response.ok) throw errorFromPayload(payload);
-    activeUploadTrackId = payload.data.id;
-    updateProcessing(payload.data.step);
-    await pollTrackStatus(activeUploadTrackId);
-  } catch (uploadError) {
-    showProcessingError(uploadError);
-  }
-}
-
-async function replaceTrackFile(file, trackId = publicTrackId) {
-  if (!currentUser || !trackId) return;
-  const processing = document.querySelector('#processing-overlay');
-  document.querySelector('#processing-error').hidden = true;
-  document.querySelector('#processing-details').hidden = true;
-  processing.hidden = false;
-  updateProcessing('UPLOADING');
-  try {
-    const response = await trackApi.replace({ id: trackId, file });
-    const payload = await response.json();
-    if (!response.ok) throw errorFromPayload(payload);
-    activeUploadTrackId = trackId;
-    updateProcessing(payload.data.step);
-    await pollTrackStatus(trackId);
-  } catch (replaceError) {
-    showProcessingError(replaceError);
-  }
-}
-
 const profile = document.querySelector('#profile-wrap');
 profile.addEventListener('pointermove', (event) => {
   const poiMarker = event.target.closest('[data-profile-poi-index]');
@@ -1486,7 +1327,7 @@ document.addEventListener('keydown', (event) => {
 document.querySelector('#gpx-file').addEventListener('change', (event) => {
   if (event.target.files[0]) {
     document.querySelector('#upload-dialog').hidden = true;
-    uploadFile(event.target.files[0]);
+    uploadFlow.uploadFile(event.target.files[0]);
   }
   event.target.value = '';
 });
@@ -1506,11 +1347,11 @@ uploadDropzone.addEventListener('drop', (event) => {
   uploadDropzone.classList.remove('is-dragging');
   if (currentUser && event.dataTransfer.files[0]) {
     document.querySelector('#upload-dialog').hidden = true;
-    uploadFile(event.dataTransfer.files[0]);
+    uploadFlow.uploadFile(event.dataTransfer.files[0]);
   }
 });
 document.querySelector('#close-processing').addEventListener('click', () => {
-  activeUploadTrackId = null;
+  uploadFlow.stop();
   document.querySelector('#processing-overlay').hidden = true;
 });
 document.querySelector('#finish-processing').addEventListener('click', async () => {
@@ -1522,20 +1363,20 @@ document.querySelector('#open-uploaded-track').addEventListener('click', (event)
   window.location.assign(`/tracks/${event.currentTarget.dataset.trackId}`);
 });
 document.querySelector('#edit-upload-title').addEventListener('click', () => {
-  setUploadMetadataEditing('#upload-title-row', true);
+  uploadFlow.setUploadMetadataEditing('#upload-title-row', true);
   document.querySelector('#upload-track-title').focus();
 });
 document.querySelector('#cancel-upload-title').addEventListener('click', () => {
-  setUploadMetadataEditing('#upload-title-row', false);
-  renderUploadMetadata();
+  uploadFlow.setUploadMetadataEditing('#upload-title-row', false);
+  uploadFlow.renderUploadMetadata();
 });
 document.querySelector('#edit-upload-links').addEventListener('click', () => {
-  setUploadMetadataEditing('#upload-links-row', true);
+  uploadFlow.setUploadMetadataEditing('#upload-links-row', true);
   document.querySelector('#upload-links-form input').focus();
 });
 document.querySelector('#cancel-upload-links').addEventListener('click', () => {
-  setUploadMetadataEditing('#upload-links-row', false);
-  renderUploadMetadata();
+  uploadFlow.setUploadMetadataEditing('#upload-links-row', false);
+  uploadFlow.renderUploadMetadata();
 });
 
 document.addEventListener('change', async (event) => {
@@ -1544,7 +1385,7 @@ document.addEventListener('change', async (event) => {
   const dropdown = input.closest('.route-type-dropdown');
   setRouteTypeDropdown(dropdown, input.value);
   dropdown.open = false;
-  if (dropdown.id === 'upload-route-type') await saveUploadMetadata({ routeType: input.value });
+  if (dropdown.id === 'upload-route-type') await uploadFlow.saveUploadMetadata({ routeType: input.value });
 });
 
 document.addEventListener('pointerdown', (event) => {
@@ -1554,72 +1395,17 @@ document.addEventListener('keydown', (event) => {
   closeRouteTypeDropdownOnEscape(event);
 }, true);
 
-async function saveUploadMetadata({ title, routeType, links }, button = null) {
-  if (!activeUploadMetadata) return false;
-  const payload = uploadMetadataPayload({
-    title: title ?? activeUploadMetadata.title,
-    speedKmh: activeUploadMetadata.speedKmh,
-    routeType: routeType ?? activeUploadMetadata.routeType,
-    links: links ?? activeUploadMetadata.externalLinks,
-  });
-  const error = document.querySelector('#upload-metadata-error');
-  error.hidden = true;
-  try {
-    return await withButtonLoading(button, async () => {
-      const response = await trackApi.update({ id: activeUploadMetadata.id, details: payload });
-      const responsePayload = await response.json();
-      if (!response.ok) {
-        bindText(error, () => errorMessage(responsePayload?.error));
-        error.hidden = false;
-        return false;
-      }
-      activeUploadMetadata.title = responsePayload.data.title;
-      activeUploadMetadata.routeType = responsePayload.data.routeType;
-      activeUploadMetadata.externalLinks = responsePayload.data.externalLinks || {};
-      renderUploadMetadata();
-      return true;
-    });
-  } catch (saveError) {
-    bindText(error, () => errorMessage(saveError));
-    error.hidden = false;
-    return false;
-  }
-}
-
 document.querySelector('#upload-title-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (await saveUploadMetadata({ title: document.querySelector('#upload-track-title').value }, event.submitter)) setUploadMetadataEditing('#upload-title-row', false);
+  if (await uploadFlow.saveUploadMetadata({ title: document.querySelector('#upload-track-title').value }, event.submitter)) uploadFlow.setUploadMetadataEditing('#upload-title-row', false);
 });
 document.querySelector('#upload-links-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
   const links = Object.fromEntries(['komoot', 'strava', 'garmin', 'rideWithGps'].map((service) => [service, formData.get(service)]));
-  if (await saveUploadMetadata({ links }, event.submitter)) setUploadMetadataEditing('#upload-links-row', false);
+  if (await uploadFlow.saveUploadMetadata({ links }, event.submitter)) uploadFlow.setUploadMetadataEditing('#upload-links-row', false);
 });
-document.querySelector('#retry-processing').addEventListener('click', async (event) => {
-  if (!activeUploadTrackId) return;
-  try {
-    await withButtonLoading(event.currentTarget, async () => {
-      const response = await trackApi.retry(activeUploadTrackId);
-      const payload = await response.json();
-      if (!response.ok) {
-        showProcessingError({ message: errorMessage(payload?.error), code: payload?.error?.code || 'RETRY_FAILED' });
-        return;
-      }
-      document.querySelector('#processing-error').hidden = true;
-      document.querySelector('#processing-details').hidden = true;
-      document.querySelector('#retry-processing').hidden = true;
-      document.querySelector('#close-processing').hidden = true;
-      document.querySelector('#processing-status').classList.remove('is-failed');
-      bindText(document.querySelector('#processing-status').querySelector('strong'), () => t('upload.processing'));
-      bindText(document.querySelector('#processing-status-copy'), () => t('upload.wait'));
-      updateProcessing(payload.data.step);
-      await pollTrackStatus(activeUploadTrackId);
-    });
-  } catch (retryError) {
-    showProcessingError(retryError);
-  }
-});
+document.querySelector('#retry-processing').addEventListener('click', (event) => uploadFlow.retryProcessing(event.currentTarget));
 
 document.querySelector('#track-search').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -1704,19 +1490,13 @@ document.querySelector('#edit-track-form').addEventListener('submit', async (eve
 document.querySelector('#replacement-gpx').addEventListener('change', (event) => {
   if (event.target.files[0]) {
     document.querySelector('#edit-track-dialog').close();
-    replaceTrackFile(event.target.files[0], managedTrackId);
+    uploadFlow.replaceTrackFile(event.target.files[0], managedTrackId);
   }
   event.target.value = '';
 });
 document.querySelector('.source-popover').addEventListener('click', async (event) => {
   if (!event.target.closest('.source-retry')) return;
-  const response = await trackApi.retry(publicTrackId);
-  const payload = await response.json();
-  if (!response.ok) return;
-  activeUploadTrackId = publicTrackId;
-  document.querySelector('#processing-overlay').hidden = false;
-  updateProcessing(payload.data.step);
-  await pollTrackStatus(publicTrackId);
+  await uploadFlow.retryExisting(publicTrackId);
 });
 document.querySelector('#delete-track').addEventListener('click', () => openTrackDeleteConfirmation({
   id: publicTrackId,
