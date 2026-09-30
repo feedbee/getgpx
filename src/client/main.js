@@ -9,6 +9,7 @@ import { bindProfileInteractions } from './profile-interactions.js';
 import { createRouteFilters } from './route-filters.js';
 import { createPoiController } from './poi-controller.js';
 import { createActiveRoutePoint } from './active-route-point.js';
+import { createTrackDeletion } from './track-delete-ui.js';
 import { distanceValue, elevationValue, number, createSpeedDraft } from './measurements.js';
 import { neutralAnalysis } from './analysis-presentation.js';
 import { errorMessage } from './errors-ui.js';
@@ -19,7 +20,6 @@ import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { renderAuthControl } from './auth-ui.js';
 import { renderHomeRouteCard, renderPublicTracks } from './home-page-ui.js';
-import { bulkDeleteSummary } from './my-tracks-ui.js';
 import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, favoriteButtonState, publicTrackIdFromPath } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js';
@@ -53,12 +53,14 @@ let publicTrackData = null;
 let publicTrackOwnershipVerified = false;
 let managedTrackId = null;
 let managedTrackTitle = '';
-let tracksPendingDeletion = [];
 
 app.innerHTML = renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPage, isFavoriteTracksPage });
 const collection = createTrackCollection({ trackApi, isMyTracksPage, isFavoriteTracksPage,
-  getCurrentUser: () => currentUser, onEdit: openTrackEditorFromList, onDelete: openTrackDeleteConfirmation,
-  onDeleteMany: (tracks) => { managedTrackId = null; openTracksDeleteConfirmation(tracks); } });
+  getCurrentUser: () => currentUser, onEdit: openTrackEditorFromList, onDelete: (track) => trackDeletion.openOne(track),
+  onDeleteMany: (tracks) => trackDeletion.openMany(tracks) });
+const trackDeletion = createTrackDeletion({ trackApi, collection, isFavoriteTracksPage, isTrackCollectionPage,
+  getPublicTrackId: () => publicTrackId, getTrackTitle: () => managedTrackTitle || currentTrack?.name,
+  windowRef: window });
 const activePoint = createActiveRoutePoint({ getTrack: () => currentTrack,
   chartCoordinates: (point) => elevationProfile.chartCoordinates(point),
   onMapPoint: (point) => routeMap.setActivePoint(point) });
@@ -185,41 +187,6 @@ async function openTrackEditorFromList(track, button) {
     const { data } = await response.json();
     openTrackEditor(data);
   });
-}
-
-function openTrackDeleteConfirmation({ id, title }) {
-  managedTrackId = id;
-  managedTrackTitle = title;
-  openTracksDeleteConfirmation([{ id, title }]);
-}
-
-function openTracksDeleteConfirmation(tracks) {
-  tracksPendingDeletion = tracks;
-  const summary = bulkDeleteSummary(tracks);
-  const favoriteRemoval = isFavoriteTracksPage;
-  bindText(document.querySelector('#delete-dialog-kicker'), () => favoriteRemoval ? t('tracks.favoritesKicker') : t('tracks.deleteKicker'));
-  bindText(document.querySelector('#delete-dialog-title'), () => summary.count === 1
-    ? (favoriteRemoval ? t('tracks.unsaveOne') : t('tracks.deleteOne'))
-    : t(favoriteRemoval ? 'tracks.unsaveMany' : 'tracks.deleteMany', { count: summary.count }));
-  bindText(document.querySelector('#delete-track-description'), () => favoriteRemoval
-    ? (summary.count === 1 ? t('tracks.keepLink') : t('tracks.keepLinks'))
-    : (summary.count === 1 ? t('tracks.deleteWarning')
-      : t('tracks.deleteManyWarning', { count: summary.count })));
-  bindText(document.querySelector('#confirm-track-delete'), () => favoriteRemoval ? t('common.remove') : t('common.delete'));
-  const list = document.querySelector('#delete-track-list');
-  list.replaceChildren(...summary.titles.map((trackTitle) => {
-    const item = document.createElement('li');
-    bindText(item, () => trackTitle);
-    return item;
-  }));
-  if (summary.remaining) {
-    const item = document.createElement('li');
-    bindText(item, () => t('tracks.remaining', { count: summary.remaining }));
-    list.append(item);
-  }
-  document.querySelector('#delete-track-error').hidden = true;
-  document.querySelector('#confirm-track-delete').disabled = false;
-  document.querySelector('#confirm-delete-dialog').showModal();
 }
 
 async function restoreSession() {
@@ -674,36 +641,6 @@ document.querySelector('.source-popover').addEventListener('click', async (event
   if (!event.target.closest('.source-retry')) return;
   await uploadFlow.retryExisting(publicTrackId);
 });
-document.querySelector('#delete-track').addEventListener('click', () => openTrackDeleteConfirmation({
-  id: publicTrackId,
-  title: managedTrackTitle || currentTrack?.name || t('tracks.thisTrack'),
-}));
-document.querySelector('#cancel-track-delete').addEventListener('click', () => document.querySelector('#confirm-delete-dialog').close());
-document.querySelector('#confirm-track-delete').addEventListener('click', async () => {
-  const button = document.querySelector('#confirm-track-delete');
-  const error = document.querySelector('#delete-track-error');
-  setButtonLoading(button, true);
-  error.hidden = true;
-  const isBulkDelete = managedTrackId === null;
-  try {
-    const response = await trackApi.remove({ id: managedTrackId, ids: isBulkDelete || isFavoriteTracksPage ? tracksPendingDeletion.map((track) => track.id) : null, saved: isFavoriteTracksPage });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null);
-      bindText(error, () => errorMessage(payload?.error));
-      error.hidden = false;
-      return;
-    }
-    document.querySelector('#confirm-delete-dialog').close();
-    if (isTrackCollectionPage) await collection.load({ reset: true });
-    else window.location.assign('/my-tracks');
-  } catch (deleteError) {
-    bindText(error, () => errorMessage(deleteError));
-    error.hidden = false;
-  } finally {
-    setButtonLoading(button, false);
-  }
-});
-
 document.querySelector('#share-track')?.addEventListener('click', async (event) => {
   if (!publicTrackId) return;
   const button = event.currentTarget;
