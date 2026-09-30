@@ -50,7 +50,8 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
   if (!trackService || !authService) throw new Error('Track and authentication services are required.');
 
   async function authenticatedOwner(request, response) {
-    const user = await authService.getUser(sessionTokenFromRequest(request));
+    const user = request.authenticatedUser === undefined
+      ? await authService.getUser(sessionTokenFromRequest(request)) : request.authenticatedUser;
     if (!user) {
       error(response, 401, 'AUTHENTICATION_REQUIRED', 'Войдите, чтобы управлять треками.');
       return null;

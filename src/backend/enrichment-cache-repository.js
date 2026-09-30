@@ -1,4 +1,4 @@
-const DEFAULT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 
 export function createEnrichmentCacheRepository(cache, { ttlMs = DEFAULT_TTL_MS } = {}) {
   if (!cache) throw new Error('An enrichment cache collection is required.');

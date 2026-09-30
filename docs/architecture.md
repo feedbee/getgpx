@@ -45,7 +45,7 @@ does not invalidate ids already stored on tracks.
 Existing track records are recreated rather than migrated to the S3 schema. Public
 access uses `publicId`.
 
-Authenticated uploads are parsed and analysed by the backend. It stores owner-bound compact track records and point-free, precomputed active summaries in MongoDB, with immutable source/analysis revisions in S3. The track page shows aggregate metrics, road distributions, and terrain lists from MongoDB before fetching authorized S3 analysis for map geometry and the elevation chart. A shared 30-day enrichment cache keeps successful Valhalla checkpoints and fully enriched OpenStreetMap results. MongoDB also stores Google-linked users and hashed opaque sessions; Google OAuth tokens are discarded after profile lookup.
+Authenticated uploads are parsed and analysed by the backend. It stores owner-bound compact track records and point-free, precomputed active summaries in MongoDB, with immutable source/analysis revisions in S3. The track page shows aggregate metrics, road distributions, and terrain lists from MongoDB before fetching authorized S3 analysis for map geometry and the elevation chart. A shared 24-hour enrichment cache keeps successful Valhalla checkpoints and fully enriched OpenStreetMap results. MongoDB also stores Google-linked users and hashed opaque sessions; Google OAuth tokens are discarded after profile lookup.
 
 The production process fails startup when MongoDB configuration or connectivity is absent. Liveness deliberately avoids dependencies; readiness performs a MongoDB ping so an orchestrator can stop routing traffic to an unhealthy instance.
 

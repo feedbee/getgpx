@@ -31,9 +31,9 @@ describe('enrichment cache repository', () => {
     const storedAt = new Date('2026-09-17T10:00:00.000Z');
     await repository.put('valhalla:v1:segment', { surface: 'asphalt' }, storedAt);
 
-    await expect(repository.get('valhalla:v1:segment', new Date('2026-10-16T10:00:00.000Z')))
+    await expect(repository.get('valhalla:v1:segment', new Date('2026-09-18T09:59:59.000Z')))
       .resolves.toEqual({ surface: 'asphalt' });
-    await expect(repository.get('valhalla:v1:segment', new Date('2026-10-18T10:00:00.000Z')))
+    await expect(repository.get('valhalla:v1:segment', new Date('2026-09-18T10:00:00.000Z')))
       .resolves.toBeNull();
   });
 

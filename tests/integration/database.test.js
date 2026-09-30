@@ -7,6 +7,7 @@ import { createTrackPersistence } from '../../src/backend/track-persistence.js';
 import { createTrackRepository } from '../../src/backend/track-repository.js';
 import { createUserRepository } from '../../src/backend/user-repository.js';
 import { createSavedTrackRepository } from '../../src/backend/saved-track-repository.js';
+import { createSessionRepository } from '../../src/backend/session-repository.js';
 
 const uri = process.env.MONGODB_URI;
 const describeWithMongo = uri ? describe : describe.skip;
@@ -41,6 +42,28 @@ describeWithMongo('MongoDB integration', () => {
     expect(user.profileUpdatedAt).toEqual(registeredAt);
     expect(user.tier).toBe('BASIC');
     await users.deleteOne({ googleSubject: 'integration-google-user' });
+  });
+
+  it('renews only a session that has not expired', async () => {
+    const sessions = await database.collection('sessions');
+    const users = await database.collection('users');
+    const repository = createSessionRepository(sessions, users);
+    const userId = new ObjectId();
+    const token = `integration-session-${userId}`;
+    const initialExpiry = new Date('2030-01-02T12:00:00.000Z');
+    const lastRequest = new Date('2030-01-02T11:00:00.000Z');
+    await repository.ensureIndexes();
+    await users.insertOne({ _id: userId, googleSubject: `session-${userId}`, email: `${userId}@example.com` });
+    try {
+      await repository.create(token, userId, initialExpiry);
+      await expect(repository.findUserByToken(token, lastRequest)).resolves.toMatchObject({ _id: userId });
+      const renewed = await sessions.findOne({ userId });
+      expect(renewed.expiresAt).toEqual(new Date('2030-02-01T11:00:00.000Z'));
+      await expect(repository.findUserByToken(token, new Date('2030-02-01T11:00:00.000Z'))).resolves.toBeNull();
+    } finally {
+      await repository.deleteByToken(token);
+      await users.deleteOne({ _id: userId });
+    }
   });
 
   it('initializes and loads user tier limits from application configuration', async () => {

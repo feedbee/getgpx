@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createAuthHandlers, createAuthService, exchangeGoogleCode, publicUser } from '../../../src/backend/auth.js';
+import { createAuthHandlers, createAuthService, createSessionRefreshMiddleware, exchangeGoogleCode, publicUser } from '../../../src/backend/auth.js';
 
 describe('Google OAuth requests', () => {
   it('aborts a stalled token exchange after ten seconds', async () => {
@@ -97,6 +97,31 @@ describe('authentication service', () => {
 });
 
 describe('authentication HTTP handlers', () => {
+  it('renews a valid session cookie on a server request', async () => {
+    const authService = { getUser: vi.fn().mockResolvedValue({ id: 'user-1' }) };
+    const middleware = createSessionRefreshMiddleware(authService, { secureCookies: true });
+    const request = { path: '/api/v1/tracks', headers: { cookie: 'getgpx_session=active-token' } };
+    const response = { headers: {}, setHeader(name, value) { this.headers[name] = value; } };
+    const next = vi.fn();
+
+    await middleware(request, response, next);
+
+    expect(authService.getUser).toHaveBeenCalledWith('active-token');
+    expect(request.authenticatedUser).toEqual({ id: 'user-1' });
+    expect(response.headers['Set-Cookie']).toContain('Max-Age=2592000');
+    expect(response.headers['Set-Cookie']).toContain('Secure');
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('does not renew an invalid session cookie', async () => {
+    const middleware = createSessionRefreshMiddleware({ getUser: async () => null });
+    const request = { path: '/api/v1/tracks', headers: { cookie: 'getgpx_session=expired' } };
+    const response = { setHeader: vi.fn() };
+    await middleware(request, response, vi.fn());
+    expect(request.authenticatedUser).toBeNull();
+    expect(response.setHeader).not.toHaveBeenCalled();
+  });
+
   it('returns the current session user and clears it on logout', async () => {
     const deleted = [];
     const authService = {

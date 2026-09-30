@@ -19,6 +19,8 @@ open a menu containing only logout.
   profile field received from Google changes.
 - Session cookies are opaque, `HttpOnly`, `SameSite=Lax`, and `Secure` in production.
   MongoDB stores only a SHA-256 hash of each session token.
+- A request carrying a valid session renews both the cookie and MongoDB expiry to 30
+  days after that request. Expired sessions cannot be renewed; logout revokes immediately.
 
 ## Structure and implementation order
 

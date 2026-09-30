@@ -22,7 +22,8 @@ export function createTrackInternalHandler(trackService, authService, config, { 
     }
     let descriptor;
     try {
-      const user = await authService.getUser(sessionTokenFromRequest(request));
+      const user = request.authenticatedUser === undefined
+        ? await authService.getUser(sessionTokenFromRequest(request)) : request.authenticatedUser;
       descriptor = await trackService.fileDescriptor(id, kind, user);
     } catch (lookupError) {
       request.log?.error({ event: 'track_file_handoff_failed', kind, stage: 'descriptor',

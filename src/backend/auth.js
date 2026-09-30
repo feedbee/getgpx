@@ -1,11 +1,11 @@
 import { createHash, createHmac, timingSafeEqual, randomBytes as nodeRandomBytes } from 'node:crypto';
 import { Router } from 'express';
 import { safeErrorDetails } from './safe-error-details.js';
+import { SESSION_DURATION_MS } from './session-repository.js';
 
 const GOOGLE_AUTHORIZATION_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo';
-const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1_000;
 const ATTEMPT_DURATION_MS = 10 * 60 * 1_000;
 const GOOGLE_REQUEST_TIMEOUT_MS = 10_000;
 const SESSION_COOKIE = 'getgpx_session';
@@ -197,7 +197,8 @@ export function createAuthHandlers(authService, { secureCookies = process.env.NO
     },
 
     async session(request, response) {
-      const user = await authService.getUser(sessionTokenFromRequest(request));
+      const user = request.authenticatedUser === undefined
+        ? await authService.getUser(sessionTokenFromRequest(request)) : request.authenticatedUser;
       response.setHeader?.('Cache-Control', 'no-store');
       response.json({ user });
     },
@@ -207,6 +208,22 @@ export function createAuthHandlers(authService, { secureCookies = process.env.NO
       response.setHeader('Set-Cookie', serializeCookie(SESSION_COOKIE, '', { maxAge: 0, secureCookies }));
       response.status(204).end();
     },
+  };
+}
+
+export function createSessionRefreshMiddleware(authService, { secureCookies = process.env.NODE_ENV === 'production' } = {}) {
+  return async (request, response, next) => {
+    const token = sessionTokenFromRequest(request);
+    if (!token || request.path === '/auth/logout') return next();
+    try {
+      const user = await authService.getUser(token);
+      request.authenticatedUser = user;
+      if (user) response.setHeader('Set-Cookie', serializeCookie(SESSION_COOKIE, token,
+        { maxAge: SESSION_DURATION_MS / 1_000, secureCookies }));
+      next();
+    } catch (error) {
+      next(error);
+    }
   };
 }
 
