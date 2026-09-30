@@ -9,4 +9,11 @@ a local HTTP test endpoint to verify upload, read, copy, and delete requests wit
 AWS credentials. CI supplies an isolated MongoDB service. Add indexes and conditional
 repository behavior here as persistence evolves.
 
+When manually testing against MongoDB in a development environment, create any
+throwaway database under a unique, clearly test-only name. Record that name and
+drop only that database after the run, even if the test fails. Automated tests
+that create temporary databases should clean them up in `finally` or `afterAll`.
+Never use a broad cleanup command against the configured application database or
+databases owned by other runs.
+
 `npm run check` is the canonical local and CI quality gate: lint, fast tests, then build. Tests should assert observable results and persisted state, not private call order. External Valhalla/Overpass smoke tests are not part of PR CI because those services are rate-limited and non-deterministic.

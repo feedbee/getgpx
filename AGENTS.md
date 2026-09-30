@@ -2,6 +2,7 @@
 
 - Use Node.js 22+ and `npm ci`; preserve `package-lock.json`.
 - Run `npm run check` for every change. Run `npm run test:integration` when database wiring changes.
+- If you create a temporary MongoDB database for development or testing, give it a unique, clearly test-only name and drop that exact database when finished, including after test failures (for example, in `finally` or `afterAll`). Never drop a configured application database or another developer's database; verify the target before cleanup.
 - Keep browser/domain code in `src/client`; keep external services and persistence behind `src/backend` adapters.
 - Keep all tests under `tests/`, mirroring the source boundary; do not colocate tests with production files.
 - Do not commit `.env`, credentials, GPX user data, or generated `dist/` output.
