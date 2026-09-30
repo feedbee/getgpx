@@ -5,6 +5,8 @@ import { createUploadFlow } from './track-upload-flow.js';
 import { createTrackCollection } from './track-collection.js';
 import { createRouteSummaryView, formatDuration } from './route-page-summary.js';
 import { createElevationProfile } from './elevation-profile.js';
+import { bindProfileInteractions } from './profile-interactions.js';
+import { createRouteFilters } from './route-filters.js';
 import { distanceValue, elevationValue, number, createSpeedDraft } from './measurements.js';
 import { neutralAnalysis, poiName, poiType, roadLabel } from './analysis-presentation.js';
 import { errorMessage } from './errors-ui.js';
@@ -25,8 +27,8 @@ import { availableExternalTrackLinks, renderExternalTrackLinks } from './externa
 import { detectClimbs, detectDescents } from './domain/climbs.js';
 import { calculateSegmentGrades } from './domain/gradient.js';
 import { emptyPoiSelection, updatePoiSelection } from './domain/poi-selection.js';
-import { nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot } from './domain/profile-math.js';
-import { classifySurface, classifyWayType, surfaceEmphasis } from './domain/surface.js';
+import { nearestRoutePointIndex } from './domain/profile-math.js';
+import { classifySurface, classifyWayType } from './domain/surface.js';
 
 const app = document.querySelector('#app');
 const trackApi = createTrackApi();
@@ -35,18 +37,9 @@ let currentTrack;
 let activePointIndex = 0;
 let viewRange = [0, 1];
 let zoomHistory = [];
-let selectionStart = null;
 let mapColorMode = 'gradient';
 let profileColorMode = 'gradient';
 let profileFocusPlacement = 'ribbon';
-let hoveredSurfaceId = null;
-let pinnedSurfaceId = null;
-let hoveredWayTypeId = null;
-let pinnedWayTypeId = null;
-let hoveredQualityId = null;
-let pinnedQualityId = null;
-let hoveredRange = null;
-let pinnedRange = null;
 let currentUser = null;
 const isMyTracksPage = window.location.pathname === '/my-tracks';
 const isFavoriteTracksPage = window.location.pathname === '/favorite-tracks';
@@ -69,14 +62,15 @@ const collection = createTrackCollection({ trackApi, isMyTracksPage, isFavoriteT
   onDeleteMany: (tracks) => { managedTrackId = null; openTracksDeleteConfirmation(tracks); } });
 const routeSummaryView = createRouteSummaryView({ updatePageLanguage, renderPointsOfInterest, setDetailedView,
   onFiltersRendered: refreshRouteFocus });
+const routeFilters = createRouteFilters({ getTrack: () => currentTrack, onChange: refreshRouteFocus });
 const routeMap = createRouteMap({ getPoiSelection: () => poiSelection, getMapColorMode: () => mapColorMode,
-  getRouteFilter: selectedRouteFilter, getTerrainRange: selectedTerrainRange,
+  getRouteFilter: routeFilters.selectedRouteFilter, getTerrainRange: routeFilters.selectedTerrainRange,
   onActivePoint: setActivePoint, onPointContext: setPointContext, onPoiHover: hoverPoi,
   onPoiLeave: leavePoi, onPoiToggle: togglePoi });
 const elevationProfile = createElevationProfile({ getTrack: () => currentTrack, getViewRange: () => viewRange,
   getSummaryMetrics: () => publicTrackData?.summary?.metrics, getColorMode: () => profileColorMode,
-  getFocusPlacement: () => profileFocusPlacement, getRouteFilter: selectedRouteFilter,
-  getTerrainRange: selectedTerrainRange });
+  getFocusPlacement: () => profileFocusPlacement, getRouteFilter: routeFilters.selectedRouteFilter,
+  getTerrainRange: routeFilters.selectedTerrainRange });
 
 const authControl = document.querySelector('#auth-control');
 
@@ -389,61 +383,12 @@ async function loadHomepageTracks() {
   initHomeExampleMap();
 }
 
-function selectedSurfaceId() {
-  return pinnedSurfaceId || hoveredSurfaceId;
-}
-
-function selectedWayTypeId() {
-  return pinnedWayTypeId || hoveredWayTypeId;
-}
-
-function selectedQualityId() {
-  return pinnedQualityId || hoveredQualityId;
-}
-
-function selectedTerrainRange() {
-  return pinnedRange || hoveredRange;
-}
-
-function selectedRouteFilter() {
-  if (selectedQualityId()) return { kind: 'quality', id: selectedQualityId() };
-  if (selectedWayTypeId()) return { kind: 'waytype', id: selectedWayTypeId() };
-  if (selectedSurfaceId()) return { kind: 'surface', id: selectedSurfaceId() };
-  return null;
-}
-
 function refreshRouteFocus() {
   if (!currentTrack) return;
   routeMap.draw(currentTrack, { fit: false });
   if (currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
   setActivePoint(activePointIndex);
-  const focusedSurface = selectedSurfaceId();
-  document.querySelectorAll('[data-surface-filter]').forEach((control) => {
-    const emphasis = surfaceEmphasis(control.dataset.surfaceFilter, focusedSurface);
-    control.classList.toggle('is-active', emphasis.highlighted);
-    control.classList.remove('is-dimmed');
-    control.setAttribute('aria-pressed', String(pinnedSurfaceId === control.dataset.surfaceFilter));
-  });
-  const focusedWayType = selectedWayTypeId();
-  document.querySelectorAll('[data-waytype-filter]').forEach((control) => {
-    const emphasis = surfaceEmphasis(control.dataset.waytypeFilter, focusedWayType);
-    control.classList.toggle('is-active', emphasis.highlighted);
-    control.classList.remove('is-dimmed');
-    control.setAttribute('aria-pressed', String(pinnedWayTypeId === control.dataset.waytypeFilter));
-  });
-  const focusedQuality = selectedQualityId();
-  document.querySelectorAll('[data-quality-filter]').forEach((control) => {
-    const emphasis = surfaceEmphasis(control.dataset.qualityFilter, focusedQuality);
-    control.classList.toggle('is-active', emphasis.highlighted);
-    control.classList.remove('is-dimmed');
-    control.setAttribute('aria-pressed', String(pinnedQualityId === control.dataset.qualityFilter));
-  });
-  document.querySelectorAll('[data-terrain-range]').forEach((control) => {
-    const range = control.dataset.terrainRange;
-    control.classList.toggle('is-active', Boolean(selectedTerrainRange() && range === selectedTerrainRange().key));
-    control.setAttribute('aria-pressed', String(Boolean(pinnedRange && range === pinnedRange.key)));
-  });
-  document.querySelector('.surface-section').classList.toggle('has-pinned-surface', Boolean(pinnedSurfaceId || pinnedWayTypeId || pinnedQualityId));
+  routeFilters.renderControls();
 }
 
 function setViewRange(range, { remember = true } = {}) {
@@ -533,14 +478,7 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
   document.querySelector('#route-state-note').hidden = true;
   setDetailedView('ready');
   routeMap.clearRangeFocus();
-  hoveredSurfaceId = null;
-  pinnedSurfaceId = null;
-  hoveredWayTypeId = null;
-  pinnedWayTypeId = null;
-  hoveredQualityId = null;
-  pinnedQualityId = null;
-  hoveredRange = null;
-  pinnedRange = null;
+  routeFilters.reset();
   currentTrack = neutralAnalysis(rawTrack);
   poiSelection = { ...emptyPoiSelection };
   const grades = calculateSegmentGrades(currentTrack.points);
@@ -654,67 +592,10 @@ async function loadPublicTrack(trackId, retries = 0) {
   }
 }
 
-const profile = document.querySelector('#profile-wrap');
-profile.addEventListener('pointermove', (event) => {
-  const poiMarker = event.target.closest('[data-profile-poi-index]');
-  if (poiMarker) {
-    hoverPoi(Number(poiMarker.dataset.profilePoiIndex));
-    return;
-  }
-  if (poiSelection.hoveredIndex !== null && poiSelection.pinnedIndex === null) leavePoi();
-  if (poiSelection.pinnedIndex !== null) return;
-  const rect = profile.getBoundingClientRect();
-  const ratio = pointerRatioInPlot(event.clientX, rect.left, rect.width);
-  const index = pointIndexAtRatio(currentTrack.points, viewRange[0], viewRange[1], ratio);
-  if (selectionStart) {
-    const startX = Math.max(0, Math.min(1200, selectionStart.x));
-    const currentX = ratio * 1200;
-    const selection = document.querySelector('#profile-selection');
-    selection.setAttribute('x', Math.min(startX, currentX));
-    selection.setAttribute('width', Math.abs(currentX - startX));
-    selection.classList.add('visible');
-  } else {
-    setActivePoint(index, { showContext: true });
-  }
-});
-profile.addEventListener('pointerleave', () => {
-  leavePoi();
-  if (!selectionStart && poiSelection.pinnedIndex === null) setPointContext(null);
-});
-profile.addEventListener('click', (event) => {
-  const marker = event.target.closest('[data-profile-poi-index]');
-  if (marker) togglePoi(Number(marker.dataset.profilePoiIndex));
-});
-profile.addEventListener('pointerdown', (event) => {
-  if (event.target.closest('[data-profile-poi-index]')) return;
-  if (poiSelection.pinnedIndex !== null) return;
-  if (event.button !== 0) return;
-  const rect = profile.getBoundingClientRect();
-  const ratio = pointerRatioInPlot(event.clientX, rect.left, rect.width);
-  selectionStart = { ratio, x: ratio * 1200, pointerId: event.pointerId };
-  profile.setPointerCapture?.(event.pointerId);
-});
-profile.addEventListener('pointerup', (event) => {
-  if (!selectionStart) return;
-  const rect = profile.getBoundingClientRect();
-  const endRatio = pointerRatioInPlot(event.clientX, rect.left, rect.width);
-  const startRatio = selectionStart.ratio;
-  selectionStart = null;
-  document.querySelector('#profile-selection').classList.remove('visible');
-  if (Math.abs(endRatio - startRatio) < 0.025) {
-    setActivePoint(pointIndexAtRatio(currentTrack.points, viewRange[0], viewRange[1], endRatio));
-    return;
-  }
-  const from = pointIndexAtRatio(currentTrack.points, viewRange[0], viewRange[1], Math.min(startRatio, endRatio));
-  const to = pointIndexAtRatio(currentTrack.points, viewRange[0], viewRange[1], Math.max(startRatio, endRatio));
-  setViewRange([from, to]);
-});
-profile.addEventListener('keydown', (event) => {
-  if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
-  if (poiSelection.pinnedIndex !== null) return;
-  event.preventDefault();
-  setActivePoint(activePointIndex + (event.key === 'ArrowRight' ? 1 : -1));
-});
+bindProfileInteractions({ getTrack: () => currentTrack, getViewRange: () => viewRange,
+  getPoiSelection: () => poiSelection, getActivePointIndex: () => activePointIndex,
+  onHoverPoi: hoverPoi, onLeavePoi: leavePoi, onTogglePoi: togglePoi,
+  onActivePoint: setActivePoint, onPointContext: setPointContext, onViewRange: setViewRange });
 document.querySelector('#zoom-back').addEventListener('click', () => {
   const previous = zoomHistory.pop();
   if (previous) setViewRange(previous, { remember: false });
@@ -741,109 +622,6 @@ document.addEventListener('keydown', (event) => {
   setProfileSettingsOpen(false);
   profileSettingsTrigger.focus();
 });
-const surfaceSection = document.querySelector('.surface-section');
-surfaceSection.addEventListener('pointerover', (event) => {
-  const control = event.target.closest('[data-surface-filter]:not(:disabled),[data-waytype-filter]:not(:disabled),[data-quality-filter]:not(:disabled)');
-  if (!control || pinnedSurfaceId || pinnedWayTypeId || pinnedQualityId || pinnedRange) return;
-  hoveredSurfaceId = control.dataset.surfaceFilter || null;
-  hoveredWayTypeId = control.dataset.waytypeFilter || null;
-  hoveredQualityId = control.dataset.qualityFilter || null;
-  refreshRouteFocus();
-});
-surfaceSection.addEventListener('pointerout', (event) => {
-  if (pinnedSurfaceId || pinnedWayTypeId || pinnedQualityId) return;
-  const from = event.target.closest('[data-surface-filter]:not(:disabled),[data-waytype-filter]:not(:disabled),[data-quality-filter]:not(:disabled)');
-  const to = event.relatedTarget?.closest?.('[data-surface-filter]:not(:disabled),[data-waytype-filter]:not(:disabled),[data-quality-filter]:not(:disabled)');
-  if (!from || from === to) return;
-  hoveredSurfaceId = null;
-  hoveredWayTypeId = null;
-  hoveredQualityId = null;
-  refreshRouteFocus();
-});
-surfaceSection.addEventListener('pointerleave', () => {
-  if (pinnedSurfaceId || pinnedWayTypeId || pinnedQualityId || (!hoveredSurfaceId && !hoveredWayTypeId && !hoveredQualityId)) return;
-  hoveredSurfaceId = null;
-  hoveredWayTypeId = null;
-  hoveredQualityId = null;
-  refreshRouteFocus();
-});
-surfaceSection.addEventListener('focusin', (event) => {
-  const control = event.target.closest('[data-surface-filter]:not(:disabled),[data-waytype-filter]:not(:disabled),[data-quality-filter]:not(:disabled)');
-  if (!control || pinnedSurfaceId || pinnedWayTypeId || pinnedQualityId) return;
-  hoveredSurfaceId = control.dataset.surfaceFilter || null;
-  hoveredWayTypeId = control.dataset.waytypeFilter || null;
-  hoveredQualityId = control.dataset.qualityFilter || null;
-  refreshRouteFocus();
-});
-surfaceSection.addEventListener('focusout', (event) => {
-  if (pinnedSurfaceId || pinnedWayTypeId || pinnedQualityId || event.relatedTarget?.closest?.('[data-surface-filter],[data-waytype-filter],[data-quality-filter]')) return;
-  hoveredSurfaceId = null;
-  hoveredWayTypeId = null;
-  hoveredQualityId = null;
-  refreshRouteFocus();
-});
-surfaceSection.addEventListener('click', (event) => {
-  const control = event.target.closest('[data-surface-filter]:not(:disabled),[data-waytype-filter]:not(:disabled),[data-quality-filter]:not(:disabled)');
-  if (!control) return;
-  const nextSurface = control.dataset.surfaceFilter || null;
-  const nextWayType = control.dataset.waytypeFilter || null;
-  const nextQuality = control.dataset.qualityFilter || null;
-  const isSame = pinnedSurfaceId === nextSurface && pinnedWayTypeId === nextWayType && pinnedQualityId === nextQuality;
-  pinnedSurfaceId = isSame ? null : nextSurface;
-  pinnedWayTypeId = isSame ? null : nextWayType;
-  pinnedQualityId = isSame ? null : nextQuality;
-  pinnedRange = null;
-  hoveredSurfaceId = null;
-  hoveredWayTypeId = null;
-  hoveredQualityId = null;
-  refreshRouteFocus();
-});
-const terrainSection = document.querySelector('.climbs-section');
-function terrainItem(control) {
-  const items = control.dataset.terrainType === 'climb' ? currentTrack.climbs : currentTrack.descents;
-  const item = items[Number(control.dataset.terrainIndex)];
-  return item ? { ...item, key: control.dataset.terrainRange } : null;
-}
-terrainSection.addEventListener('pointerover', (event) => {
-  const control = event.target.closest('[data-terrain-range]');
-  if (!control || pinnedRange || pinnedSurfaceId || pinnedWayTypeId || pinnedQualityId) return;
-  hoveredRange = terrainItem(control);
-  refreshRouteFocus();
-});
-terrainSection.addEventListener('pointerout', (event) => {
-  const control = event.target.closest('[data-terrain-range]');
-  if (!control || pinnedRange || event.relatedTarget?.closest?.('[data-terrain-range]') === control) return;
-  hoveredRange = null;
-  refreshRouteFocus();
-});
-terrainSection.addEventListener('focusin', (event) => {
-  const control = event.target.closest('[data-terrain-range]');
-  if (!control || pinnedRange || pinnedSurfaceId || pinnedWayTypeId || pinnedQualityId) return;
-  hoveredRange = terrainItem(control);
-  refreshRouteFocus();
-});
-terrainSection.addEventListener('focusout', (event) => {
-  if (pinnedRange || event.relatedTarget?.closest?.('[data-terrain-range]')) return;
-  hoveredRange = null;
-  refreshRouteFocus();
-});
-terrainSection.addEventListener('click', (event) => {
-  const control = event.target.closest('[data-terrain-range]');
-  if (!control) return;
-  const nextRange = terrainItem(control);
-  pinnedRange = pinnedRange?.key === nextRange?.key ? null : nextRange;
-  hoveredRange = null;
-  pinnedSurfaceId = null;
-  pinnedWayTypeId = null;
-  pinnedQualityId = null;
-  refreshRouteFocus();
-});
-document.querySelectorAll('[data-terrain-tab]').forEach((button) => button.addEventListener('click', () => {
-  document.querySelectorAll('[data-terrain-tab]').forEach((item) => item.classList.toggle('active', item === button));
-  document.querySelector('#climbs-list').hidden = button.dataset.terrainTab !== 'climbs';
-  document.querySelector('#descents-list').hidden = button.dataset.terrainTab !== 'descents';
-}));
-
 const poiSection = document.querySelector('.poi-section');
 poiSection.addEventListener('pointerover', (event) => {
   const row = event.target.closest('[data-poi-index]');
@@ -885,20 +663,7 @@ window.addEventListener('scroll', scheduleStickyRouteHeaderRefresh, { passive: t
 window.addEventListener('resize', scheduleStickyRouteHeaderRefresh);
 refreshStickyRouteHeader();
 
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') closeUserMenu();
-  if (event.key !== 'Escape' || (!pinnedSurfaceId && !pinnedWayTypeId && !pinnedQualityId && !pinnedRange)) return;
-  pinnedSurfaceId = null;
-  pinnedWayTypeId = null;
-  pinnedQualityId = null;
-  pinnedRange = null;
-  hoveredSurfaceId = null;
-  hoveredWayTypeId = null;
-  hoveredQualityId = null;
-  hoveredRange = null;
-  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-  refreshRouteFocus();
-});
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeUserMenu(); });
 document.querySelector('#gpx-file').addEventListener('change', (event) => {
   if (event.target.files[0]) {
     document.querySelector('#upload-dialog').hidden = true;
