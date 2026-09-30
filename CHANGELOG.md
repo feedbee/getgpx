@@ -4,6 +4,26 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-30
+
+### Added
+
+- Versioned track API routes under `/api/v1/tracks`, including `GET /api/v1/tracks/:id?include=geometry` to return metadata and detailed geometry for the same track revision in one response.
+
+### Changed
+
+- Authentication routes now use `/auth`; the featured-track feed uses `/homepage`; GPX download and replacement use `/api/v1/tracks/:id/gpx`.
+- Google OAuth token and profile requests now time out after ten seconds each.
+
+### Fixed
+
+- Replacing a GPX preserves the track's edited title, speed, route type, and external links, and recalculates duration from the new distance.
+- Public track pages show an unavailable state if metadata loading fails.
+
+### Upgrade notes
+
+- Update clients and reverse-proxy rules to the new API paths. Register the new `/auth/google/callback` URL with Google and update `GOOGLE_REDIRECT_URI` before deploying.
+
 ## [0.2.3] - 2026-09-29
 
 ### Fixed
