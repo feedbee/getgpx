@@ -10,10 +10,10 @@ import { createRouteFilters } from './route-filters.js';
 import { createPoiController } from './poi-controller.js';
 import { createActiveRoutePoint } from './active-route-point.js';
 import { createTrackDeletion } from './track-delete-ui.js';
-import { distanceValue, elevationValue, number, createSpeedDraft } from './measurements.js';
+import { createTrackEditor } from './track-editor-ui.js';
+import { distanceValue, elevationValue, number } from './measurements.js';
 import { neutralAnalysis } from './analysis-presentation.js';
-import { errorMessage } from './errors-ui.js';
-import { t, bindText, bindAttribute, htmlMessage, preferences, formatMeasurement, currentUnit } from './i18n.js';
+import { t, bindText, bindAttribute, htmlMessage, preferences, formatMeasurement } from './i18n.js';
 import L from 'leaflet';
 import { createRouteMap } from './route-map.js';
 import 'leaflet/dist/leaflet.css';
@@ -23,8 +23,8 @@ import { renderHomeRouteCard, renderPublicTracks } from './home-page-ui.js';
 import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, favoriteButtonState, publicTrackIdFromPath } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js';
-import { setButtonLoading, withButtonLoading } from './button-loading-ui.js';
-import { closeRouteTypeDropdownOnEscape, closeRouteTypeDropdownsOutside, routeTypeDefinition, routeTypeIcon, selectedRouteType, setRouteTypeDropdown } from './route-type-ui.js';
+import { setButtonLoading } from './button-loading-ui.js';
+import { closeRouteTypeDropdownOnEscape, closeRouteTypeDropdownsOutside, routeTypeDefinition, routeTypeIcon, setRouteTypeDropdown } from './route-type-ui.js';
 import { availableExternalTrackLinks, renderExternalTrackLinks } from './external-track-links-ui.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
 import { calculateSegmentGrades } from './domain/gradient.js';
@@ -51,16 +51,24 @@ let publicTrackId = null;
 const uploadFlow = createUploadFlow({ trackApi, isAuthenticated: () => Boolean(currentUser), getPublicTrackId: () => publicTrackId });
 let publicTrackData = null;
 let publicTrackOwnershipVerified = false;
-let managedTrackId = null;
-let managedTrackTitle = '';
 
 app.innerHTML = renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPage, isFavoriteTracksPage });
 const collection = createTrackCollection({ trackApi, isMyTracksPage, isFavoriteTracksPage,
-  getCurrentUser: () => currentUser, onEdit: openTrackEditorFromList, onDelete: (track) => trackDeletion.openOne(track),
+  getCurrentUser: () => currentUser, onEdit: (track, button) => trackEditor.openFromList(track, button), onDelete: (track) => trackDeletion.openOne(track),
   onDeleteMany: (tracks) => trackDeletion.openMany(tracks) });
 const trackDeletion = createTrackDeletion({ trackApi, collection, isFavoriteTracksPage, isTrackCollectionPage,
-  getPublicTrackId: () => publicTrackId, getTrackTitle: () => managedTrackTitle || currentTrack?.name,
+  getPublicTrackId: () => publicTrackId, getTrackTitle: () => trackEditor.managedTitle || currentTrack?.name,
   windowRef: window });
+const trackEditor = createTrackEditor({ trackApi, uploadFlow, getPublicTrackId: () => publicTrackId,
+  getPublicTrackData: () => publicTrackData, onUpdated: async (data) => {
+    if (isMyTracksPage) return collection.load({ reset: true });
+    publicTrackData = data;
+    renderExternalTrackLinks(document.querySelector('#external-track-links'), data.externalLinks);
+    const linksSection = document.querySelector('#external-track-links-section');
+    linksSection.hidden = availableExternalTrackLinks(data.externalLinks).length === 0;
+    document.querySelector('#external-track-links-nav').hidden = linksSection.hidden;
+    await loadPublicTrack(publicTrackId);
+  } });
 const activePoint = createActiveRoutePoint({ getTrack: () => currentTrack,
   chartCoordinates: (point) => elevationProfile.chartCoordinates(point),
   onMapPoint: (point) => routeMap.setActivePoint(point) });
@@ -128,10 +136,7 @@ async function loadTrackManagement(trackId) {
   publicTrackOwnershipVerified = true;
   renderTrackAttribution();
   document.querySelector('#owner-track-actions').hidden = false;
-  document.querySelector('#edit-track-title').value = data.title;
-  setSpeedDraft(data.speedKmh || 20);
-  setRouteTypeDropdown(document.querySelector('#edit-track-route-type'), data.routeType);
-  setExternalLinkFields(data.externalLinks);
+  trackEditor.setFields(data);
   document.querySelectorAll('.source-retry').forEach((button) => {
     button.hidden = !data.canRetry || button.dataset.retrySource !== data.retrySource;
   });
@@ -151,42 +156,6 @@ async function loadSavedState(trackId) {
   if (!response.ok || trackId !== publicTrackId) return;
   const { data } = await response.json();
   setSavedButton(Boolean(data.saved));
-}
-
-function setExternalLinkFields(links = {}) {
-  document.querySelector('#edit-track-komoot').value = links.komoot || '';
-  document.querySelector('#edit-track-strava').value = links.strava || '';
-  document.querySelector('#edit-track-garmin').value = links.garmin || '';
-  document.querySelector('#edit-track-ride-with-gps').value = links.rideWithGps || '';
-}
-
-function externalLinksFromEditor() {
-  return {
-    komoot: document.querySelector('#edit-track-komoot').value,
-    strava: document.querySelector('#edit-track-strava').value,
-    garmin: document.querySelector('#edit-track-garmin').value,
-    rideWithGps: document.querySelector('#edit-track-ride-with-gps').value,
-  };
-}
-
-function openTrackEditor({ id, title, speedKmh, routeType, externalLinks }) {
-  managedTrackId = id;
-  managedTrackTitle = title;
-  document.querySelector('#edit-track-title').value = title;
-  setSpeedDraft(speedKmh || 20);
-  setRouteTypeDropdown(document.querySelector('#edit-track-route-type'), routeType);
-  setExternalLinkFields(externalLinks);
-  document.querySelector('#edit-track-error').hidden = true;
-  document.querySelector('#edit-track-dialog').showModal();
-}
-
-async function openTrackEditorFromList(track, button) {
-  await withButtonLoading(button, async () => {
-    const response = await trackApi.management(track.id);
-    if (!response.ok) return;
-    const { data } = await response.json();
-    openTrackEditor(data);
-  });
 }
 
 async function restoreSession() {
@@ -579,64 +548,6 @@ document.querySelector('#upload-links-form').addEventListener('submit', async (e
 });
 document.querySelector('#retry-processing').addEventListener('click', (event) => uploadFlow.retryProcessing(event.currentTarget));
 
-document.querySelector('#edit-track').addEventListener('click', () => openTrackEditor({
-  id: publicTrackId,
-  title: document.querySelector('#edit-track-title').value,
-  speedKmh: speedDraft.canonical,
-  routeType: publicTrackData?.routeType,
-  externalLinks: publicTrackData?.externalLinks,
-}));
-document.querySelector('#cancel-track-edit').addEventListener('click', () => document.querySelector('#edit-track-dialog').close());
-document.querySelector('#edit-track-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  speedDraft.update(speedInput.value, preferences.value);
-  if (!speedDraft.valid) {
-    const validation = document.querySelector('#edit-track-error');
-    bindText(validation, () => errorMessage({ code: 'INVALID_TRACK_SPEED' }));
-    validation.hidden = false;
-    return;
-  }
-  const error = document.querySelector('#edit-track-error');
-  error.hidden = true;
-  try {
-    await withButtonLoading(event.submitter, async () => {
-      const response = await trackApi.update({ id: managedTrackId, details: {
-        title: document.querySelector('#edit-track-title').value,
-        speedKmh: speedDraft.canonical,
-        routeType: selectedRouteType(document.querySelector('#edit-track-route-type')),
-        externalLinks: externalLinksFromEditor(),
-      } });
-      const payload = await response.json();
-      if (!response.ok) {
-        bindText(error, () => errorMessage(payload?.error));
-        error.hidden = false;
-        return;
-      }
-      document.querySelector('#edit-track-dialog').close();
-      if (isMyTracksPage) {
-        await collection.load({ reset: true });
-      } else {
-        managedTrackTitle = payload.data.title;
-        publicTrackData = payload.data;
-        renderExternalTrackLinks(document.querySelector('#external-track-links'), payload.data.externalLinks);
-        const linksSection = document.querySelector('#external-track-links-section');
-        linksSection.hidden = availableExternalTrackLinks(payload.data.externalLinks).length === 0;
-        document.querySelector('#external-track-links-nav').hidden = linksSection.hidden;
-        await loadPublicTrack(publicTrackId);
-      }
-    });
-  } catch (saveError) {
-    bindText(error, () => errorMessage(saveError));
-    error.hidden = false;
-  }
-});
-document.querySelector('#replacement-gpx').addEventListener('change', (event) => {
-  if (event.target.files[0]) {
-    document.querySelector('#edit-track-dialog').close();
-    uploadFlow.replaceTrackFile(event.target.files[0], managedTrackId);
-  }
-  event.target.value = '';
-});
 document.querySelector('.source-popover').addEventListener('click', async (event) => {
   if (!event.target.closest('.source-retry')) return;
   await uploadFlow.retryExisting(publicTrackId);
@@ -694,22 +605,6 @@ function updatePageLanguage() {
   document.documentElement.lang = preferences.value.language;
   document.title = currentTrack?.name ? `${currentTrack.name} — GetGPX` : t(isNotFoundPage ? 'notFound.title' : isMyTracksPage ? 'common.myTracks' : isFavoriteTracksPage ? 'common.favorites' : 'app.title');
 }
-const speedInput = document.querySelector('#edit-track-speed');
-let speedDraft = createSpeedDraft(20);
-function setSpeedDraft(value) {
-  speedDraft = createSpeedDraft(value);
-  speedInput.value = speedDraft.display(preferences.value);
-}
-function refreshSpeedInput(previous) {
-  if (previous) speedDraft.update(speedInput.value, previous);
-  speedInput.value = speedDraft.display(preferences.value);
-  speedInput.dataset.min = String(distanceValue(1, preferences.value));
-  speedInput.dataset.max = String(distanceValue(50, preferences.value));
-  speedInput.dataset.step = String(distanceValue(0.1, preferences.value));
-  bindAttribute(speedInput, 'aria-description', () => errorMessage({ code: 'INVALID_TRACK_SPEED' }));
-}
-speedInput.addEventListener('input', () => speedDraft.update(speedInput.value, preferences.value));
-bindText(document.querySelector('#speed-input-label'), () => t('edit.speed', { unit: currentUnit('speed') }));
 setupPreferencesControl(document, { blockedReason: () => {
   const processing = document.querySelector('#processing-overlay');
   if (!processing.hidden && document.querySelector('#close-processing').hidden) return 'preferences.blockedProcessing';
@@ -725,7 +620,7 @@ for (const form of document.querySelectorAll('#edit-track-form, #upload-title-fo
   form.addEventListener('reset', () => { delete form.dataset.dirty; });
 }
 document.querySelector('#edit-track-dialog').addEventListener('close', () => { delete document.querySelector('#edit-track-form').dataset.dirty; });
-refreshSpeedInput();
+trackEditor.refreshSpeedInput();
 updatePageLanguage();
 if (new URLSearchParams(window.location.search).get('auth') === 'error') {
   const toast = document.querySelector('#toast');
