@@ -11,6 +11,7 @@ import { createPoiController } from './poi-controller.js';
 import { createActiveRoutePoint } from './active-route-point.js';
 import { createTrackDeletion } from './track-delete-ui.js';
 import { createTrackEditor } from './track-editor-ui.js';
+import { bindUploadInteractions } from './upload-interactions.js';
 import { distanceValue, elevationValue, number } from './measurements.js';
 import { neutralAnalysis } from './analysis-presentation.js';
 import { t, bindText, bindAttribute, htmlMessage, preferences, formatMeasurement } from './i18n.js';
@@ -465,61 +466,8 @@ window.addEventListener('resize', scheduleStickyRouteHeaderRefresh);
 refreshStickyRouteHeader();
 
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeUserMenu(); });
-document.querySelector('#gpx-file').addEventListener('change', (event) => {
-  if (event.target.files[0]) {
-    document.querySelector('#upload-dialog').hidden = true;
-    uploadFlow.uploadFile(event.target.files[0]);
-  }
-  event.target.value = '';
-});
-document.addEventListener('click', (event) => {
-  if (!event.target.closest('[data-auth-upload]') || !currentUser) return;
-  document.querySelector('#upload-dialog').hidden = false;
-  document.querySelector('#upload-dropzone').focus();
-});
-document.querySelector('#close-upload-dialog').addEventListener('click', () => {
-  document.querySelector('#upload-dialog').hidden = true;
-});
-const uploadDropzone = document.querySelector('#upload-dropzone');
-uploadDropzone.addEventListener('dragover', (event) => { event.preventDefault(); uploadDropzone.classList.add('is-dragging'); });
-uploadDropzone.addEventListener('dragleave', () => uploadDropzone.classList.remove('is-dragging'));
-uploadDropzone.addEventListener('drop', (event) => {
-  event.preventDefault();
-  uploadDropzone.classList.remove('is-dragging');
-  if (currentUser && event.dataTransfer.files[0]) {
-    document.querySelector('#upload-dialog').hidden = true;
-    uploadFlow.uploadFile(event.dataTransfer.files[0]);
-  }
-});
-document.querySelector('#close-processing').addEventListener('click', () => {
-  uploadFlow.stop();
-  document.querySelector('#processing-overlay').hidden = true;
-});
-document.querySelector('#finish-processing').addEventListener('click', async () => {
-  document.querySelector('#processing-overlay').hidden = true;
-  if (isMyTracksPage) await collection.load({ reset: true });
-});
-document.querySelector('#open-uploaded-track').addEventListener('click', (event) => {
-  setButtonLoading(event.currentTarget, true);
-  window.location.assign(`/tracks/${event.currentTarget.dataset.trackId}`);
-});
-document.querySelector('#edit-upload-title').addEventListener('click', () => {
-  uploadFlow.setUploadMetadataEditing('#upload-title-row', true);
-  document.querySelector('#upload-track-title').focus();
-});
-document.querySelector('#cancel-upload-title').addEventListener('click', () => {
-  uploadFlow.setUploadMetadataEditing('#upload-title-row', false);
-  uploadFlow.renderUploadMetadata();
-});
-document.querySelector('#edit-upload-links').addEventListener('click', () => {
-  uploadFlow.setUploadMetadataEditing('#upload-links-row', true);
-  document.querySelector('#upload-links-form input').focus();
-});
-document.querySelector('#cancel-upload-links').addEventListener('click', () => {
-  uploadFlow.setUploadMetadataEditing('#upload-links-row', false);
-  uploadFlow.renderUploadMetadata();
-});
-
+bindUploadInteractions({ uploadFlow, collection, getCurrentUser: () => currentUser,
+  getPublicTrackId: () => publicTrackId, isMyTracksPage, windowRef: window });
 document.addEventListener('change', async (event) => {
   const input = event.target.closest('.route-type-dropdown input[type="radio"]');
   if (!input) return;
@@ -536,22 +484,6 @@ document.addEventListener('keydown', (event) => {
   closeRouteTypeDropdownOnEscape(event);
 }, true);
 
-document.querySelector('#upload-title-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  if (await uploadFlow.saveUploadMetadata({ title: document.querySelector('#upload-track-title').value }, event.submitter)) uploadFlow.setUploadMetadataEditing('#upload-title-row', false);
-});
-document.querySelector('#upload-links-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const formData = new FormData(event.currentTarget);
-  const links = Object.fromEntries(['komoot', 'strava', 'garmin', 'rideWithGps'].map((service) => [service, formData.get(service)]));
-  if (await uploadFlow.saveUploadMetadata({ links }, event.submitter)) uploadFlow.setUploadMetadataEditing('#upload-links-row', false);
-});
-document.querySelector('#retry-processing').addEventListener('click', (event) => uploadFlow.retryProcessing(event.currentTarget));
-
-document.querySelector('.source-popover').addEventListener('click', async (event) => {
-  if (!event.target.closest('.source-retry')) return;
-  await uploadFlow.retryExisting(publicTrackId);
-});
 document.querySelector('#share-track')?.addEventListener('click', async (event) => {
   if (!publicTrackId) return;
   const button = event.currentTarget;
