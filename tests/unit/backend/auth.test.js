@@ -1,5 +1,43 @@
-import { describe, expect, it } from 'vitest';
-import { createAuthHandlers, createAuthService, publicUser } from '../../../src/backend/auth.js';
+import { describe, expect, it, vi } from 'vitest';
+import { createAuthHandlers, createAuthService, exchangeGoogleCode, publicUser } from '../../../src/backend/auth.js';
+
+describe('Google OAuth requests', () => {
+  it('aborts a stalled token exchange after ten seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImplementation = vi.fn((_url, { signal }) => new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      }));
+      const exchange = exchangeGoogleCode({ code: 'code', codeVerifier: 'verifier', clientId: 'client',
+        clientSecret: 'secret', redirectUri: 'https://example.com/callback', fetchImplementation });
+      const rejected = expect(exchange).rejects.toMatchObject({ name: 'TimeoutError' });
+      await vi.advanceTimersByTimeAsync(10_000);
+      await rejected;
+      expect(fetchImplementation).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives the profile request its own ten-second timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImplementation = vi.fn()
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 'token' }) })
+        .mockImplementationOnce((_url, { signal }) => new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }));
+      const exchange = exchangeGoogleCode({ code: 'code', codeVerifier: 'verifier', clientId: 'client',
+        clientSecret: 'secret', redirectUri: 'https://example.com/callback', fetchImplementation });
+      const rejected = expect(exchange).rejects.toMatchObject({ name: 'TimeoutError' });
+      await vi.advanceTimersByTimeAsync(10_000);
+      await rejected;
+      expect(fetchImplementation).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
 
 describe('authentication service', () => {
   it('exposes only the public user contract', () => {

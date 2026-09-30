@@ -7,6 +7,7 @@ const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo';
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1_000;
 const ATTEMPT_DURATION_MS = 10 * 60 * 1_000;
+const GOOGLE_REQUEST_TIMEOUT_MS = 10_000;
 const SESSION_COOKIE = 'getgpx_session';
 const ATTEMPT_COOKIE = 'getgpx_oauth_attempt';
 
@@ -61,18 +62,27 @@ export function publicUser(user) {
 }
 
 export async function exchangeGoogleCode({ code, codeVerifier, clientId, clientSecret, redirectUri, fetchImplementation = fetch }) {
-  const tokenResponse = await fetchImplementation(GOOGLE_TOKEN_URL, {
+  const requestJson = async (url, options, failureMessage) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(new DOMException('Google request timed out.', 'TimeoutError')),
+      GOOGLE_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetchImplementation(url, { ...options, signal: controller.signal });
+      if (!response.ok) throw new Error(failureMessage);
+      return await response.json();
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+  const tokens = await requestJson(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code', code_verifier: codeVerifier }),
-  });
-  if (!tokenResponse.ok) throw new Error('Google token exchange failed.');
-  const tokens = await tokenResponse.json();
+  }, 'Google token exchange failed.');
   if (typeof tokens.access_token !== 'string') throw new Error('Google returned an invalid token response.');
 
-  const profileResponse = await fetchImplementation(GOOGLE_USERINFO_URL, { headers: { authorization: `Bearer ${tokens.access_token}` } });
-  if (!profileResponse.ok) throw new Error('Google profile request failed.');
-  return profileResponse.json();
+  return requestJson(GOOGLE_USERINFO_URL,
+    { headers: { authorization: `Bearer ${tokens.access_token}` } }, 'Google profile request failed.');
 }
 
 export function createAuthService({
