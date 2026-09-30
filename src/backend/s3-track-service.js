@@ -2,85 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { ObjectId } from 'mongodb';
 import { DEFAULT_USER_TIERS } from './configuration.js';
 import { normalizeRouteType } from '../route-types.js';
-import { InvalidTrackCursorError, TrackLimitReachedError, EXTERNAL_ANALYSIS_TIMEOUT_MS } from './track-service.js';
+import { TrackLimitReachedError, EXTERNAL_ANALYSIS_TIMEOUT_MS } from './track-contracts.js';
 import { hasExpiredAttempt, trackObjectKeys } from './s3-track-repository.js';
-import { analysisFailure } from './analysis-warning.js';
+import { PAGE_SIZE, cursorOf, decodeCursor, titleFromFilename, resultOf, statusOf, publicTrack, card, homepage } from './s3-track-presenters.js';
 import { logger } from './logger.js';
 import { safeErrorDetails } from './safe-error-details.js';
-
-const PAGE_SIZE = 24;
-function cursorOf(value, field) {
-  return Buffer.from(JSON.stringify({ at: value[field].toISOString(), id: String(value._id) })).toString('base64url');
-}
-function decodeCursor(value, field) {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString());
-    const at = new Date(parsed.at);
-    if (Number.isNaN(at.getTime()) || !/^[a-f\d]{24}$/i.test(parsed.id)) throw new Error();
-    return { [field]: at, id: ObjectId.createFromHexString(parsed.id) };
-  } catch { throw new InvalidTrackCursorError(); }
-}
-function titleFromFilename(filename) { return filename.split(/[\\/]/).at(-1).replace(/\.gpx$/i, '').trim(); }
-function resultOf(track) { return track.active || track.diagnostic || null; }
-function sourcesOf(analysis, status) {
-  return {
-    gpx: 'SUCCESS',
-    valhalla: analysis.enrichmentSource ? 'SUCCESS' : status === 'READY' ? 'SUCCESS' : 'FAILED',
-    openStreetMap: analysis.enrichmentSource === 'VALHALLA_OSM' ? 'SUCCESS' : 'FAILED',
-  };
-}
-function statusOf(track) {
-  if (!track) return null;
-  const attempt = track.attempt;
-  const interrupted = hasExpiredAttempt(track);
-  return { id: track.publicId, status: interrupted ? 'FAILED' : attempt?.status || track.analysisStatus,
-    step: attempt?.step || track.analysisStep,
-    error: interrupted ? { code: 'PROCESSING_INTERRUPTED' }
-      : attempt?.error ? { code: attempt.error.code } : null,
-    hasActive: Boolean(track.active), canRetry: Boolean(attempt?.status === 'FAILED' || hasExpiredAttempt(track)),
-    interrupted };
-}
-function publicTrack(track, uploader = null) {
-  if (!track) return null;
-  const result = resultOf(track);
-  const id = track.publicId;
-  return {
-    id, title: track.title, routeType: normalizeRouteType(track.routeType),
-    status: track.analysisStatus, processing: track.attempt ? statusOf(track) : null,
-    resultKind: track.active ? 'ACTIVE' : result ? 'DIAGNOSTIC' : 'NONE',
-    revision: result?.revision || null, metrics: result?.metrics || null,
-    summary: result?.summary || null,
-    originalFilename: result?.originalFilename || track.attempt?.originalFilename || null,
-    sourcePointCount: result?.sourcePointCount ?? null,
-    pointsOfInterestCount: result?.pointsOfInterestCount ?? 0,
-    preview: result?.preview || null, completeness: result?.completeness || null,
-    analysisSources: result?.analysisSources || { gpx: track.analysisStatus === 'PROCESSING' ? 'PENDING' : 'FAILED', valhalla: 'PENDING', openStreetMap: 'PENDING' },
-    analysisLevel: result ? (track.active ? 'FULL' : 'BASIC') : 'NONE',
-    externalLinks: track.externalLinks || {}, createdAt: track.createdAt?.toISOString() || null,
-    uploader, analysisUrl: result?.analysisKey ? `/api/tracks/${id}/analysis` : null,
-    downloadUrl: result?.sourceKey || track.attempt?.sourceKey ? `/api/tracks/${id}/download` : null,
-  };
-}
-function card(track) {
-  const id = track.publicId;
-  const result = resultOf(track);
-  return { id, title: track.title, routeType: normalizeRouteType(track.routeType),
-    createdAt: track.createdAt?.toISOString() || null, status: track.analysisStatus,
-    step: track.attempt?.step || track.analysisStep,
-    distanceKm: result?.metrics?.distanceKm ?? null, ascentM: result?.metrics?.ascentM ?? null,
-    descentM: result?.metrics?.descentM ?? null, speedKmh: result?.metrics?.effectiveSpeedKmh ?? null,
-    estimatedDurationMs: result?.metrics?.estimatedDurationMs ?? null,
-    preview: result?.preview || null, externalLinks: track.externalLinks || {},
-    url: `/tracks/${id}`, downloadUrl: `/api/tracks/${id}/download` };
-}
-function homepage(track) {
-  const result = resultOf(track);
-  return { id: track.publicId, title: track.title, routeType: normalizeRouteType(track.routeType),
-    distanceKm: result?.metrics?.distanceKm ?? null, ascentM: result?.metrics?.ascentM ?? null,
-    pointsOfInterestCount: result?.pointsOfInterestCount ?? 0, url: `/tracks/${track.publicId}`,
-    analysisUrl: result?.analysisKey ? `/api/tracks/${track.publicId}/analysis` : null };
-}
+import { createS3TrackProcessor } from './s3-track-processor.js';
 
 export function createS3TrackService({ trackRepository, objectStore, enrichmentCacheRepository,
   savedTrackRepository, userRepository, analyzeSource, enrichAnalysis,
@@ -95,78 +22,8 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
       warn({ event: 'track_object_cleanup_failed', ...safeErrorDetails(result.reason) });
     }
   };
-  const scheduleProcessing = (track) => schedule(() => process(track).catch((error) => {
-    warn({ event: 'track_analysis_job_failed', trackId: String(track._id),
-      revision: track.attempt?.revision, ...safeErrorDetails(error) });
-  }));
-
-  async function process(track) {
-    const identity = { trackId: track._id, ownerId: track.ownerId,
-      revision: track.attempt.revision, workerId: randomUUID() };
-    const claimed = await trackRepository.claim(identity, now());
-    if (!claimed) return;
-    let lost = false;
-    const heartbeat = setInterval(() => {
-      trackRepository.heartbeat(identity, now()).then((result) => { if (!result.modifiedCount) lost = true; })
-        .catch((heartbeatError) => {
-          if (!lost) warn({ event: 'track_heartbeat_failed', trackId: String(track._id),
-            revision: identity.revision, ...safeErrorDetails(heartbeatError) });
-          lost = true;
-        });
-    }, 30_000);
-    heartbeat.unref?.();
-    let base;
-    let step = 'READING';
-    try {
-      const source = await objectStore.readSource(claimed.attempt.sourceKey);
-      step = 'PARSING';
-      base = analyzeSource(source, { filename: claimed.attempt.originalFilename });
-      if (lost || !await trackRepository.setStep(identity, 'ENRICHING', now(),
-        claimed.active ? null : base.name)) return;
-      step = 'ENRICHING';
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), enrichmentTimeoutMs);
-      let analysis;
-      try {
-        analysis = await enrichAnalysis(base, { cache: enrichmentCacheRepository, signal: controller.signal,
-          warn: (details) => warn({ trackId: String(track._id), revision: identity.revision, ...details }) });
-      } finally { clearTimeout(timeout); }
-      if (lost) return;
-      const analysisSources = sourcesOf(analysis, 'READY');
-      const completeness = analysis.enrichmentSource === 'VALHALLA_OSM' ? 'FULL' : 'PARTIAL';
-      step = 'WRITING';
-      const analysisKey = await objectStore.writeAnalysis({ trackId: String(track._id), revision: identity.revision,
-        analysis, analysisSources, completeness });
-      step = 'PUBLISHING';
-      const previous = await trackRepository.publish(identity, { analysis, analysisKey,
-        title: base.name, analysisSources, completeness }, now());
-      if (previous) {
-        const retained = new Set(trackObjectKeys(await trackRepository.findById(track._id) || {}));
-        await cleanup(trackObjectKeys(previous).filter((key) => !retained.has(key)));
-      }
-    } catch (error) {
-      warn({ event: 'track_analysis_failed', trackId: String(track._id), revision: identity.revision,
-        step, ...analysisFailure(error) });
-      // A lost MongoDB acknowledgement can mean the new object is already active.
-      if (step === 'PUBLISHING') return;
-      const errorCode = step === 'READING' ? 'TRACK_FILE_UNAVAILABLE' : step === 'PARSING'
-        ? error?.code === 'GPX_POINT_LIMIT' ? 'GPX_POINT_LIMIT' : 'INVALID_GPX'
-        : step === 'WRITING' ? 'ANALYSIS_STORAGE_UNAVAILABLE' : 'ENRICHMENT_UNAVAILABLE';
-      let diagnostic = null;
-      if (step === 'ENRICHING' && base && !claimed.active) {
-        try {
-          const analysisSources = sourcesOf(base, 'FAILED');
-          const analysisKey = await objectStore.writeAnalysis({ trackId: String(track._id),
-            revision: identity.revision, analysis: base, status: 'FAILED', completeness: 'PARTIAL', analysisSources });
-          diagnostic = { analysis: base, analysisKey, analysisSources };
-        } catch (writeError) {
-          warn({ event: 'track_diagnostic_write_failed', trackId: String(track._id),
-            revision: identity.revision, ...safeErrorDetails(writeError) });
-        }
-      }
-      await trackRepository.fail(identity, { errorCode, failedStep: step, diagnostic }, now());
-    } finally { clearInterval(heartbeat); }
-  }
+  const scheduleProcessing = createS3TrackProcessor({ trackRepository, objectStore, enrichmentCacheRepository,
+    analyzeSource, enrichAnalysis, cleanup, schedule, warn, enrichmentTimeoutMs, now });
 
   async function findReadable(publicId, identity = null) {
     const track = await trackRepository.findByPublicId(publicId);

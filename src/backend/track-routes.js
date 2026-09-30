@@ -3,7 +3,7 @@ import { ObjectId } from 'mongodb';
 import { sessionTokenFromRequest } from './auth.js';
 import { GpxFileTooLargeError } from './gpx-file-store.js';
 import { TRACK_UPLOAD_LIMITS } from './track-repository.js';
-import { InvalidTrackCursorError, TrackLimitReachedError } from './track-service.js';
+import { InvalidTrackCursorError, TrackLimitReachedError } from './track-contracts.js';
 import { normalizeExternalTrackLinks } from './external-track-links.js';
 import { isRouteType } from '../route-types.js';
 import { isPublicId } from './public-id.js';

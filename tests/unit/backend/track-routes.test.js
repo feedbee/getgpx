@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 import { ObjectId } from 'mongodb';
 import { describe, expect, it, vi } from 'vitest';
 import { createTrackHandlers } from '../../../src/backend/track-routes.js';
-import { TrackLimitReachedError } from '../../../src/backend/track-service.js';
+import { TrackLimitReachedError } from '../../../src/backend/track-contracts.js';
 
 function response() {
   return {
