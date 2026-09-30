@@ -3,6 +3,8 @@ import { renderAppShell } from './app-shell.js';
 import { createTrackApi } from './track-api.js';
 import { createUploadFlow } from './track-upload-flow.js';
 import { createTrackCollection } from './track-collection.js';
+import { createRouteSummaryView, formatDuration } from './route-page-summary.js';
+import { createElevationProfile } from './elevation-profile.js';
 import { distanceValue, elevationValue, number, createSpeedDraft } from './measurements.js';
 import { neutralAnalysis, poiName, poiType, roadLabel } from './analysis-presentation.js';
 import { errorMessage } from './errors-ui.js';
@@ -22,10 +24,10 @@ import { availableExternalTrackLinks, renderExternalTrackLinks } from './externa
 import { detectClimbs, detectDescents } from './domain/climbs.js';
 import { calculateSegmentGrades } from './domain/gradient.js';
 import { emptyPoiSelection, updatePoiSelection } from './domain/poi-selection.js';
-import { areaPathFromCoordinates, elevationGainLoss, nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot, profileFocusVisibility, profileRangePosition, visibleRangeIndices } from './domain/profile-math.js';
-import { colorRunsForMode, highlightRunsForFilter, profileColorRuns } from './domain/route-color.js';
+import { nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot } from './domain/profile-math.js';
+import { colorRunsForMode, highlightRunsForFilter } from './domain/route-color.js';
 import { isClosedRoute } from './domain/route-shape.js';
-import { classifySurface, classifyWayType, roadQualityCategories, surfaceCategories, surfaceEmphasis, wayTypeCategories } from './domain/surface.js';
+import { classifySurface, classifyWayType, surfaceEmphasis } from './domain/surface.js';
 
 const app = document.querySelector('#app');
 const trackApi = createTrackApi();
@@ -40,7 +42,6 @@ let activePointIndex = 0;
 let viewRange = [0, 1];
 let zoomHistory = [];
 let selectionStart = null;
-let currentViewMetrics = null;
 let mapColorMode = 'gradient';
 let profileColorMode = 'gradient';
 let profileFocusPlacement = 'ribbon';
@@ -72,6 +73,12 @@ app.innerHTML = renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPa
 const collection = createTrackCollection({ trackApi, isMyTracksPage, isFavoriteTracksPage,
   getCurrentUser: () => currentUser, onEdit: openTrackEditorFromList, onDelete: openTrackDeleteConfirmation,
   onDeleteMany: (tracks) => { managedTrackId = null; openTracksDeleteConfirmation(tracks); } });
+const routeSummaryView = createRouteSummaryView({ updatePageLanguage, renderPointsOfInterest, setDetailedView,
+  onFiltersRendered: refreshRouteFocus });
+const elevationProfile = createElevationProfile({ getTrack: () => currentTrack, getViewRange: () => viewRange,
+  getSummaryMetrics: () => publicTrackData?.summary?.metrics, getColorMode: () => profileColorMode,
+  getFocusPlacement: () => profileFocusPlacement, getRouteFilter: selectedRouteFilter,
+  getTerrainRange: selectedTerrainRange });
 
 const authControl = document.querySelector('#auth-control');
 
@@ -252,13 +259,6 @@ document.addEventListener('click', (event) => {
   if (!authControl.contains(event.target)) closeUserMenu();
   closeOverflowMenuOnOutsideClick(document.querySelector('.route-overflow'), event.target);
 });
-
-function formatDuration(ms) {
-  if (!ms) return ['—', ''];
-  const hours = Math.floor(ms / 3_600_000);
-  const minutes = Math.round((ms % 3_600_000) / 60_000);
-  return [`${hours}:${String(minutes).padStart(2, '0')}`, t('common.hour')];
-}
 
 function makeEndpointIcon(label, type) {
   return L.divIcon({ className: '', html: `<div class="endpoint endpoint-${type}">${label}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
@@ -513,118 +513,10 @@ function drawMap(track, { fit = true } = {}) {
   if (fit) map.fitBounds(routeLine.getBounds(), { padding: [48, 48] });
 }
 
-function visibleMetrics() {
-  const [startIndex, endIndex] = viewRange;
-  const points = currentTrack.points.slice(startIndex, endIndex + 1);
-  const elevations = points.map((point) => point.ele).filter(Number.isFinite);
-  const rawMin = Math.min(...elevations);
-  const rawMax = Math.max(...elevations);
-  const padding = Math.max(10, (rawMax - rawMin) * 0.08);
-  return { startIndex, endIndex, startKm: points[0].distanceKm, endKm: points.at(-1).distanceKm, min: rawMin - padding, max: rawMax + padding };
-}
-
-function chartCoordinates(point) {
-  const { min, max, startKm, endKm } = currentViewMetrics ?? visibleMetrics();
-  const x = ((point.distanceKm - startKm) / Math.max(endKm - startKm, 0.001)) * 1200;
-  const y = 260 - ((point.ele - min) / Math.max(max - min, 1)) * 220;
-  return { x, y };
-}
-
-function renderProfilePointsOfInterest(track, startKm, endKm) {
-  const group = document.querySelector('#profile-pois');
-  group.replaceChildren();
-  (track.pointsOfInterest || []).forEach((point, index) => {
-    const routePoint = track.points[point.routePointIndex];
-    if (!routePoint || routePoint.distanceKm < startKm || routePoint.distanceKm > endKm) return;
-    const ratio = (routePoint.distanceKm - startKm) / Math.max(endKm - startKm, 0.001);
-    const marker = document.createElement('span');
-    marker.className = 'profile-poi';
-    marker.dataset.profilePoiIndex = String(index);
-    marker.style.left = `${ratio * 100}%`;
-    marker.title = poiName(point, index);
-    bindText(marker, () => String(index + 1));
-    group.append(marker);
-  });
-}
-
-function drawProfile(track) {
-  currentViewMetrics = visibleMetrics();
-  const { startIndex, endIndex, startKm, endKm, min, max } = currentViewMetrics;
-  const isFullRange = startIndex === 0 && endIndex === track.points.length - 1;
-  const summaryMetrics = isFullRange ? publicTrackData?.summary?.metrics : null;
-  const { ascentM, descentM } = summaryMetrics || elevationGainLoss(track.points, startIndex, endIndex);
-  bindText(document.querySelector('#profile-ascent'), () => number(elevationValue(ascentM, preferences.value), { ...preferences.value, digits: 0 }));
-  bindText(document.querySelector('#profile-descent'), () => number(elevationValue(descentM, preferences.value), { ...preferences.value, digits: 0 }));
-  const visiblePoints = track.points.slice(startIndex, endIndex + 1).filter((point) => Number.isFinite(point.ele));
-  const coords = visiblePoints.map(chartCoordinates);
-  renderProfilePointsOfInterest(track, startKm, endKm);
-  const line = coords.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
-  document.querySelector('#profile-area').setAttribute('d', `${line} L1200,264 L0,264 Z`);
-  const profileCoordinates = (run) => {
-    const visibleIndices = visibleRangeIndices(run, startIndex, endIndex);
-    if (!visibleIndices) return [];
-    const [visibleRunStart, visibleRunEnd] = visibleIndices;
-    return track.points.slice(visibleRunStart, visibleRunEnd + 1)
-      .filter((point) => Number.isFinite(point.ele))
-      .map(chartCoordinates);
-  };
-  const profilePath = (run) => {
-    const runPoints = profileCoordinates(run);
-    if (runPoints.length < 2) return '';
-    return runPoints.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
-  };
-  const profileRuns = profileColorRuns(track.points, profileColorMode);
-  const gradientAreaPaths = profileRuns.area.map((run) => {
-    const path = areaPathFromCoordinates(profileCoordinates(run), 264);
-    return path ? `<path d="${path}" fill="${run.color}"></path>` : '';
-  }).join('');
-  document.querySelector('#profile-gradient-area').innerHTML = gradientAreaPaths;
-  const baseProfilePaths = profileRuns.line.map((run) => {
-    const path = profilePath(run);
-    return path ? `<path d="${path}" stroke="${run.color}"><title>${escapeHtml(t(run.label))}</title></path>` : '';
-  }).join('');
-  document.querySelector('#gradient-line').innerHTML = baseProfilePaths;
-  const focusedRuns = highlightRunsForFilter(track.points, selectedRouteFilter());
-  const terrainRange = selectedTerrainRange();
-  if (terrainRange) focusedRuns.push(terrainRange);
-  const focusVisibility = profileFocusVisibility(profileFocusPlacement);
-  document.querySelector('#profile-focus-profile').innerHTML = focusVisibility.profile ? focusedRuns.map((run) => {
-    const path = profilePath(run);
-    return path ? `<path class="profile-focus-path-outline" d="${path}"></path><path class="profile-focus-path-line" d="${path}" stroke="${run.color}"><title>${escapeHtml(t(run.label))}</title></path>` : '';
-  }).join('') : '';
-  document.querySelector('#grid').innerHTML = [40, 95, 150, 205, 260].map((y) => `<line x1="0" y1="${y}" x2="1200" y2="${y}" />`).join('');
-  document.querySelector('#axis').innerHTML = Array.from({ length: 6 }, (_, index) => `<span>${formatMeasurement('distance', startKm + (endKm - startKm) * index / 5)}</span>`).join('');
-  bindText(document.querySelector('#min-label'), () => formatMeasurement('elevation', summaryMetrics?.minElevationM ?? min));
-  bindText(document.querySelector('#max-label'), () => formatMeasurement('elevation', summaryMetrics?.maxElevationM ?? max));
-  document.querySelector('#climb-bands').innerHTML = track.climbs.map((climb) => {
-    const from = Math.max(climb.startKm, startKm);
-    const to = Math.min(climb.endKm, endKm);
-    if (from >= to) return '';
-    const x = ((from - startKm) / Math.max(endKm - startKm, 0.001)) * 1200;
-    const width = ((to - from) / Math.max(endKm - startKm, 0.001)) * 1200;
-    return `<rect class="climb-band" x="${x}" y="18" width="${width}" height="246" fill="${climb.color}"><title>${escapeHtml(t('profile.climb', { distance: formatMeasurement('distance', climb.lengthM / 1000), grade: percent(climb.averageGrade) }))}</title></rect>`;
-  }).join('');
-  const ribbonRuns = colorRunsForMode(track.points, profileColorMode);
-  const ribbonRect = (run) => {
-    const position = profileRangePosition(track.points, run, startKm, endKm);
-    if (!position) return '';
-    const { x, width } = position;
-    return `<rect x="${x}" y="269" width="${Math.max(width, 1)}" height="9" fill="${run.color}"><title>${escapeHtml(t(run.label))}</title></rect>`;
-  };
-  document.querySelector('#surface-ribbon').innerHTML = ribbonRuns.map(ribbonRect).join('');
-  const focusRect = (run) => {
-    const position = profileRangePosition(track.points, run, startKm, endKm);
-    if (!position) return '';
-    const { x, width } = position;
-    return `<rect class="profile-focus-outline" x="${x}" y="265" width="${Math.max(width, 1)}" height="17" rx="2"></rect><rect class="profile-focus-line" x="${x}" y="268" width="${Math.max(width, 1)}" height="11" rx="1" fill="${run.color}"><title>${escapeHtml(t(run.label))}</title></rect>`;
-  };
-  document.querySelector('#profile-focus-ribbon').innerHTML = focusVisibility.ribbon ? focusedRuns.map(focusRect).join('') : '';
-}
-
 function refreshRouteFocus() {
   if (!currentTrack) return;
   drawMap(currentTrack, { fit: false });
-  if (currentTrack.hasElevation) drawProfile(currentTrack);
+  if (currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
   setActivePoint(activePointIndex);
   const focusedSurface = selectedSurfaceId();
   document.querySelectorAll('[data-surface-filter]').forEach((control) => {
@@ -678,8 +570,8 @@ function setViewRange(range, { remember = true } = {}) {
   if (normalized[1] - normalized[0] < 2) return;
   if (remember) zoomHistory.push([...viewRange]);
   viewRange = normalized;
-  currentViewMetrics = null;
-  drawProfile(currentTrack);
+  elevationProfile.resetMetrics();
+  elevationProfile.drawProfile(currentTrack);
   const isFullRange = viewRange[0] === 0 && viewRange[1] === currentTrack.points.length - 1;
   if (isFullRange) {
     clearRangeFocus();
@@ -688,51 +580,6 @@ function setViewRange(range, { remember = true } = {}) {
   document.querySelector('#zoom-back').disabled = zoomHistory.length === 0;
   document.querySelector('#zoom-reset').disabled = isFullRange;
   setActivePoint(viewRange[0]);
-}
-
-function renderClimbs(track) {
-  bindText(document.querySelector('#climbs-count'), () => track.climbs.length);
-  bindText(document.querySelector('#descents-count'), () => track.descents.length);
-  const rows = (items, type) => items.length ? items.map((item, index) => {
-    const key = `${type}-${index}`;
-    return `<button class="terrain-row" type="button" data-terrain-range="${key}" data-terrain-type="${type}" data-terrain-index="${index}" aria-pressed="false" style="--terrain-color:${item.color}"><b>#${index + 1}</b><i></i><span>${escapeHtml(t(item.label))}</span><span>△ ${percent(item.averageGrade)}</span><span>${type === 'climb' ? '↗' : '↘'} ${formatMeasurement('elevation', type === 'climb' ? item.gainM : item.dropM)}</span><span>↔ ${formatMeasurement('distance', item.lengthM / 1000, { digits: 2 })}</span></button>`;
-  }).join('') : `<p class="empty-climbs">${htmlMessage('terrain.empty')}</p>`;
-  document.querySelector('#climbs-list').innerHTML = rows(track.climbs, 'climb');
-  document.querySelector('#descents-list').innerHTML = rows(track.descents, 'descent');
-}
-
-function renderSurfaces(trackSummary) {
-  const categoryRows = (items, categories) => categories.map((category) => ({
-    ...category, ...(items || []).find((item) => item.id === category.id),
-    distanceKm: (items || []).find((item) => item.id === category.id)?.distanceKm ?? 0,
-    percent: (items || []).find((item) => item.id === category.id)?.percent ?? 0,
-  }));
-  const summary = categoryRows(trackSummary.distributions.surfaces, surfaceCategories);
-  const wayTypes = categoryRows(trackSummary.distributions.wayTypes, wayTypeCategories);
-  const quality = categoryRows(trackSummary.distributions.roadQualities, roadQualityCategories);
-  document.querySelector('#surface-bar').innerHTML = summary.filter((item) => item.percent > 0).map((item) =>
-    `<button type="button" data-surface-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${escapeHtml(t(item.label))}: ${percent(item.percent)}" aria-label="${escapeHtml(t(item.label))}: ${escapeHtml(t('profile.percentRoute', { percent: percent(item.percent) }))}" aria-pressed="false"></button>`).join('');
-  document.querySelector('#surface-stats').innerHTML = summary.map((item) => `
-    <button class="surface-stat distribution-row" type="button" data-surface-filter="${item.id}" data-selected-label="${escapeHtml(t('surface.selected'))}" data-map-label="${escapeHtml(t('surface.onMap'))}" aria-pressed="false" ${item.distanceKm === 0 ? 'disabled' : ''}>
-      <i style="--surface-color:${item.color}"></i><span>${escapeHtml(t(item.label))}</span>
-      <strong>${formatMeasurement('distance', item.distanceKm)}</strong><small>${percent(item.percent, 0)}</small></button>`).join('');
-  document.querySelector('#way-type-bar').innerHTML = wayTypes.filter((item) => item.percent > 0).map((item) =>
-    `<button type="button" data-waytype-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${escapeHtml(t(item.label))}: ${percent(item.percent)}" aria-label="${escapeHtml(t(item.label))}: ${escapeHtml(t('profile.percentRoute', { percent: percent(item.percent) }))}" aria-pressed="false"></button>`).join('');
-  document.querySelector('#way-type-stats').innerHTML = wayTypes.map((item) => `
-    <button class="distribution-row" type="button" data-waytype-filter="${item.id}" aria-pressed="false" ${item.distanceKm === 0 ? 'disabled' : ''}><i style="--surface-color:${item.color}"></i><span>${escapeHtml(t(item.label))}</span><strong>${formatMeasurement('distance', item.distanceKm)}</strong><small>${percent(item.percent, 0)}</small></button>`).join('');
-  document.querySelector('#surface-legend').innerHTML = surfaceCategories.map((item) =>
-    `<span><i style="--surface-color:${item.color}"></i>${escapeHtml(t(item.label))}</span>`).join('');
-  document.querySelector('#waytype-legend').innerHTML = wayTypeCategories.map((item) =>
-    `<span><i style="--surface-color:${item.color}"></i>${escapeHtml(t(item.label))}</span>`).join('');
-  document.querySelector('#quality-legend').innerHTML = roadQualityCategories.map((item) =>
-    `<span><i style="--surface-color:${item.color}"></i>${escapeHtml(t(item.label))}</span>`).join('');
-  document.querySelector('#quality-bar').innerHTML = quality.filter((item) => item.percent > 0).map((item) =>
-    `<button type="button" data-quality-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${escapeHtml(t(item.label))}: ${percent(item.percent)}" aria-label="${escapeHtml(t(item.label))}: ${escapeHtml(t('profile.percentRoute', { percent: percent(item.percent) }))}" aria-pressed="false"></button>`).join('');
-  document.querySelector('#quality-stats').innerHTML = quality.map((item) => `
-    <button class="distribution-row" type="button" data-quality-filter="${item.id}" aria-pressed="false" ${item.distanceKm === 0 ? 'disabled' : ''}><i style="--surface-color:${item.color}"></i><span>${escapeHtml(t(item.label))}</span><strong>${formatMeasurement('distance', item.distanceKm)}</strong><small>${percent(item.percent, 0)}</small></button>`).join('');
-  document.querySelectorAll('[data-surface-filter],[data-waytype-filter],[data-quality-filter]')
-    .forEach((control) => { control.dataset.summaryEmpty = String(control.disabled); });
-  refreshRouteFocus();
 }
 
 function setColorMode(scope, mode) {
@@ -751,7 +598,7 @@ function setColorMode(scope, mode) {
   }
   if (!currentTrack) return;
   if (scope === 'map') drawMap(currentTrack, { fit: false });
-  if (scope === 'profile' && currentTrack.hasElevation) drawProfile(currentTrack);
+  if (scope === 'profile' && currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
   setActivePoint(activePointIndex);
 }
 
@@ -762,18 +609,7 @@ function setProfileFocusPlacement(placement) {
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', String(active));
   });
-  if (currentTrack?.hasElevation) drawProfile(currentTrack);
-}
-
-function renderSourceInfo(sources = {}) {
-  const symbols = { SUCCESS: '✓', FAILED: '×', PENDING: '…' };
-  const labels = { SUCCESS: 'sources.available', FAILED: 'sources.unavailable', PENDING: 'sources.processing' };
-  document.querySelectorAll('[data-analysis-source]').forEach((row) => {
-    const status = sources[row.dataset.analysisSource] || 'PENDING';
-    row.dataset.sourceStatus = status;
-    bindText(row.querySelector('.source-state'), () => symbols[status]);
-    bindAttribute(row.querySelector('.source-state'), 'aria-label', () => t(labels[status]));
-  });
+  if (currentTrack?.hasElevation) elevationProfile.drawProfile(currentTrack);
 }
 
 function setPointContext(point) {
@@ -794,7 +630,7 @@ function setActivePoint(index, { showContext = false } = {}) {
   if (!currentTrack) return;
   activePointIndex = Math.max(0, Math.min(index, currentTrack.points.length - 1));
   const point = currentTrack.points[activePointIndex];
-  const chart = chartCoordinates(point);
+  const chart = elevationProfile.chartCoordinates(point);
   activeMarker?.setLatLng([point.lat, point.lon]);
   document.querySelector('#profile-cursor').setAttribute('x1', chart.x);
   document.querySelector('#profile-cursor').setAttribute('x2', chart.x);
@@ -840,7 +676,7 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
   currentTrack.descents ??= detectDescents(currentTrack.points);
   viewRange = [0, currentTrack.points.length - 1];
   zoomHistory = [];
-  currentViewMetrics = null;
+  elevationProfile.resetMetrics();
   bindText(document.querySelector('#track-name'), () => currentTrack.name || t('common.unnamed'));
   bindText(document.querySelector('#compact-track-name'), () => currentTrack.name || t('common.unnamed'));
   const type = routeTypeDefinition(routeType);
@@ -872,89 +708,11 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
     : routeSpeed ? t('route.estimatedSpeed', { speed: formatMeasurement('speed', routeSpeed) }) : t('route.noSpeed'));
   updatePageLanguage();
   drawMap(currentTrack);
-  if (currentTrack.hasElevation) drawProfile(currentTrack);
-  renderSourceInfo(analysisSources || { gpx: 'SUCCESS', valhalla: 'PENDING', openStreetMap: 'PENDING' });
+  if (currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
+  routeSummaryView.renderSourceInfo(analysisSources || { gpx: 'SUCCESS', valhalla: 'PENDING', openStreetMap: 'PENDING' });
   document.querySelector('#zoom-back').disabled = true;
   document.querySelector('#zoom-reset').disabled = true;
   setActivePoint(0);
-}
-
-function renderUnavailableTrack(track) {
-  document.querySelector('#track-name').classList.remove('inline-loading', 'is-loading');
-  bindText(document.querySelector('#track-name'), () => track.title || t('common.unnamed'));
-  bindText(document.querySelector('#compact-track-name'), () => track.title || t('common.unnamed'));
-  bindText(document.querySelector('#route-state-note'), () => track.analysisNote || t(track.status === 'PROCESSING' ? 'sources.waiting' : 'sources.failed'));
-  document.querySelector('#route-state-note').hidden = false;
-  document.querySelector('#route-state-note').classList.toggle('is-processing', track.status === 'PROCESSING');
-  const metrics = track.summary?.metrics || track.metrics;
-  document.querySelector('.route-metrics').hidden = !metrics;
-  if (metrics) {
-    const type = routeTypeDefinition(track.routeType);
-    document.querySelector('#route-type-metric').innerHTML = `${routeTypeIcon(type.id)}<b>${htmlMessage(`activity.${type.id}`)}</b>`;
-    bindText(document.querySelector('#distance'), () => metrics.distanceKm == null ? '—'
-      : number(distanceValue(metrics.distanceKm, preferences.value), preferences.value));
-    bindText(document.querySelector('#ascent'), () => metrics.ascentM == null ? '—'
-      : number(elevationValue(metrics.ascentM, preferences.value), { ...preferences.value, digits: 0 }));
-    bindText(document.querySelector('#descent'), () => metrics.descentM == null ? '—'
-      : number(elevationValue(metrics.descentM, preferences.value), { ...preferences.value, digits: 0 }));
-    bindText(document.querySelector('#duration'), () => formatDuration(metrics.estimatedDurationMs)[0]);
-    bindText(document.querySelector('#duration-unit'), () => t('common.hour'));
-    bindText(document.querySelector('#average-speed-badge'), () => metrics.effectiveSpeedKmh == null ? '—'
-      : formatMeasurement('speed', metrics.effectiveSpeedKmh));
-  }
-  document.querySelector('.route-workspace').hidden = !track.summary;
-  if (track.summary) setDetailedView(track.status === 'PROCESSING' ? 'loading' : 'failed');
-}
-
-function renderBasicTrackHeader(track) {
-  document.querySelector('#track-name').classList.remove('inline-loading', 'is-loading');
-  bindText(document.querySelector('#track-name'), () => track.title || t('common.unnamed'));
-  bindText(document.querySelector('#compact-track-name'), () => track.title || t('common.unnamed'));
-  const type = routeTypeDefinition(track.routeType);
-  for (const selector of ['#route-type-metric', '#compact-route-type-metric']) {
-    const element = document.querySelector(selector);
-    element.innerHTML = `${routeTypeIcon(type.id)}<b>${htmlMessage(`activity.${type.id}`)}</b>`;
-    bindAttribute(element, 'aria-label', () => t('route.typeValue', { type: routeTypeDefinition(type.id).label }));
-  }
-  const metrics = track.summary?.metrics || track.metrics;
-  document.querySelector('.route-metrics').hidden = !metrics;
-  if (metrics) {
-    const distance = () => metrics.distanceKm == null ? '—'
-      : number(distanceValue(metrics.distanceKm, preferences.value), preferences.value);
-    const elevation = (value) => value == null ? '—'
-      : number(elevationValue(value, preferences.value), { ...preferences.value, digits: 0 });
-    for (const selector of ['#distance', '#compact-distance']) bindText(document.querySelector(selector), distance);
-    for (const selector of ['#ascent', '#compact-ascent']) bindText(document.querySelector(selector), () => elevation(metrics.ascentM));
-    for (const selector of ['#descent', '#compact-descent']) bindText(document.querySelector(selector), () => elevation(metrics.descentM));
-    const duration = () => metrics.estimatedDurationMs == null ? '—' : formatDuration(metrics.estimatedDurationMs)[0];
-    for (const selector of ['#duration', '#compact-duration']) bindText(document.querySelector(selector), duration);
-    for (const selector of ['#duration-unit', '#compact-duration-unit']) bindText(document.querySelector(selector), () => t('common.hour'));
-    const speed = () => metrics.effectiveSpeedKmh == null ? '—' : formatMeasurement('speed', metrics.effectiveSpeedKmh);
-    for (const selector of ['#average-speed-badge', '#compact-speed']) bindText(document.querySelector(selector), speed);
-    bindAttribute(document.querySelector('#average-speed-badge'), 'title', () => metrics.effectiveSpeedKmh == null
-      ? t('route.noSpeed') : t('route.estimatedSpeed', { speed: speed() }));
-  }
-  updatePageLanguage();
-  document.querySelector('.route-workspace').hidden = !track.summary;
-  document.querySelector('#route-state-note').hidden = true;
-  if (track.summary) {
-    const hasRoadSummary = Object.values(track.summary.distributions).some((items) => items.length);
-    document.querySelector('.surface-section').hidden = !hasRoadSummary;
-    document.querySelector('.route-tabs a[href="#way-types"]').hidden = !hasRoadSummary;
-    const hasTerrainSummary = track.resultKind !== 'DIAGNOSTIC'
-      || track.summary.climbs.length || track.summary.descents.length;
-    document.querySelector('.climbs-section').hidden = !hasTerrainSummary;
-    document.querySelector('.route-tabs a[href="#climbs"]').hidden = !hasTerrainSummary;
-    renderClimbs(track.summary);
-    renderPointsOfInterest(track.summary.pointsOfInterest);
-    renderSurfaces(track.summary);
-    renderSourceInfo(track.summary.analysisSources);
-    bindText(document.querySelector('#profile-ascent'), () => metrics.ascentM == null ? '—' : formatMeasurement('elevation', metrics.ascentM, { digits: 0 }));
-    bindText(document.querySelector('#profile-descent'), () => metrics.descentM == null ? '—' : formatMeasurement('elevation', metrics.descentM, { digits: 0 }));
-    bindText(document.querySelector('#min-label'), () => metrics.minElevationM == null ? '—' : formatMeasurement('elevation', metrics.minElevationM));
-    bindText(document.querySelector('#max-label'), () => metrics.maxElevationM == null ? '—' : formatMeasurement('elevation', metrics.maxElevationM));
-    setDetailedView('loading');
-  }
 }
 
 function setDetailedView(state) {
@@ -984,12 +742,12 @@ async function loadPublicTrack(trackId, retries = 0) {
   currentTrack = null;
   const response = await trackApi.publicTrack(trackId);
   if (!response.ok) {
-    renderUnavailableTrack({ title: t('tracks.notFound'), analysisNote: t('tracks.checkLink') });
+    routeSummaryView.renderUnavailableTrack({ title: t('tracks.notFound'), analysisNote: t('tracks.checkLink') });
     return;
   }
   const { data } = await response.json();
   publicTrackData = data;
-  renderBasicTrackHeader(data);
+  routeSummaryView.renderBasicTrackHeader(data);
   renderExternalTrackLinks(document.querySelector('#external-track-links'), data.externalLinks);
   const linksSection = document.querySelector('#external-track-links-section');
   linksSection.hidden = availableExternalTrackLinks(data.externalLinks).length === 0;
@@ -999,7 +757,7 @@ async function loadPublicTrack(trackId, retries = 0) {
   download.href = data.downloadUrl || '#';
   download.hidden = !data.downloadUrl;
   if (!data.analysisUrl) {
-    renderUnavailableTrack(data.status === 'READY' ? { ...data, analysisNote: t('errors.fileUnavailable') } : data);
+    routeSummaryView.renderUnavailableTrack(data.status === 'READY' ? { ...data, analysisNote: t('errors.fileUnavailable') } : data);
     return;
   }
   try {
@@ -1011,7 +769,7 @@ async function loadPublicTrack(trackId, retries = 0) {
     const analysis = { ...detail.analysis, ...data.metrics, name: data.title };
     renderTrack(analysis, { analysisSources: data.analysisSources, routeType: data.routeType });
   } catch {
-    renderUnavailableTrack({ ...data, analysisNote: t('errors.fileUnavailable') });
+    routeSummaryView.renderUnavailableTrack({ ...data, analysisNote: t('errors.fileUnavailable') });
   }
 }
 

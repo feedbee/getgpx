@@ -18,5 +18,6 @@ Track work is split into route/controller, service/domain, and repository layers
 - `src/backend/s3-track-repository.js`: compact MongoDB track state and processing leases.
 - `src/backend/s3-track-processor.js`: background analysis and publication.
 - `src/backend/s3-track-service.js`: track operations and storage coordination; `s3-track-presenters.js` builds API responses.
-- `src/client/app-shell.js`: page markup; `track-api.js`: browser track requests; `track-upload-flow.js`: upload and processing state; `track-collection.js`: library and favorites lists. `main.js` owns page composition and remaining interaction wiring.
+- `src/client/app-shell.js`: page markup; `track-api.js`: browser track requests; `track-upload-flow.js`: upload and processing state; `track-collection.js`: library and favorites lists.
+- `src/client/route-page-summary.js` and `route-summary-ui.js`: route header, analysis states, climbs, and surface summaries; `elevation-profile.js`: elevation chart rendering and its visible metrics. `main.js` owns page composition and remaining map and interaction wiring.
 - `src/backend/track-internal-router.js`: nginx-mode signing handoff mounted on the application listener; Nginx blocks direct external access.
