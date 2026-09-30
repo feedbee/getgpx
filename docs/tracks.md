@@ -51,6 +51,11 @@ version unchanged. In-process workers use an expiring MongoDB lease; the owner m
 retry an interrupted attempt. MongoDB removal precedes best-effort S3 deletion;
 orphan objects after a failure are possible and are not swept automatically.
 
+Replacing a GPX changes the source file and derived route data while retaining the
+track's editable title, speed, route type, and external links. Duration is recalculated
+from the new route distance and retained speed. Initial uploads still use the GPX
+title and calculated speed until the owner edits them.
+
 ## API
 
 - `POST /api/tracks`: authenticated raw GPX upload; 202 after durable source storage

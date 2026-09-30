@@ -113,7 +113,8 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
         const active = compact(analysis, previous.attempt.sourceKey, analysisKey,
           identity.revision, previous.attempt.originalFilename, analysisSources, completeness);
         const override = previous.attempt.metadataOverrides;
-        const speedKmh = override?.speedKmh ?? (previous.attempt.kind === 'RETRY' && previous.active
+        const retainedMetadata = previous.attempt.kind !== 'INITIAL' && previous.active;
+        const speedKmh = override?.speedKmh ?? (retainedMetadata
           ? previous.active.metrics.effectiveSpeedKmh : null);
         if (speedKmh != null) {
           const duration = active.metrics.distanceKm / speedKmh * 3_600_000;
@@ -122,7 +123,7 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
           active.summary.metrics.effectiveSpeedKmh = speedKmh;
           active.summary.metrics.estimatedDurationMs = duration;
         }
-        const effectiveTitle = override?.title ?? (previous.attempt.kind === 'RETRY' && previous.active ? previous.title : title);
+        const effectiveTitle = override?.title ?? (retainedMetadata ? previous.title : title);
         const filter = { ...attemptFilter(identity), 'attempt.metadataVersion': previous.attempt.metadataVersion ?? { $exists: false } };
         const result = await tracks.updateOne(filter, {
           $set: { active, title: effectiveTitle, normalizedName: normalizeTrackName(effectiveTitle),

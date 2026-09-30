@@ -126,13 +126,14 @@ describeWithMongo('MongoDB S3 track contract', () => {
     await tracks.deleteOne({ _id: trackId });
   });
 
-  it('switches source, analysis and basic metrics together on replacement', async () => {
+  it('switches source and analysis on replacement while keeping editable metadata', async () => {
     const trackId = new ObjectId();
     const ownerId = new ObjectId();
     await tracks.insertOne({ _id: trackId, ownerId, publicId: `track_${trackId}`, title: 'Old',
-      normalizedName: 'old', createdAt: new Date(), analysisStatus: 'READY',
+      normalizedName: 'old', routeType: 'gravel-cycling', externalLinks: { komoot: 'https://www.komoot.com/tour/123' },
+      createdAt: new Date(), analysisStatus: 'READY',
       active: { revision: 'old', sourceKey: `dev/tracks/${trackId}/old/source.gpx`,
-        analysisKey: `dev/tracks/${trackId}/old/analysis.json`, metrics: { distanceKm: 10 } } });
+        analysisKey: `dev/tracks/${trackId}/old/analysis.json`, metrics: { distanceKm: 10, effectiveSpeedKmh: 25 } } });
     const pending = await repository.beginAttempt({ trackId, ownerId, revision: 'new', kind: 'REPLACE',
       sourceKey: `dev/tracks/${trackId}/new/source.gpx`, originalFilename: 'new.gpx' });
     expect(pending.active.metrics.distanceKm).toBe(10);
@@ -144,11 +145,13 @@ describeWithMongo('MongoDB S3 track contract', () => {
       analysisKey: `dev/tracks/${trackId}/new/analysis.json`, analysisSources: { gpx: 'SUCCESS' } });
     expect(previous.active.revision).toBe('old');
     const current = await repository.findById(trackId);
-    expect(current).toMatchObject({ title: 'New', analysisStatus: 'READY', active: { revision: 'new',
-      originalFilename: 'new.gpx', metrics: { distanceKm: 20 },
+    expect(current).toMatchObject({ title: 'Old', normalizedName: 'old', routeType: 'gravel-cycling',
+      externalLinks: { komoot: 'https://www.komoot.com/tour/123' }, analysisStatus: 'READY', active: { revision: 'new',
+      originalFilename: 'new.gpx', metrics: { distanceKm: 20, effectiveSpeedKmh: 25, estimatedDurationMs: 2_880_000 },
       sourceKey: `dev/tracks/${trackId}/new/source.gpx`,
       analysisKey: `dev/tracks/${trackId}/new/analysis.json` } });
-    expect(current.active.summary.metrics.distanceKm).toBe(20);
+    expect(current.active.summary.metrics).toMatchObject({ distanceKm: 20, effectiveSpeedKmh: 25,
+      estimatedDurationMs: 2_880_000 });
     expect(current).not.toHaveProperty('attempt');
     await tracks.deleteOne({ _id: trackId });
   });
