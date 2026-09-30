@@ -8,12 +8,12 @@ open a menu containing only logout.
 
 ## Contract and data
 
-- `GET /api/auth/session` returns `{ "user": null }` or a public user containing
+- `GET /auth/session` returns `{ "user": null }` or a public user containing
   `id`, `email`, `displayName`, and `avatarUrl`.
-- `GET /api/auth/google` starts Google OAuth 2.0 Authorization Code flow with PKCE.
-- `GET /api/auth/google/callback` validates OAuth state, exchanges the code, upserts
+- `GET /auth/google` starts Google OAuth 2.0 Authorization Code flow with PKCE.
+- `GET /auth/google/callback` validates OAuth state, exchanges the code, upserts
   the user, creates a server-side session, and redirects to `/`.
-- `POST /api/auth/logout` revokes the current server-side session and clears its cookie.
+- `POST /auth/logout` revokes the current server-side session and clears its cookie.
 - Users store Google subject, email, display name, avatar URL, registration time,
   last-login time, and profile-update time. Profile-update time changes only when a
   profile field received from Google changes.

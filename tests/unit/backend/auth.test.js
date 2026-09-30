@@ -57,7 +57,7 @@ describe('authentication service', () => {
     const attempts = new Map();
     const sessions = [];
     const auth = createAuthService({
-      clientId: 'client-id', clientSecret: 'client-secret', redirectUri: 'https://getgpx.test/api/auth/google/callback',
+      clientId: 'client-id', clientSecret: 'client-secret', redirectUri: 'https://getgpx.test/auth/google/callback',
       sessionSecret: 'a'.repeat(32),
       userRepository: { loginWithGoogle: async (profile) => ({ _id: 'user-1', ...profile }) },
       sessionRepository: { create: async (...args) => sessions.push(args), findUserByToken: async () => null, deleteByToken: async () => {} },

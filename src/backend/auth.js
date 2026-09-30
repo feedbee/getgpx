@@ -213,9 +213,9 @@ export function createAuthHandlers(authService, { secureCookies = process.env.NO
 export function createAuthRouter(authService, options) {
   const handlers = createAuthHandlers(authService, options);
   const router = Router();
-  router.get('/api/auth/google', handlers.begin);
-  router.get('/api/auth/google/callback', handlers.callback);
-  router.get('/api/auth/session', handlers.session);
-  router.post('/api/auth/logout', handlers.logout);
+  router.get('/auth/google', handlers.begin);
+  router.get('/auth/google/callback', handlers.callback);
+  router.get('/auth/session', handlers.session);
+  router.post('/auth/logout', handlers.logout);
   return router;
 }

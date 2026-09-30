@@ -40,7 +40,7 @@ export function renderHomePage(publicTracks = [], { loading = false } = {}) {
           <p class="home-lede">${htmlMessage('home.lede')}</p>
           <p class="home-note">${htmlMessage('home.noRegistration')}</p>
           <div class="home-actions">
-            <a class="home-primary" data-home-guest href="/api/auth/google">${htmlMessage('home.publish')} <span aria-hidden="true">↗</span></a>
+            <a class="home-primary" data-home-guest href="/auth/google">${htmlMessage('home.publish')} <span aria-hidden="true">↗</span></a>
             <button class="home-primary" data-home-author data-auth-upload type="button" hidden>${htmlMessage('common.upload')} <span aria-hidden="true">＋</span></button>
             <a class="home-secondary" id="home-open-real" href="${escapeHtml(primaryUrl)}" ${loading ? 'aria-disabled="true"' : ''}>${htmlMessage('home.openReal')}</a>
           </div>
@@ -68,6 +68,6 @@ export function renderHomePage(publicTracks = [], { loading = false } = {}) {
       <section class="home-section home-tracks" id="public-tracks" aria-labelledby="public-tracks-title"><div class="home-section-heading"><p class="route-kicker">${htmlMessage('home.examples')}</p><div><h2 id="public-tracks-title">${htmlMessage('home.openPublic')}</h2><p>${htmlMessage('home.publicDescription')}</p></div></div><div class="home-track-links">${renderPublicTracks(publicTracks, loading)}</div></section>
 
       <section class="home-library" aria-labelledby="library-title"><div><p class="route-kicker">${htmlMessage('home.library')}</p><h2 id="library-title">${htmlMessage('home.atHand')}</h2><p>${htmlMessage('home.searchReady')}</p></div><span class="home-soon">${htmlMessage('home.soon')}</span></section>
-      <section class="home-final" aria-labelledby="home-final-title"><p class="route-kicker">${htmlMessage('home.haveGpx')}</p><h2 id="home-final-title">${htmlMessage('home.goodLink')}</h2><a class="home-primary" data-home-guest href="/api/auth/google">${htmlMessage('home.publish')} <span aria-hidden="true">↗</span></a><button class="home-primary" data-home-author data-auth-upload type="button" hidden>${htmlMessage('common.upload')} <span aria-hidden="true">＋</span></button></section>
+      <section class="home-final" aria-labelledby="home-final-title"><p class="route-kicker">${htmlMessage('home.haveGpx')}</p><h2 id="home-final-title">${htmlMessage('home.goodLink')}</h2><a class="home-primary" data-home-guest href="/auth/google">${htmlMessage('home.publish')} <span aria-hidden="true">↗</span></a><button class="home-primary" data-home-author data-auth-upload type="button" hidden>${htmlMessage('common.upload')} <span aria-hidden="true">＋</span></button></section>
     </main>`;
 }

@@ -4,7 +4,7 @@ function escapeHtml(value) {
 }
 
 export function renderAuthControl(user) {
-  if (!user) return `<a class="login-button" href="/api/auth/google">${htmlMessage('common.login')}</a>`;
+  if (!user) return `<a class="login-button" href="/auth/google">${htmlMessage('common.login')}</a>`;
   const name = escapeHtml(user.displayName || user.email);
   const avatar = user.avatarUrl
     ? `<img src="${escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" />`

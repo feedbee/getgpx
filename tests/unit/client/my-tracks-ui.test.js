@@ -73,7 +73,7 @@ describe('my tracks UI', () => {
     };
     const card = createTrackCard({
       id: 'track-1', title: 'Ride', status: 'READY', createdAt: '2026-09-17T10:00:00.000Z',
-      url: '/tracks/track-1', downloadUrl: '/api/tracks/track-1/download',
+      url: '/tracks/track-1', downloadUrl: '/api/v1/tracks/track-1/gpx',
       externalLinks: { strava: 'https://www.strava.com/routes/1' },
     }, documentRef);
 

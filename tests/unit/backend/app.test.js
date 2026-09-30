@@ -102,9 +102,9 @@ describe('request logging', () => {
     const log = pino({ level: 'info' }, { write: (line) => entries.push(JSON.parse(line)) });
     const app = createApp({ database: { ping: vi.fn() }, log });
     const request = {
-      method: 'GET', url: '/api/auth/google/callback?code=SECRET',
+      method: 'GET', url: '/auth/google/callback?code=SECRET',
       headers: { authorization: 'Bearer SECRET', cookie: 'session=SECRET' },
-      route: { path: '/api/auth/google/callback' },
+      route: { path: '/auth/google/callback' },
     };
     const response = new EventEmitter();
     response.statusCode = 500;
@@ -114,7 +114,7 @@ describe('request logging', () => {
     response.emit('finish');
 
     expect(entries).toHaveLength(2);
-    expect(entries[0]).toMatchObject({ level: 50, requestId: expect.any(String), req: { method: 'GET', path: '/api/auth/google/callback', route: '/api/auth/google/callback' } });
+    expect(entries[0]).toMatchObject({ level: 50, requestId: expect.any(String), req: { method: 'GET', path: '/auth/google/callback', route: '/auth/google/callback' } });
     expect(entries[1]).toMatchObject({ level: 40, requestId: entries[0].requestId, res: { statusCode: 500 }, durationMs: expect.any(Number) });
     expect(JSON.stringify(entries)).not.toContain('SECRET');
   });

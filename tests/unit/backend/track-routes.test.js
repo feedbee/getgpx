@@ -23,6 +23,27 @@ function request({ body = '<gpx />', headers = {}, params = {} } = {}) {
 }
 
 describe('track HTTP handlers', () => {
+  it('expands geometry only for the supported include parameter', async () => {
+    const publicId = 'publicTrackId00000001';
+    const trackService = { getPublicTrack: vi.fn().mockResolvedValue({ id: publicId, analysis: { points: [] } }) };
+    const handlers = createTrackHandlers(trackService, {});
+    const source = request({ params: { id: publicId } });
+    source.query = { include: 'geometry' };
+    const result = response();
+    await handlers.publicTrack(source, result);
+    expect(result.body.data.analysis).toEqual({ points: [] });
+    expect(trackService.getPublicTrack).toHaveBeenCalledWith(publicId, null, { includeGeometry: true });
+    trackService.getPublicTrack.mockClear();
+    for (const include of ['unknown', '', ['geometry', 'geometry'], { value: 'geometry' }]) {
+      source.query = { include };
+      const invalid = response();
+      await handlers.publicTrack(source, invalid);
+      expect(invalid.statusCode).toBe(400);
+      expect(invalid.body.error.code).toBe('INVALID_INCLUDE');
+    }
+    expect(trackService.getPublicTrack).not.toHaveBeenCalled();
+  });
+
   it('requires authentication for upload', async () => {
     const handlers = createTrackHandlers({ upload: vi.fn() }, { getUser: vi.fn().mockResolvedValue(null) });
     const result = response();
@@ -114,7 +135,7 @@ describe('track HTTP handlers', () => {
     expect(trackService.upload).toHaveBeenCalledWith({ ownerId, tier: 'BASIC', filename: 'Заезд.gpx', routeType: 'gravel-cycling', source, profile: null,
       onStage: expect.any(Function) });
     expect(result.statusCode).toBe(202);
-    expect(result.headers.location).toBe('/api/tracks/track-1/status');
+    expect(result.headers.location).toBe('/api/v1/tracks/track-1/status');
   });
 
   it('returns a conflict when the user has reached the configured track limit', async () => {
@@ -258,7 +279,7 @@ describe('track HTTP handlers', () => {
     expect(result.statusCode).toBe(200);
     expect(result.body.data.analysisLevel).toBe('BASIC');
     expect(authService.getUser).not.toHaveBeenCalled();
-    expect(trackService.getPublicTrack).toHaveBeenCalledWith(publicId, null);
+    expect(trackService.getPublicTrack).toHaveBeenCalledWith(publicId, null, { includeGeometry: false });
   });
 
   it('returns homepage tracks publicly without checking a session', async () => {

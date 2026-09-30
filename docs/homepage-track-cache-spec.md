@@ -1,6 +1,6 @@
 # Homepage track cache: proposed specification
 
-Status: implemented. Scope: the public `GET /api/tracks/homepage` response.
+Status: implemented. Scope: the public `GET /homepage` response.
 
 ## Objective
 

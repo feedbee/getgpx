@@ -29,7 +29,7 @@ describe('request profiling', () => {
   it('keeps step and HTTP logs under the same request ID', async () => {
     const entries = [];
     const log = pino({ level: 'debug' }, { write: (line) => entries.push(JSON.parse(line)) });
-    const request = { method: 'GET', url: '/api/tracks/homepage', headers: {} };
+    const request = { method: 'GET', url: '/homepage', headers: {} };
     const response = new EventEmitter();
     response.statusCode = 200;
     response.setHeader = () => {};

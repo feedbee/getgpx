@@ -37,7 +37,7 @@ Health endpoints are `/health/live` (process) and `/health/ready` (MongoDB depen
 
 1. In [Google Auth Platform](https://console.cloud.google.com/auth/overview), configure Branding and Audience. While the app is in testing, add the Google accounts that may sign in as test users.
 2. Under Clients, create or open an OAuth client of type **Web application**. Copy its client ID and client secret into the local/deployment secret store as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
-3. Add the exact `GOOGLE_REDIRECT_URI` value to **Authorized redirect URIs**. Scheme, host, port, path, case, and trailing slash must match. Local Vite development uses `http://localhost:5173/api/auth/google/callback`; the production-shaped local server uses `http://localhost:3000/api/auth/google/callback`.
+3. Add the exact `GOOGLE_REDIRECT_URI` value to **Authorized redirect URIs**. Scheme, host, port, path, case, and trailing slash must match. Local Vite development uses `http://localhost:5173/auth/google/callback`; the production-shaped local server uses `http://localhost:3000/auth/google/callback`.
 4. Generate `SESSION_SECRET` independently (for example, `openssl rand -base64 48`). Do not reuse the Google client secret.
 
 Google only displays newly created client secrets once, so store the value immediately in a protected secret manager. The app requests only `openid email profile`; it does not store Google access or refresh tokens. See Google's [web-server OAuth guide](https://developers.google.com/identity/protocols/oauth2/web-server) and [OAuth client management guide](https://support.google.com/cloud/answer/15549257).

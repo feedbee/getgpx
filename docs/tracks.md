@@ -58,16 +58,22 @@ title and calculated speed until the owner edits them.
 
 ## API
 
-- `POST /api/tracks`: authenticated raw GPX upload; 202 after durable source storage
+- `POST /api/v1/tracks`: authenticated raw GPX upload; 202 after durable source storage
   and MongoDB insertion. Upload headers and quota rules remain as before.
-- `GET /api/tracks/mine`, `GET /api/tracks/saved`, `GET /api/tracks/homepage`: compact
+- `GET /api/v1/tracks/mine`, `GET /api/v1/tracks/saved`, `GET /homepage`: compact
   MongoDB-backed lists. The featured homepage track has an `analysisUrl` rather than
   embedded analysis.
-- `GET /api/tracks/:id`: public basic information and the complete point-free
+- `GET /api/v1/tracks/:id`: public basic information and the complete point-free
   `summary`, including height extrema, surface/road/quality distributions, climbs,
   descents, POI metadata and route distances, current revision, analysisUrl, and
-  downloadUrl. No S3 read is required.
-- `GET /api/tracks/:id/analysis`: current active detailed JSON, or completed partial
+  downloadUrl. Route points and preview geometry are omitted. No S3 read is required.
+- `GET /api/v1/tracks/:id?include=geometry`: the same metadata plus `analysis`
+  containing the detailed analysis JSON and `preview`. The analysis is read from
+  S3 for the same active revision as the metadata, with diagnostic fallback when
+  no active result exists. `analysis` is null if no completed analysis exists yet.
+  Unsupported or repeated `include` values return 400 with `INVALID_INCLUDE`.
+  The site retains the two-step metadata/analysis loading flow below.
+- `GET /api/v1/tracks/:id/analysis`: current active detailed JSON, or completed partial
   diagnostic JSON when no active version exists. The client does not choose a revision.
 
 The track page renders its title, route type, metrics, elevation summary, road and
@@ -77,15 +83,15 @@ placement and selection, and segment highlighting wait for the separate analysis
 disabled while waiting. If analysis delivery fails, the summary stays visible and
 the map/chart show localized errors. Existing track records are recreated; no legacy
 summary fallback or backfill is provided.
-- `GET /api/tracks/:id/download`: current active source GPX, or the initial source
+- `GET /api/v1/tracks/:id/gpx`: current active source GPX, or the initial source
   before first publication. The original bytes and safe filename are retained.
-- `GET /api/tracks/:id/status`, `GET /api/tracks/:id/manage`: owner-only processing,
+- `GET /api/v1/tracks/:id/status`, `GET /api/v1/tracks/:id/manage`: owner-only processing,
   retry, and editing information.
-- `PATCH /api/tracks/:id`: owner-only title, route type, speed, and external links;
+- `PATCH /api/v1/tracks/:id`: owner-only title, route type, speed, and external links;
   updates compact MongoDB fields without rewriting S3 objects.
-- `PUT /api/tracks/:id/file`, `POST /api/tracks/:id/retry-analysis`: owner-only new
+- `PUT /api/v1/tracks/:id/gpx`, `POST /api/v1/tracks/:id/retry-analysis`: owner-only new
   processing revision. Live concurrent attempts conflict.
-- `DELETE /api/tracks/:id`, `DELETE /api/tracks`: owner-only, MongoDB-first deletion;
+- `DELETE /api/v1/tracks/:id`, `DELETE /api/v1/tracks`: owner-only, MongoDB-first deletion;
   repeat single-track deletion succeeds.
 - Saved-track add/remove endpoints remain owner-session scoped.
 

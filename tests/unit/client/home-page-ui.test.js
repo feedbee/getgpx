@@ -48,7 +48,7 @@ describe('renderHomePage', () => {
     const markup = renderHomePage();
 
     expect(markup).toContain('data-home-guest');
-    expect(markup).toContain('href="/api/auth/google"');
+    expect(markup).toContain('href="/auth/google"');
     expect(markup).toContain('data-home-author');
     expect(markup).toContain('data-auth-upload');
     expect(markup).toContain('type="button"');

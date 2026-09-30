@@ -15,7 +15,7 @@ export function createTrackCollection({ trackApi, isMyTracksPage, isFavoriteTrac
     const more = documentRef.querySelector('#load-more-tracks');
     if (!getCurrentUser()) {
       list.replaceChildren();
-      message.innerHTML = `${htmlMessage(isFavoriteTracksPage ? 'tracks.loginFavorites' : 'tracks.loginOwn')} <a href="/api/auth/google">${htmlMessage('common.login')}</a>`;
+      message.innerHTML = `${htmlMessage(isFavoriteTracksPage ? 'tracks.loginFavorites' : 'tracks.loginOwn')} <a href="/auth/google">${htmlMessage('common.login')}</a>`;
       message.hidden = false;
       more.hidden = true;
       return;

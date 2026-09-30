@@ -162,7 +162,7 @@ async function loadSavedState(trackId) {
 
 async function restoreSession() {
   try {
-    const response = await fetch('/api/auth/session', { headers: { accept: 'application/json' } });
+    const response = await fetch('/auth/session', { headers: { accept: 'application/json' } });
     if (!response.ok) throw new Error('Session request failed.');
     const payload = await response.json();
     setAuthUser(payload.user || null);
@@ -182,7 +182,7 @@ authControl.addEventListener('click', async (event) => {
   }
   if (!event.target.closest('.logout-button')) return;
   try {
-    const response = await fetch('/api/auth/logout', { method: 'POST', headers: { accept: 'application/json' } });
+    const response = await fetch('/auth/logout', { method: 'POST', headers: { accept: 'application/json' } });
     if (response.ok) setAuthUser(null);
   } catch {
     closeUserMenu();
@@ -416,7 +416,7 @@ document.querySelector('#share-track')?.addEventListener('click', async (event) 
 
 document.querySelector('#save-track')?.addEventListener('click', async () => {
   if (!currentUser) {
-    window.location.assign('/api/auth/google');
+    window.location.assign('/auth/google');
     return;
   }
   if (!publicTrackId) return;

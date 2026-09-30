@@ -49,7 +49,7 @@ is introduced. Existing public visibility and owner-only mutations remain.
   splitting by distance (default 200 km). The elevation request is currently unbatched;
   Overpass currently receives all unique way IDs in one request.
 - Current previews sample uniformly and scale their two axes independently.
-- Track detail embeds analysis in `GET /api/tracks/:id`. The homepage embeds full
+- Track detail embeds analysis in `GET /api/v1/tracks/:id`. The homepage embeds full
   analysis for its first track; the optional homepage cache retains that payload.
 - Valhalla failure leaves a FAILED track with a basic map. Successful Valhalla with
   unavailable Overpass produces READY with a warning and a retry action.
@@ -344,7 +344,7 @@ the resulting compact preview in MongoDB; cards do not request analysis or S3.
 ## Public API: current basic information and detailed analysis
 
 Clients must not discover or supply a revision to access the current track.
-`GET /api/tracks/:id` is the complete basic-information endpoint, including all header
+`GET /api/v1/tracks/:id` is the complete basic-information endpoint, including all header
 metrics and the compact analysis summary, suitable for other services without downloading detailed geometry. There
 is no additional metadata/metrics request.
 
@@ -374,9 +374,8 @@ is no additional metadata/metrics request.
       "pointsOfInterest": [{ "name": "Water", "type": "WATER", "distanceKm": 12.6 }],
       "pointsOfInterestCount": 1
     },
-    "preview": { "viewBox": "0 0 100 100", "points": [] },
-    "analysisUrl": "/api/tracks/public-track-id/analysis",
-    "downloadUrl": "/api/tracks/public-track-id/download"
+    "analysisUrl": "/api/v1/tracks/public-track-id/analysis",
+    "downloadUrl": "/api/v1/tracks/public-track-id/gpx"
   }
 }
 ```
@@ -389,16 +388,17 @@ Do not expose internal IDs/keys, owner secrets, or CloudFront URLs/signatures.
 
 | Endpoint | Behavior |
 | --- | --- |
-| GET /api/tracks/:id | Basic information and compact summary directly from MongoDB |
-| GET /api/tracks/:id/analysis | Detailed JSON for the currently active revision, with diagnostic fallback as specified below |
-| GET /api/tracks/:id/download | Original GPX for the current active revision, with initial-source fallback |
-| GET /api/tracks/:id/status | Owner-only attempt status, active availability, canRetry/interrupted |
-| GET /api/tracks/:id/manage | Existing owner management fields and current attempt outcome |
-| POST /api/tracks | 202 after source upload and Mongo insertion; Location points to status |
-| PUT /api/tracks/:id/file | 202 when accepted; 409 for a live competing attempt |
-| POST /api/tracks/:id/retry-analysis | 202 for a newly claimed retry; 409 when ineligible/live |
-| PATCH /api/tracks/:id | Updated basic information including metrics; no S3 access |
-| DELETE /api/tracks/:id | 200 with `{ data: { deleted: true } }`, including repeats |
+| GET /api/v1/tracks/:id | Basic information and compact summary directly from MongoDB |
+| GET /api/v1/tracks/:id?include=geometry | Basic information plus preview and expanded `analysis` from the same revision in S3; null analysis when none is available |
+| GET /api/v1/tracks/:id/analysis | Detailed JSON for the currently active revision, with diagnostic fallback as specified below |
+| GET /api/v1/tracks/:id/gpx | Original GPX for the current active revision, with initial-source fallback |
+| GET /api/v1/tracks/:id/status | Owner-only attempt status, active availability, canRetry/interrupted |
+| GET /api/v1/tracks/:id/manage | Existing owner management fields and current attempt outcome |
+| POST /api/v1/tracks | 202 after source upload and Mongo insertion; Location points to status |
+| PUT /api/v1/tracks/:id/gpx | 202 when accepted; 409 for a live competing attempt |
+| POST /api/v1/tracks/:id/retry-analysis | 202 for a newly claimed retry; 409 when ineligible/live |
+| PATCH /api/v1/tracks/:id | Updated basic information including metrics; no S3 access |
+| DELETE /api/v1/tracks/:id | 200 with `{ data: { deleted: true } }`, including repeats |
 
 Selection rules are shared by stream and nginx delivery:
 
@@ -603,7 +603,7 @@ credentials, databases, and open ports. Use synthetic GPX fixtures, not user dat
 | Basic metrics | Initial metrics use all accepted source points and are not recomputed merely due to simplification |
 | Provider compatibility | Existing Valhalla sampling/splitting, elevation/Overpass requests, cache behavior, concurrency, and timeouts remain unchanged |
 | Detailed calculations | Enrichment, gradients, climbs, descents, and persisted geometry use the selected analysis points |
-| Basic API | GET /api/tracks/:id returns metrics, elevation summary, distributions, climbs, descents, and POI metadata with no S3 access |
+| Basic API | GET /api/v1/tracks/:id returns metrics, elevation summary, distributions, climbs, descents, and POI metadata with no S3 access |
 | Current analysis | Plain /analysis resolves active automatically; callers need not know a revision |
 | Lists/previews | mine/saved/homepage function without S3; preview point cap, proportions, and turns are correct |
 | Detailed page | Separate basic/analysis requests render the selected route geometry, POI, profile, road data, and climb/descent tables |

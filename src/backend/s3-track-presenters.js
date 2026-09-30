@@ -46,8 +46,8 @@ export function publicTrack(track, uploader = null) {
     analysisSources: result?.analysisSources || { gpx: track.analysisStatus === 'PROCESSING' ? 'PENDING' : 'FAILED', valhalla: 'PENDING', openStreetMap: 'PENDING' },
     analysisLevel: result ? (track.active ? 'FULL' : 'BASIC') : 'NONE',
     externalLinks: track.externalLinks || {}, createdAt: track.createdAt?.toISOString() || null,
-    uploader, analysisUrl: result?.analysisKey ? `/api/tracks/${id}/analysis` : null,
-    downloadUrl: result?.sourceKey || track.attempt?.sourceKey ? `/api/tracks/${id}/download` : null,
+    uploader, analysisUrl: result?.analysisKey ? `/api/v1/tracks/${id}/analysis` : null,
+    downloadUrl: result?.sourceKey || track.attempt?.sourceKey ? `/api/v1/tracks/${id}/gpx` : null,
   };
 }
 export function card(track) {
@@ -60,12 +60,12 @@ export function card(track) {
     descentM: result?.metrics?.descentM ?? null, speedKmh: result?.metrics?.effectiveSpeedKmh ?? null,
     estimatedDurationMs: result?.metrics?.estimatedDurationMs ?? null,
     preview: result?.preview || null, externalLinks: track.externalLinks || {},
-    url: `/tracks/${id}`, downloadUrl: `/api/tracks/${id}/download` };
+    url: `/tracks/${id}`, downloadUrl: `/api/v1/tracks/${id}/gpx` };
 }
 export function homepage(track) {
   const result = resultOf(track);
   return { id: track.publicId, title: track.title, routeType: normalizeRouteType(track.routeType),
     distanceKm: result?.metrics?.distanceKm ?? null, ascentM: result?.metrics?.ascentM ?? null,
     pointsOfInterestCount: result?.pointsOfInterestCount ?? 0, url: `/tracks/${track.publicId}`,
-    analysisUrl: result?.analysisKey ? `/api/tracks/${track.publicId}/analysis` : null };
+    analysisUrl: result?.analysisKey ? `/api/v1/tracks/${track.publicId}/analysis` : null };
 }

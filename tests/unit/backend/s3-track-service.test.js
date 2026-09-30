@@ -37,6 +37,45 @@ function fixture({ parsedName = 'Ride', enrichAnalysis = async (analysis) => ({ 
 }
 
 describe('S3 track service', () => {
+  it('includes geometry only on request and reads the same active revision as the metadata', async () => {
+    const { service, store, track } = fixture();
+    track.active = { revision: 'active', analysisKey: 'active-analysis', metrics: { distanceKm: 25 },
+      preview: { points: [[0, 0], [100, 100]] } };
+    track.diagnostic = { revision: 'diagnostic', analysisKey: 'diagnostic-analysis' };
+    const analysis = { points: [{ lat: 1, lon: 2 }], distanceKm: 25 };
+    store.readAnalysis = vi.fn(async () => ({ revision: 'active', analysis }));
+    const basic = await service.getPublicTrack(track.publicId);
+    expect(basic).not.toHaveProperty('analysis');
+    expect(basic).not.toHaveProperty('preview');
+    expect(store.readAnalysis).not.toHaveBeenCalled();
+    const expanded = await service.getPublicTrack(track.publicId, null, { includeGeometry: true });
+    expect(expanded).toMatchObject({ revision: 'active', analysis, preview: track.active.preview });
+    expect(store.readAnalysis).toHaveBeenCalledWith('active-analysis');
+  });
+
+  it('returns null geometry before analysis exists and supports diagnostic geometry', async () => {
+    const { service, store, track } = fixture();
+    store.readAnalysis = vi.fn(async () => ({ revision: 'partial', analysis: { points: [{ lat: 1, lon: 2 }] } }));
+    expect(await service.getPublicTrack(track.publicId, null, { includeGeometry: true }))
+      .toMatchObject({ analysis: null });
+    expect(store.readAnalysis).not.toHaveBeenCalled();
+    track.diagnostic = { revision: 'partial', analysisKey: 'partial-analysis' };
+    expect(await service.getPublicTrack(track.publicId, null, { includeGeometry: true }))
+      .toMatchObject({ resultKind: 'DIAGNOSTIC', analysis: { points: [{ lat: 1, lon: 2 }] } });
+    expect(store.readAnalysis).toHaveBeenCalledWith('partial-analysis');
+  });
+
+  it('does not read geometry for missing tracks or hide storage failures', async () => {
+    const { service, store, track, repository } = fixture();
+    store.readAnalysis = vi.fn().mockRejectedValue(new Error('Storage unavailable'));
+    repository.findByPublicId.mockResolvedValueOnce(null);
+    expect(await service.getPublicTrack(track.publicId, null, { includeGeometry: true })).toBeNull();
+    expect(store.readAnalysis).not.toHaveBeenCalled();
+    track.active = { revision: 'active', analysisKey: 'active-analysis' };
+    await expect(service.getPublicTrack(track.publicId, null, { includeGeometry: true }))
+      .rejects.toThrow('Storage unavailable');
+  });
+
   it('does not insert a track when source upload fails', async () => {
     const { service, store, repository } = fixture();
     store.writeSource.mockRejectedValueOnce(new Error('S3 failed'));
@@ -169,7 +208,7 @@ describe('S3 track service', () => {
     const list = await service.listMyTracks({ ownerId: 'owner' });
     expect(basic.metrics.distanceKm).toBe(25);
     expect(basic.summary.metrics.distanceKm).toBe(25);
-    expect(basic.analysisUrl).toBe(`/api/tracks/${track.publicId}/analysis`);
+    expect(basic.analysisUrl).toBe(`/api/v1/tracks/${track.publicId}/analysis`);
     expect(list.items[0].preview.points).toHaveLength(2);
     expect(store.openRead).not.toHaveBeenCalled();
     expect(store.readSource).not.toHaveBeenCalled();

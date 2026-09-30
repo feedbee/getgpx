@@ -24,7 +24,7 @@ describe('track collection', () => {
     await collection.load({ reset: true });
 
     expect(documentRef.querySelector('#track-query').value).toBe('forest');
-    expect(documentRef.querySelector('#my-tracks-message').innerHTML).toContain('/api/auth/google');
+    expect(documentRef.querySelector('#my-tracks-message').innerHTML).toContain('/auth/google');
     expect(documentRef.querySelector('#load-more-tracks').hidden).toBe(true);
     expect(trackApi.list).not.toHaveBeenCalled();
   });

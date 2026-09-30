@@ -7,7 +7,7 @@ import { renderAuthControl } from '../../../src/client/auth-ui.js';
 describe('authentication header control', () => {
   it('renders a Google login link for a guest', () => {
     expect(renderAuthControl(null)).toContain('Войти');
-    expect(renderAuthControl(null)).toContain('/api/auth/google');
+    expect(renderAuthControl(null)).toContain('/auth/google');
   });
 
   it('renders an avatar button and logout action for a user', () => {

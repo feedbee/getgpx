@@ -145,7 +145,12 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
     async publicTrack(request, response) {
       const publicId = isPublicId(request.params.id) ? request.params.id : null;
       if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
-      const track = await trackService.getPublicTrack(publicId, createRequestProfiler(request.log));
+      const include = request.query?.include;
+      if (include !== undefined && include !== 'geometry') {
+        return send(response, 400, { error: { code: 'INVALID_INCLUDE' } });
+      }
+      const track = await trackService.getPublicTrack(publicId, createRequestProfiler(request.log),
+        { includeGeometry: include === 'geometry' });
       return track
         ? send(response, 200, { data: track })
         : error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
@@ -326,7 +331,7 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
       try {
         const status = await trackService.upload({ ownerId, tier, filename, routeType, source: request,
           profile: createRequestProfiler(request.log), onStage: (stage) => { uploadStage = stage; } });
-        response.setHeader('Location', `/api/tracks/${status.id}/status`);
+        response.setHeader('Location', `/api/v1/tracks/${status.id}/status`);
         send(response, 202, { data: status });
       } catch (uploadError) {
         if (uploadError instanceof GpxFileTooLargeError) {
@@ -372,23 +377,23 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
 export function createTrackRouter(trackService, authService, options) {
   const handlers = createTrackHandlers(trackService, authService, options);
   const router = Router();
-  router.post('/api/tracks', handlers.upload);
-  router.get('/api/tracks/homepage', handlers.homepageTracks);
-  router.get('/api/tracks/mine', handlers.mine);
-  router.get('/api/tracks/saved', handlers.saved);
-  router.delete('/api/tracks/saved', express.json({ limit: '16kb' }), handlers.unsaveMany);
-  router.delete('/api/tracks', express.json({ limit: '16kb' }), handlers.removeMany);
-  router.get('/api/tracks/:id/status', handlers.status);
-  router.get('/api/tracks/:id/saved', handlers.savedState);
-  router.put('/api/tracks/:id/saved', handlers.save);
-  router.delete('/api/tracks/:id/saved', handlers.unsave);
-  router.get('/api/tracks/:id/manage', handlers.management);
-  router.patch('/api/tracks/:id', express.json({ limit: '16kb' }), handlers.update);
-  router.put('/api/tracks/:id/file', handlers.replace);
-  router.post('/api/tracks/:id/retry-analysis', handlers.retry);
-  router.delete('/api/tracks/:id', handlers.remove);
-  router.get('/api/tracks/:id/download', handlers.download);
-  router.get('/api/tracks/:id/analysis', handlers.analysis);
-  router.get('/api/tracks/:id', handlers.publicTrack);
+  router.post('/api/v1/tracks', handlers.upload);
+  router.get('/homepage', handlers.homepageTracks);
+  router.get('/api/v1/tracks/mine', handlers.mine);
+  router.get('/api/v1/tracks/saved', handlers.saved);
+  router.delete('/api/v1/tracks/saved', express.json({ limit: '16kb' }), handlers.unsaveMany);
+  router.delete('/api/v1/tracks', express.json({ limit: '16kb' }), handlers.removeMany);
+  router.get('/api/v1/tracks/:id/status', handlers.status);
+  router.get('/api/v1/tracks/:id/saved', handlers.savedState);
+  router.put('/api/v1/tracks/:id/saved', handlers.save);
+  router.delete('/api/v1/tracks/:id/saved', handlers.unsave);
+  router.get('/api/v1/tracks/:id/manage', handlers.management);
+  router.patch('/api/v1/tracks/:id', express.json({ limit: '16kb' }), handlers.update);
+  router.put('/api/v1/tracks/:id/gpx', handlers.replace);
+  router.post('/api/v1/tracks/:id/retry-analysis', handlers.retry);
+  router.delete('/api/v1/tracks/:id', handlers.remove);
+  router.get('/api/v1/tracks/:id/gpx', handlers.download);
+  router.get('/api/v1/tracks/:id/analysis', handlers.analysis);
+  router.get('/api/v1/tracks/:id', handlers.publicTrack);
   return router;
 }

@@ -69,7 +69,7 @@ The backend writes newline-delimited JSON logs to stdout with Pino, including wh
 
 At `LOG_LEVEL=debug`, the homepage tracks, public track, and GPX upload API requests also log individual server steps with `step`, `durationMs`, and the same `requestId`. These timers are inactive at higher log levels. The measurements cover server work only; browser rendering and network transfer require browser tools.
 
-An unexpected `POST /api/tracks` failure emits a separate `track_upload_failed` error
+An unexpected `POST /api/v1/tracks` failure emits a separate `track_upload_failed` error
 event with the current `stage` (`quota_check`, `source_upload`,
 `track_record_create`, or `processing_schedule`), a safe error name/code, and the
 upstream HTTP status when available. Find it by the request ID from the HTTP 500
