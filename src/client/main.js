@@ -10,6 +10,7 @@ import { neutralAnalysis, poiName, poiType, roadLabel } from './analysis-present
 import { errorMessage } from './errors-ui.js';
 import { t, bindText, bindAttribute, htmlMessage, preferences, formatMeasurement, currentUnit, percent, escapeHtml } from './i18n.js';
 import L from 'leaflet';
+import { createRouteMap } from './route-map.js';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { renderAuthControl } from './auth-ui.js';
@@ -25,18 +26,11 @@ import { detectClimbs, detectDescents } from './domain/climbs.js';
 import { calculateSegmentGrades } from './domain/gradient.js';
 import { emptyPoiSelection, updatePoiSelection } from './domain/poi-selection.js';
 import { nearestRoutePointIndex, pointIndexAtRatio, pointerRatioInPlot } from './domain/profile-math.js';
-import { colorRunsForMode, highlightRunsForFilter } from './domain/route-color.js';
-import { isClosedRoute } from './domain/route-shape.js';
 import { classifySurface, classifyWayType, surfaceEmphasis } from './domain/surface.js';
 
 const app = document.querySelector('#app');
 const trackApi = createTrackApi();
-let map;
-let routeLine;
-let activeMarker;
-let poiMarkers = [];
 let poiSelection = { ...emptyPoiSelection };
-let focusLayers = [];
 let currentTrack;
 let activePointIndex = 0;
 let viewRange = [0, 1];
@@ -75,6 +69,10 @@ const collection = createTrackCollection({ trackApi, isMyTracksPage, isFavoriteT
   onDeleteMany: (tracks) => { managedTrackId = null; openTracksDeleteConfirmation(tracks); } });
 const routeSummaryView = createRouteSummaryView({ updatePageLanguage, renderPointsOfInterest, setDetailedView,
   onFiltersRendered: refreshRouteFocus });
+const routeMap = createRouteMap({ getPoiSelection: () => poiSelection, getMapColorMode: () => mapColorMode,
+  getRouteFilter: selectedRouteFilter, getTerrainRange: selectedTerrainRange,
+  onActivePoint: setActivePoint, onPointContext: setPointContext, onPoiHover: hoverPoi,
+  onPoiLeave: leavePoi, onPoiToggle: togglePoi });
 const elevationProfile = createElevationProfile({ getTrack: () => currentTrack, getViewRange: () => viewRange,
   getSummaryMetrics: () => publicTrackData?.summary?.metrics, getColorMode: () => profileColorMode,
   getFocusPlacement: () => profileFocusPlacement, getRouteFilter: selectedRouteFilter,
@@ -260,14 +258,6 @@ document.addEventListener('click', (event) => {
   closeOverflowMenuOnOutsideClick(document.querySelector('.route-overflow'), event.target);
 });
 
-function makeEndpointIcon(label, type) {
-  return L.divIcon({ className: '', html: `<div class="endpoint endpoint-${type}">${label}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
-}
-
-function makePoiIcon(index) {
-  return L.divIcon({ className: '', html: `<div class="poi-marker"><span>${index + 1}</span></div>`, iconSize: [28, 32], iconAnchor: [14, 30] });
-}
-
 function selectedPoiIndex() {
   return poiSelection.pinnedIndex ?? poiSelection.hoveredIndex;
 }
@@ -281,12 +271,7 @@ function renderPoiSelection() {
   document.querySelectorAll('[data-profile-poi-index]').forEach((marker) => {
     marker.classList.toggle('is-active', Number(marker.dataset.profilePoiIndex) === index);
   });
-  poiMarkers.forEach((marker, markerIndex) => {
-    marker.getElement()?.querySelector('.poi-marker')?.classList.toggle('is-active', markerIndex === index);
-    marker.setZIndexOffset(markerIndex === index ? 1200 : 700);
-    if (markerIndex === index) marker.openTooltip();
-    else marker.closeTooltip();
-  });
+  routeMap.renderPoiSelection(index);
 }
 
 function applyPoiSelection(nextSelection, { restorePointIndex = null } = {}) {
@@ -358,21 +343,6 @@ function renderPointsOfInterest(pointsOfInterest = []) {
   });
 }
 
-function initMap() {
-  map = L.map('map', { zoomControl: false, attributionControl: true });
-  map.createPane('startMarkerPane');
-  map.getPane('startMarkerPane').style.zIndex = '675';
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap',
-  }).addTo(map);
-  L.control.zoom({ position: 'topright', zoomInTitle: t('map.zoomIn'), zoomOutTitle: t('map.zoomOut') }).addTo(map);
-  bindAttribute(document.querySelector('.leaflet-control-zoom-in'), 'title', () => t('map.zoomIn'));
-  bindAttribute(document.querySelector('.leaflet-control-zoom-in'), 'aria-label', () => t('map.zoomIn'));
-  bindAttribute(document.querySelector('.leaflet-control-zoom-out'), 'title', () => t('map.zoomOut'));
-  bindAttribute(document.querySelector('.leaflet-control-zoom-out'), 'aria-label', () => t('map.zoomOut'));
-}
-
 async function initHomeExampleMap() {
   const container = document.querySelector('#home-example-map');
   const previewContainer = document.querySelector('#home-preview-example-map');
@@ -419,10 +389,6 @@ async function loadHomepageTracks() {
   initHomeExampleMap();
 }
 
-function nearestPoint(latlng) {
-  return nearestRoutePointIndex(currentTrack.points, { lat: latlng.lat, lon: latlng.lng });
-}
-
 function selectedSurfaceId() {
   return pinnedSurfaceId || hoveredSurfaceId;
 }
@@ -446,76 +412,9 @@ function selectedRouteFilter() {
   return null;
 }
 
-function drawMap(track, { fit = true } = {}) {
-  if (routeLine) map.eachLayer((layer) => { if (layer.options?.trackLayer && !layer.options?.rangeFocus) map.removeLayer(layer); });
-  poiMarkers = [];
-  const coordinates = track.points.map((point) => [point.lat, point.lon]);
-  L.polyline(coordinates, { color: '#ffffff', weight: 8, opacity: 0.92, trackLayer: true, interactive: false }).addTo(map);
-  colorRunsForMode(track.points, mapColorMode).forEach((run) => {
-    L.polyline(coordinates.slice(run.startIndex, run.endIndex + 1), {
-      color: run.color,
-      weight: 5,
-      opacity: 1,
-      trackLayer: true, interactive: false,
-    }).addTo(map);
-  });
-  highlightRunsForFilter(track.points, selectedRouteFilter()).forEach((run) => {
-    const highlightedCoordinates = coordinates.slice(run.startIndex, run.endIndex + 1);
-    L.polyline(highlightedCoordinates, {
-      color: '#ffffff', weight: 11, opacity: 0.94, trackLayer: true, interactive: false,
-    }).addTo(map);
-    L.polyline(highlightedCoordinates, {
-      color: run.color, weight: 7, opacity: 1, trackLayer: true, interactive: false,
-    }).addTo(map);
-  });
-  routeLine = L.polyline(coordinates, { color: '#000000', weight: 14, opacity: 0, trackLayer: true }).addTo(map);
-  routeLine.on('mousemove', (event) => {
-    if (poiSelection.pinnedIndex === null) setActivePoint(nearestPoint(event.latlng), { showContext: true });
-  });
-  routeLine.on('mouseout', () => { if (poiSelection.pinnedIndex === null) setPointContext(null); });
-  const closedRoute = isClosedRoute(track.points);
-  L.marker(coordinates[0], {
-    icon: makeEndpointIcon('A', 'start'), trackLayer: true, pane: 'startMarkerPane', interactive: false, zIndexOffset: 1000,
-    title: closedRoute ? t('map.startFinishTitle') : t('map.startTitle'),
-  }).addTo(map);
-  if (!closedRoute) {
-    L.marker(coordinates.at(-1), {
-      icon: makeEndpointIcon('B', 'finish'), trackLayer: true, interactive: false, zIndexOffset: 900, title: t('map.finishTitle'),
-    }).addTo(map);
-  }
-  poiMarkers = (track.pointsOfInterest || []).map((point, index) => {
-    const tooltip = document.createElement('span');
-    bindText(tooltip, () => poiName(point, index));
-    const marker = L.marker([point.lat, point.lon], {
-      icon: makePoiIcon(index), trackLayer: true, zIndexOffset: 700, title: poiName(point, index),
-    }).addTo(map).bindTooltip(tooltip, { direction: 'top', offset: [0, -26] });
-    marker.on('mouseover', () => hoverPoi(index));
-    marker.on('mouseout', () => leavePoi());
-    marker.on('click', () => togglePoi(index));
-    return marker;
-  });
-  renderPoiSelection();
-  document.querySelector('#map-note').innerHTML = closedRoute
-    ? `<span class="start-dot"></span><b>${htmlMessage('map.startFinish')}</b>`
-    : `<span class="start-dot"></span><b>${htmlMessage('map.start')}</b><i class="finish-dot"></i><b>${htmlMessage('map.finish')}</b>`;
-  activeMarker = L.circleMarker(coordinates[0], { radius: 8, color: '#fff', weight: 3, fillColor: '#131712', fillOpacity: 1, trackLayer: true, interactive: false }).addTo(map);
-  const terrainRange = selectedTerrainRange();
-  if (terrainRange) {
-    L.polyline(coordinates.slice(terrainRange.startIndex, terrainRange.endIndex + 1), {
-      color: '#12251e', weight: 12, opacity: 0.8, trackLayer: true, interactive: false,
-    }).addTo(map);
-    L.polyline(coordinates.slice(terrainRange.startIndex, terrainRange.endIndex + 1), {
-      color: terrainRange.color, weight: 6, opacity: 1, trackLayer: true, interactive: false,
-    }).addTo(map);
-  }
-  focusLayers[0]?.bringToBack?.();
-  focusLayers.slice(1).forEach((layer) => layer.bringToFront?.());
-  if (fit) map.fitBounds(routeLine.getBounds(), { padding: [48, 48] });
-}
-
 function refreshRouteFocus() {
   if (!currentTrack) return;
-  drawMap(currentTrack, { fit: false });
+  routeMap.draw(currentTrack, { fit: false });
   if (currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
   setActivePoint(activePointIndex);
   const focusedSurface = selectedSurfaceId();
@@ -547,24 +446,6 @@ function refreshRouteFocus() {
   document.querySelector('.surface-section').classList.toggle('has-pinned-surface', Boolean(pinnedSurfaceId || pinnedWayTypeId || pinnedQualityId));
 }
 
-function clearRangeFocus() {
-  focusLayers.forEach((layer) => map.removeLayer(layer));
-  focusLayers = [];
-}
-
-function fitMapToRange(range) {
-  const points = currentTrack.points.slice(range[0], range[1] + 1);
-  const coordinates = points.map((point) => [point.lat, point.lon]);
-  clearRangeFocus();
-  const outline = L.polyline(coordinates, {
-    color: '#151a17', weight: 14, opacity: 0.9, dashArray: '10 8', lineCap: 'butt',
-    rangeFocus: true, interactive: false,
-  }).addTo(map).bringToBack();
-  const boundaryStyle = { radius: 7, color: '#10251d', weight: 3, fillColor: '#f0b83f', fillOpacity: 1, rangeFocus: true, interactive: false };
-  focusLayers = [outline, L.circleMarker(coordinates[0], boundaryStyle).addTo(map), L.circleMarker(coordinates.at(-1), boundaryStyle).addTo(map)];
-  map.fitBounds(outline.getBounds(), { padding: [72, 72] });
-}
-
 function setViewRange(range, { remember = true } = {}) {
   const normalized = [Math.min(...range), Math.max(...range)];
   if (normalized[1] - normalized[0] < 2) return;
@@ -574,9 +455,9 @@ function setViewRange(range, { remember = true } = {}) {
   elevationProfile.drawProfile(currentTrack);
   const isFullRange = viewRange[0] === 0 && viewRange[1] === currentTrack.points.length - 1;
   if (isFullRange) {
-    clearRangeFocus();
-    map.fitBounds(routeLine.getBounds(), { padding: [48, 48] });
-  } else fitMapToRange(viewRange);
+    routeMap.clearRangeFocus();
+    routeMap.fitFullRange();
+  } else routeMap.fitRange(currentTrack, viewRange);
   document.querySelector('#zoom-back').disabled = zoomHistory.length === 0;
   document.querySelector('#zoom-reset').disabled = isFullRange;
   setActivePoint(viewRange[0]);
@@ -597,7 +478,7 @@ function setColorMode(scope, mode) {
     document.querySelector('#quality-legend').hidden = mode !== 'quality';
   }
   if (!currentTrack) return;
-  if (scope === 'map') drawMap(currentTrack, { fit: false });
+  if (scope === 'map') routeMap.draw(currentTrack, { fit: false });
   if (scope === 'profile' && currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
   setActivePoint(activePointIndex);
 }
@@ -631,7 +512,7 @@ function setActivePoint(index, { showContext = false } = {}) {
   activePointIndex = Math.max(0, Math.min(index, currentTrack.points.length - 1));
   const point = currentTrack.points[activePointIndex];
   const chart = elevationProfile.chartCoordinates(point);
-  activeMarker?.setLatLng([point.lat, point.lon]);
+  routeMap.setActivePoint(point);
   document.querySelector('#profile-cursor').setAttribute('x1', chart.x);
   document.querySelector('#profile-cursor').setAttribute('x2', chart.x);
   document.querySelector('#profile-dot').setAttribute('cx', chart.x);
@@ -651,7 +532,7 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
   document.querySelector('.route-workspace').hidden = false;
   document.querySelector('#route-state-note').hidden = true;
   setDetailedView('ready');
-  clearRangeFocus();
+  routeMap.clearRangeFocus();
   hoveredSurfaceId = null;
   pinnedSurfaceId = null;
   hoveredWayTypeId = null;
@@ -707,7 +588,7 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
     ? t('route.recordedSpeed', { speed: formatMeasurement('speed', routeSpeed) })
     : routeSpeed ? t('route.estimatedSpeed', { speed: formatMeasurement('speed', routeSpeed) }) : t('route.noSpeed'));
   updatePageLanguage();
-  drawMap(currentTrack);
+  routeMap.draw(currentTrack);
   if (currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
   routeSummaryView.renderSourceInfo(analysisSources || { gpx: 'SUCCESS', valhalla: 'PENDING', openStreetMap: 'PENDING' });
   document.querySelector('#zoom-back').disabled = true;
@@ -732,7 +613,7 @@ function setDetailedView(state) {
   document.querySelectorAll('[data-surface-filter],[data-waytype-filter],[data-quality-filter],[data-terrain-range]')
     .forEach((control) => { control.disabled = !ready || control.dataset.summaryEmpty === 'true'; });
   document.querySelectorAll('[data-poi-index]').forEach((control) => { control.disabled = !ready; });
-  if (ready) map.invalidateSize();
+  if (ready) routeMap.invalidateSize();
 }
 
 async function loadPublicTrack(trackId, retries = 0) {
@@ -1234,7 +1115,7 @@ document.querySelector('#save-track')?.addEventListener('click', async () => {
 });
 
 if (pathPublicTrackId) {
-  initMap();
+  routeMap.init();
   setColorMode('map', mapColorMode);
   setColorMode('profile', profileColorMode);
 }
