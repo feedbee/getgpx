@@ -7,10 +7,12 @@ import { createRouteSummaryView, formatDuration } from './route-page-summary.js'
 import { createElevationProfile } from './elevation-profile.js';
 import { bindProfileInteractions } from './profile-interactions.js';
 import { createRouteFilters } from './route-filters.js';
+import { createPoiController } from './poi-controller.js';
+import { createActiveRoutePoint } from './active-route-point.js';
 import { distanceValue, elevationValue, number, createSpeedDraft } from './measurements.js';
-import { neutralAnalysis, poiName, poiType, roadLabel } from './analysis-presentation.js';
+import { neutralAnalysis } from './analysis-presentation.js';
 import { errorMessage } from './errors-ui.js';
-import { t, bindText, bindAttribute, htmlMessage, preferences, formatMeasurement, currentUnit, percent, escapeHtml } from './i18n.js';
+import { t, bindText, bindAttribute, htmlMessage, preferences, formatMeasurement, currentUnit } from './i18n.js';
 import L from 'leaflet';
 import { createRouteMap } from './route-map.js';
 import 'leaflet/dist/leaflet.css';
@@ -26,15 +28,12 @@ import { closeRouteTypeDropdownOnEscape, closeRouteTypeDropdownsOutside, routeTy
 import { availableExternalTrackLinks, renderExternalTrackLinks } from './external-track-links-ui.js';
 import { detectClimbs, detectDescents } from './domain/climbs.js';
 import { calculateSegmentGrades } from './domain/gradient.js';
-import { emptyPoiSelection, updatePoiSelection } from './domain/poi-selection.js';
 import { nearestRoutePointIndex } from './domain/profile-math.js';
-import { classifySurface, classifyWayType } from './domain/surface.js';
+import { classifySurface } from './domain/surface.js';
 
 const app = document.querySelector('#app');
 const trackApi = createTrackApi();
-let poiSelection = { ...emptyPoiSelection };
 let currentTrack;
-let activePointIndex = 0;
 let viewRange = [0, 1];
 let zoomHistory = [];
 let mapColorMode = 'gradient';
@@ -60,13 +59,18 @@ app.innerHTML = renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPa
 const collection = createTrackCollection({ trackApi, isMyTracksPage, isFavoriteTracksPage,
   getCurrentUser: () => currentUser, onEdit: openTrackEditorFromList, onDelete: openTrackDeleteConfirmation,
   onDeleteMany: (tracks) => { managedTrackId = null; openTracksDeleteConfirmation(tracks); } });
-const routeSummaryView = createRouteSummaryView({ updatePageLanguage, renderPointsOfInterest, setDetailedView,
+const activePoint = createActiveRoutePoint({ getTrack: () => currentTrack,
+  chartCoordinates: (point) => elevationProfile.chartCoordinates(point),
+  onMapPoint: (point) => routeMap.setActivePoint(point) });
+const poiController = createPoiController({ getTrack: () => currentTrack, getActivePointIndex: () => activePoint.index,
+  onActivePoint: activePoint.set, onMapSelection: (index) => routeMap.renderPoiSelection(index) });
+const routeSummaryView = createRouteSummaryView({ updatePageLanguage, renderPointsOfInterest: poiController.renderPointsOfInterest, setDetailedView,
   onFiltersRendered: refreshRouteFocus });
 const routeFilters = createRouteFilters({ getTrack: () => currentTrack, onChange: refreshRouteFocus });
-const routeMap = createRouteMap({ getPoiSelection: () => poiSelection, getMapColorMode: () => mapColorMode,
+const routeMap = createRouteMap({ getPoiSelection: () => poiController.selection, getMapColorMode: () => mapColorMode,
   getRouteFilter: routeFilters.selectedRouteFilter, getTerrainRange: routeFilters.selectedTerrainRange,
-  onActivePoint: setActivePoint, onPointContext: setPointContext, onPoiHover: hoverPoi,
-  onPoiLeave: leavePoi, onPoiToggle: togglePoi });
+  onActivePoint: activePoint.set, onPointContext: activePoint.setPointContext, onPoiHover: poiController.hover,
+  onPoiLeave: poiController.leave, onPoiToggle: poiController.toggle });
 const elevationProfile = createElevationProfile({ getTrack: () => currentTrack, getViewRange: () => viewRange,
   getSummaryMetrics: () => publicTrackData?.summary?.metrics, getColorMode: () => profileColorMode,
   getFocusPlacement: () => profileFocusPlacement, getRouteFilter: routeFilters.selectedRouteFilter,
@@ -252,91 +256,6 @@ document.addEventListener('click', (event) => {
   closeOverflowMenuOnOutsideClick(document.querySelector('.route-overflow'), event.target);
 });
 
-function selectedPoiIndex() {
-  return poiSelection.pinnedIndex ?? poiSelection.hoveredIndex;
-}
-
-function renderPoiSelection() {
-  const index = selectedPoiIndex();
-  document.querySelectorAll('[data-poi-index]').forEach((row) => {
-    row.classList.toggle('is-active', Number(row.dataset.poiIndex) === index);
-    row.setAttribute('aria-pressed', String(Number(row.dataset.poiIndex) === poiSelection.pinnedIndex));
-  });
-  document.querySelectorAll('[data-profile-poi-index]').forEach((marker) => {
-    marker.classList.toggle('is-active', Number(marker.dataset.profilePoiIndex) === index);
-  });
-  routeMap.renderPoiSelection(index);
-}
-
-function applyPoiSelection(nextSelection, { restorePointIndex = null } = {}) {
-  poiSelection = nextSelection;
-  renderPoiSelection();
-  const index = selectedPoiIndex();
-  const routePointIndex = currentTrack?.pointsOfInterest?.[index]?.routePointIndex;
-  if (Number.isInteger(routePointIndex) && routePointIndex >= 0) {
-    setActivePoint(routePointIndex, { showContext: true });
-  } else if (Number.isInteger(restorePointIndex)) {
-    setActivePoint(restorePointIndex);
-  }
-}
-
-function hoverPoi(index) {
-  applyPoiSelection(updatePoiSelection(poiSelection, {
-    type: 'hover', index, currentPointIndex: activePointIndex,
-  }));
-}
-
-function leavePoi() {
-  const restorePointIndex = poiSelection.returnPointIndex;
-  applyPoiSelection(updatePoiSelection(poiSelection, { type: 'leave' }), { restorePointIndex });
-}
-
-function togglePoi(index) {
-  const restorePointIndex = poiSelection.returnPointIndex;
-  applyPoiSelection(updatePoiSelection(poiSelection, {
-    type: 'toggle', index, currentPointIndex: activePointIndex,
-  }), { restorePointIndex });
-}
-
-function renderPointsOfInterest(pointsOfInterest = []) {
-  const section = document.querySelector('#points-of-interest');
-  const navLink = document.querySelector('#poi-nav-link');
-  const list = document.querySelector('#poi-list');
-  section.hidden = pointsOfInterest.length === 0;
-  navLink.hidden = pointsOfInterest.length === 0;
-  list.replaceChildren();
-  if (!pointsOfInterest.length) return;
-
-  bindText(document.querySelector('#poi-count'), () => t('poi.count', { count: pointsOfInterest.length }));
-  pointsOfInterest.forEach((point, index) => {
-    const row = document.createElement('button');
-    row.type = 'button';
-    row.className = 'poi-row';
-    row.dataset.poiIndex = String(index);
-    row.disabled = !currentTrack;
-    row.setAttribute('aria-pressed', 'false');
-    const number = document.createElement('b');
-    bindText(number, () => String(index + 1));
-    const copy = document.createElement('span');
-    const name = document.createElement('strong');
-    bindText(name, () => poiName(point, index));
-    copy.append(name);
-    const detail = poiType(point);
-    if (detail) {
-      const meta = document.createElement('small');
-      bindText(meta, () => poiType(point));
-      copy.append(meta);
-    }
-    if (Number.isFinite(point.distanceKm)) {
-      const distance = document.createElement('small');
-      bindText(distance, () => formatMeasurement('distance', point.distanceKm));
-      copy.append(distance);
-    }
-    row.append(number, copy);
-    list.append(row);
-  });
-}
-
 async function initHomeExampleMap() {
   const container = document.querySelector('#home-example-map');
   const previewContainer = document.querySelector('#home-preview-example-map');
@@ -387,7 +306,7 @@ function refreshRouteFocus() {
   if (!currentTrack) return;
   routeMap.draw(currentTrack, { fit: false });
   if (currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
-  setActivePoint(activePointIndex);
+  activePoint.set(activePoint.index);
   routeFilters.renderControls();
 }
 
@@ -405,7 +324,7 @@ function setViewRange(range, { remember = true } = {}) {
   } else routeMap.fitRange(currentTrack, viewRange);
   document.querySelector('#zoom-back').disabled = zoomHistory.length === 0;
   document.querySelector('#zoom-reset').disabled = isFullRange;
-  setActivePoint(viewRange[0]);
+  activePoint.set(viewRange[0]);
 }
 
 function setColorMode(scope, mode) {
@@ -425,7 +344,7 @@ function setColorMode(scope, mode) {
   if (!currentTrack) return;
   if (scope === 'map') routeMap.draw(currentTrack, { fit: false });
   if (scope === 'profile' && currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
-  setActivePoint(activePointIndex);
+  activePoint.set(activePoint.index);
 }
 
 function setProfileFocusPlacement(placement) {
@@ -438,39 +357,6 @@ function setProfileFocusPlacement(placement) {
   if (currentTrack?.hasElevation) elevationProfile.drawProfile(currentTrack);
 }
 
-function setPointContext(point) {
-  const currentIds = point ? {
-    surface: point.surface.id,
-    waytype: classifyWayType(point.surface.highway).id,
-    quality: point.surface.quality.id,
-  } : null;
-  document.querySelectorAll('[data-surface-filter],[data-waytype-filter],[data-quality-filter]').forEach((control) => {
-    const matchesPoint = currentIds && (control.dataset.surfaceFilter === currentIds.surface
-      || control.dataset.waytypeFilter === currentIds.waytype
-      || control.dataset.qualityFilter === currentIds.quality);
-    control.classList.toggle('is-current', Boolean(matchesPoint));
-  });
-}
-
-function setActivePoint(index, { showContext = false } = {}) {
-  if (!currentTrack) return;
-  activePointIndex = Math.max(0, Math.min(index, currentTrack.points.length - 1));
-  const point = currentTrack.points[activePointIndex];
-  const chart = elevationProfile.chartCoordinates(point);
-  routeMap.setActivePoint(point);
-  document.querySelector('#profile-cursor').setAttribute('x1', chart.x);
-  document.querySelector('#profile-cursor').setAttribute('x2', chart.x);
-  document.querySelector('#profile-dot').setAttribute('cx', chart.x);
-  document.querySelector('#profile-dot').setAttribute('cy', chart.y);
-  const grade = percent(point.grade);
-  const surfaceLabel = point.surface.inferred ? t('profile.inferred', { surface: t(point.surface.label) }) : t(point.surface.label);
-  document.querySelector('#hover-readout').innerHTML = `<b>${formatMeasurement('distance', point.distanceKm)} · ${formatMeasurement('elevation', point.ele)} · ${grade}</b><span>${escapeHtml(t('profile.surfaceDetail', { surface: surfaceLabel, road: roadLabel(point.surface.highway), quality: t(point.surface.quality.label) }))}</span><small>${escapeHtml(t('profile.percentRoute', { percent: percent(currentTrack.distanceKm ? point.distanceKm / currentTrack.distanceKm * 100 : 0, 0) }))}</small>`;
-  const slider = document.querySelector('#profile-wrap');
-  slider.setAttribute('aria-valuenow', currentTrack.distanceKm ? Math.round((point.distanceKm / currentTrack.distanceKm) * 100) : 0);
-  slider.setAttribute('aria-valuetext', t('profile.positionValue', { distance: formatMeasurement('distance', point.distanceKm), elevation: formatMeasurement('elevation', point.ele) }));
-  setPointContext(showContext ? point : null);
-}
-
 function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
   document.querySelector('#track-name').classList.remove('inline-loading', 'is-loading');
   document.querySelector('.route-metrics').hidden = false;
@@ -480,7 +366,7 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
   routeMap.clearRangeFocus();
   routeFilters.reset();
   currentTrack = neutralAnalysis(rawTrack);
-  poiSelection = { ...emptyPoiSelection };
+  poiController.reset();
   const grades = calculateSegmentGrades(currentTrack.points);
   currentTrack.points = currentTrack.points.map((point, index) => ({
     ...point,
@@ -531,7 +417,7 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
   routeSummaryView.renderSourceInfo(analysisSources || { gpx: 'SUCCESS', valhalla: 'PENDING', openStreetMap: 'PENDING' });
   document.querySelector('#zoom-back').disabled = true;
   document.querySelector('#zoom-reset').disabled = true;
-  setActivePoint(0);
+  activePoint.set(0);
 }
 
 function setDetailedView(state) {
@@ -593,9 +479,9 @@ async function loadPublicTrack(trackId, retries = 0) {
 }
 
 bindProfileInteractions({ getTrack: () => currentTrack, getViewRange: () => viewRange,
-  getPoiSelection: () => poiSelection, getActivePointIndex: () => activePointIndex,
-  onHoverPoi: hoverPoi, onLeavePoi: leavePoi, onTogglePoi: togglePoi,
-  onActivePoint: setActivePoint, onPointContext: setPointContext, onViewRange: setViewRange });
+  getPoiSelection: () => poiController.selection, getActivePointIndex: () => activePoint.index,
+  onHoverPoi: poiController.hover, onLeavePoi: poiController.leave, onTogglePoi: poiController.toggle,
+  onActivePoint: activePoint.set, onPointContext: activePoint.setPointContext, onViewRange: setViewRange });
 document.querySelector('#zoom-back').addEventListener('click', () => {
   const previous = zoomHistory.pop();
   if (previous) setViewRange(previous, { remember: false });
@@ -622,27 +508,6 @@ document.addEventListener('keydown', (event) => {
   setProfileSettingsOpen(false);
   profileSettingsTrigger.focus();
 });
-const poiSection = document.querySelector('.poi-section');
-poiSection.addEventListener('pointerover', (event) => {
-  const row = event.target.closest('[data-poi-index]');
-  if (row) hoverPoi(Number(row.dataset.poiIndex));
-});
-poiSection.addEventListener('pointerout', (event) => {
-  const row = event.target.closest('[data-poi-index]');
-  if (row && !row.contains(event.relatedTarget)) leavePoi();
-});
-poiSection.addEventListener('focusin', (event) => {
-  const row = event.target.closest('[data-poi-index]');
-  if (row) hoverPoi(Number(row.dataset.poiIndex));
-});
-poiSection.addEventListener('focusout', (event) => {
-  if (!event.relatedTarget?.closest?.('[data-poi-index]')) leavePoi();
-});
-poiSection.addEventListener('click', (event) => {
-  const row = event.target.closest('[data-poi-index]');
-  if (row) togglePoi(Number(row.dataset.poiIndex));
-});
-
 const topbar = document.querySelector('.topbar');
 const compactRouteHeader = document.querySelector('.compact-route-header');
 let routeHeaderFrame;
