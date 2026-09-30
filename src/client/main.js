@@ -6,6 +6,7 @@ import { createTrackCollection } from './track-collection.js';
 import { createRouteSummaryView, formatDuration } from './route-page-summary.js';
 import { createElevationProfile } from './elevation-profile.js';
 import { bindProfileInteractions } from './profile-interactions.js';
+import { createProfileViewport } from './profile-viewport.js';
 import { createRouteFilters } from './route-filters.js';
 import { createPoiController } from './poi-controller.js';
 import { createActiveRoutePoint } from './active-route-point.js';
@@ -35,8 +36,6 @@ import { classifySurface } from './domain/surface.js';
 const app = document.querySelector('#app');
 const trackApi = createTrackApi();
 let currentTrack;
-let viewRange = [0, 1];
-let zoomHistory = [];
 let mapColorMode = 'gradient';
 let profileColorMode = 'gradient';
 let profileFocusPlacement = 'ribbon';
@@ -70,6 +69,10 @@ const trackEditor = createTrackEditor({ trackApi, uploadFlow, getPublicTrackId: 
     document.querySelector('#external-track-links-nav').hidden = linksSection.hidden;
     await loadPublicTrack(publicTrackId);
   } });
+const profileViewport = createProfileViewport({ getTrack: () => currentTrack,
+  onResetMetrics: () => elevationProfile.resetMetrics(), onDrawProfile: (track) => elevationProfile.drawProfile(track),
+  onClearRangeFocus: () => routeMap.clearRangeFocus(), onFitFullRange: () => routeMap.fitFullRange(),
+  onFitRange: (track, range) => routeMap.fitRange(track, range), onActivePoint: (index) => activePoint.set(index) });
 const activePoint = createActiveRoutePoint({ getTrack: () => currentTrack,
   chartCoordinates: (point) => elevationProfile.chartCoordinates(point),
   onMapPoint: (point) => routeMap.setActivePoint(point) });
@@ -82,7 +85,7 @@ const routeMap = createRouteMap({ getPoiSelection: () => poiController.selection
   getRouteFilter: routeFilters.selectedRouteFilter, getTerrainRange: routeFilters.selectedTerrainRange,
   onActivePoint: activePoint.set, onPointContext: activePoint.setPointContext, onPoiHover: poiController.hover,
   onPoiLeave: poiController.leave, onPoiToggle: poiController.toggle });
-const elevationProfile = createElevationProfile({ getTrack: () => currentTrack, getViewRange: () => viewRange,
+const elevationProfile = createElevationProfile({ getTrack: () => currentTrack, getViewRange: () => profileViewport.range,
   getSummaryMetrics: () => publicTrackData?.summary?.metrics, getColorMode: () => profileColorMode,
   getFocusPlacement: () => profileFocusPlacement, getRouteFilter: routeFilters.selectedRouteFilter,
   getTerrainRange: routeFilters.selectedTerrainRange });
@@ -247,23 +250,6 @@ function refreshRouteFocus() {
   routeFilters.renderControls();
 }
 
-function setViewRange(range, { remember = true } = {}) {
-  const normalized = [Math.min(...range), Math.max(...range)];
-  if (normalized[1] - normalized[0] < 2) return;
-  if (remember) zoomHistory.push([...viewRange]);
-  viewRange = normalized;
-  elevationProfile.resetMetrics();
-  elevationProfile.drawProfile(currentTrack);
-  const isFullRange = viewRange[0] === 0 && viewRange[1] === currentTrack.points.length - 1;
-  if (isFullRange) {
-    routeMap.clearRangeFocus();
-    routeMap.fitFullRange();
-  } else routeMap.fitRange(currentTrack, viewRange);
-  document.querySelector('#zoom-back').disabled = zoomHistory.length === 0;
-  document.querySelector('#zoom-reset').disabled = isFullRange;
-  activePoint.set(viewRange[0]);
-}
-
 function setColorMode(scope, mode) {
   if (scope === 'map') mapColorMode = mode;
   else profileColorMode = mode;
@@ -316,9 +302,7 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
   }));
   currentTrack.climbs ??= detectClimbs(currentTrack.points);
   currentTrack.descents ??= detectDescents(currentTrack.points);
-  viewRange = [0, currentTrack.points.length - 1];
-  zoomHistory = [];
-  elevationProfile.resetMetrics();
+  profileViewport.reset(currentTrack);
   bindText(document.querySelector('#track-name'), () => currentTrack.name || t('common.unnamed'));
   bindText(document.querySelector('#compact-track-name'), () => currentTrack.name || t('common.unnamed'));
   const type = routeTypeDefinition(routeType);
@@ -352,8 +336,6 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
   routeMap.draw(currentTrack);
   if (currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
   routeSummaryView.renderSourceInfo(analysisSources || { gpx: 'SUCCESS', valhalla: 'PENDING', openStreetMap: 'PENDING' });
-  document.querySelector('#zoom-back').disabled = true;
-  document.querySelector('#zoom-reset').disabled = true;
   activePoint.set(0);
 }
 
@@ -415,18 +397,10 @@ async function loadPublicTrack(trackId, retries = 0) {
   }
 }
 
-bindProfileInteractions({ getTrack: () => currentTrack, getViewRange: () => viewRange,
+bindProfileInteractions({ getTrack: () => currentTrack, getViewRange: () => profileViewport.range,
   getPoiSelection: () => poiController.selection, getActivePointIndex: () => activePoint.index,
   onHoverPoi: poiController.hover, onLeavePoi: poiController.leave, onTogglePoi: poiController.toggle,
-  onActivePoint: activePoint.set, onPointContext: activePoint.setPointContext, onViewRange: setViewRange });
-document.querySelector('#zoom-back').addEventListener('click', () => {
-  const previous = zoomHistory.pop();
-  if (previous) setViewRange(previous, { remember: false });
-});
-document.querySelector('#zoom-reset').addEventListener('click', () => {
-  zoomHistory = [];
-  setViewRange([0, currentTrack.points.length - 1], { remember: false });
-});
+  onActivePoint: activePoint.set, onPointContext: activePoint.setPointContext, onViewRange: profileViewport.setRange });
 document.querySelectorAll('[data-color-mode]').forEach((button) => button.addEventListener('click', () => setColorMode(button.dataset.colorScope, button.dataset.colorMode)));
 document.querySelectorAll('[data-profile-focus-placement]').forEach((button) => button.addEventListener('click', () => setProfileFocusPlacement(button.dataset.profileFocusPlacement)));
 const profileSettings = document.querySelector('.profile-overlay-settings');
