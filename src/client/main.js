@@ -1,6 +1,6 @@
 import { setupPreferencesControl } from './preferences-ui.js';
 import { renderAppShell } from './app-shell.js';
-import { createTrackApi } from './track-api.js';
+import { createTrackApi, readPublicTrackMetadata } from './track-api.js';
 import { createUploadFlow } from './track-upload-flow.js';
 import { createTrackCollection } from './track-collection.js';
 import { createRouteSummaryView } from './route-page-summary.js';
@@ -301,12 +301,14 @@ async function loadPublicTrack(trackId, retries = 0) {
   publicTrackData = null;
   publicTrackOwnershipVerified = false;
   currentTrack = null;
-  const response = await trackApi.publicTrack(trackId);
-  if (!response.ok) {
-    routeSummaryView.renderUnavailableTrack({ title: t('tracks.notFound'), analysisNote: t('tracks.checkLink') });
+  const result = await readPublicTrackMetadata(trackApi, trackId);
+  if (result.kind !== 'ready') {
+    routeSummaryView.renderUnavailableTrack(result.kind === 'not-found'
+      ? { title: t('tracks.notFound'), analysisNote: t('tracks.checkLink') }
+      : { title: t('tracks.unavailable'), analysisNote: t('errors.unknown') });
     return;
   }
-  const { data } = await response.json();
+  const { data } = result;
   publicTrackData = data;
   routeSummaryView.renderBasicTrackHeader(data);
   renderExternalTrackLinks(document.querySelector('#external-track-links'), data.externalLinks);

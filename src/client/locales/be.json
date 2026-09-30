@@ -100,6 +100,7 @@
   "tracks.deleteWarning": "Трэк і зыходны GPX будуць выдаленыя без магчымасці аднаўлення.",
   "tracks.thisTrack": "Гэты трэк",
   "tracks.notFound": "Трэк не знойдзены",
+  "tracks.unavailable": "Трэк часова недаступны",
   "tracks.checkLink": "Праверце публічную спасылку.",
   "status.ready": "Гатовы",
   "status.failed": "Патрэбны паўторны аналіз",

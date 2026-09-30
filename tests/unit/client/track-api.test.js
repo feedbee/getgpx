@@ -1,7 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTrackApi } from '../../../src/client/track-api.js';
+import { createTrackApi, readPublicTrackMetadata } from '../../../src/client/track-api.js';
 
 describe('track API', () => {
+  it('reports network and invalid JSON failures as unavailable', async () => {
+    const network = await readPublicTrackMetadata({ publicTrack: () => Promise.reject(new Error('offline')) }, 'track-1');
+    const invalidJson = await readPublicTrackMetadata({ publicTrack: () => Promise.resolve({ ok: true,
+      json: () => Promise.reject(new SyntaxError('invalid JSON')) }) }, 'track-1');
+    expect(network).toEqual({ kind: 'unavailable' });
+    expect(invalidJson).toEqual({ kind: 'unavailable' });
+  });
+
+  it('distinguishes missing tracks from temporary server failures', async () => {
+    const missing = await readPublicTrackMetadata({ publicTrack: () => Promise.resolve({ ok: false, status: 404 }) }, 'track-1');
+    const failure = await readPublicTrackMetadata({ publicTrack: () => Promise.resolve({ ok: false, status: 503 }) }, 'track-1');
+    expect(missing).toEqual({ kind: 'not-found' });
+    expect(failure).toEqual({ kind: 'unavailable' });
+  });
+
+  it('returns valid public track metadata', async () => {
+    const data = { title: 'Forest ride', analysisUrl: '/analysis/track-1' };
+    const result = await readPublicTrackMetadata({ publicTrack: () => Promise.resolve({ ok: true,
+      json: () => Promise.resolve({ data }) }) }, 'track-1');
+    expect(result).toEqual({ kind: 'ready', data });
+  });
+
   it('sends GPX uploads with the filename and route type', async () => {
     const fetchImplementation = vi.fn().mockResolvedValue({ ok: true });
     const file = { name: 'Morning ride.gpx' };

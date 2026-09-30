@@ -1,5 +1,17 @@
 const jsonHeaders = { accept: 'application/json' };
 
+export async function readPublicTrackMetadata(trackApi, trackId) {
+  try {
+    const response = await trackApi.publicTrack(trackId);
+    if (!response.ok) return { kind: response.status === 404 ? 'not-found' : 'unavailable' };
+    const { data } = await response.json();
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return { kind: 'unavailable' };
+    return { kind: 'ready', data };
+  } catch {
+    return { kind: 'unavailable' };
+  }
+}
+
 export function createTrackApi(fetchImplementation = fetch) {
   const trackUrl = (id, suffix = '') => `/api/tracks/${id}${suffix}`;
   return {

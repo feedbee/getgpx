@@ -100,6 +100,7 @@
   "tracks.deleteWarning": "Trasa i oryginalny GPX zostaną trwale usunięte.",
   "tracks.thisTrack": "Ta trasa",
   "tracks.notFound": "Nie znaleziono trasy",
+  "tracks.unavailable": "Trasa jest tymczasowo niedostępna",
   "tracks.checkLink": "Sprawdź publiczny link.",
   "status.ready": "Gotowa",
   "status.failed": "Wymagana ponowna analiza",

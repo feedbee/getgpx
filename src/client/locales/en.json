@@ -100,6 +100,7 @@
   "tracks.deleteWarning": "The track and original GPX will be permanently deleted.",
   "tracks.thisTrack": "This track",
   "tracks.notFound": "Track not found",
+  "tracks.unavailable": "Track temporarily unavailable",
   "tracks.checkLink": "Check the public link.",
   "status.ready": "Ready",
   "status.failed": "Analysis needs retrying",
