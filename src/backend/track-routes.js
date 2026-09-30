@@ -145,12 +145,7 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
     async publicTrack(request, response) {
       const publicId = isPublicId(request.params.id) ? request.params.id : null;
       if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
-      const include = request.query?.include;
-      if (include !== undefined && include !== 'geometry') {
-        return send(response, 400, { error: { code: 'INVALID_INCLUDE' } });
-      }
-      const track = await trackService.getPublicTrack(publicId, createRequestProfiler(request.log),
-        { includeGeometry: include === 'geometry' });
+      const track = await trackService.getPublicTrack(publicId, createRequestProfiler(request.log));
       return track
         ? send(response, 200, { data: track })
         : error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');

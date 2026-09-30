@@ -67,12 +67,6 @@ title and calculated speed until the owner edits them.
   `summary`, including height extrema, surface/road/quality distributions, climbs,
   descents, POI metadata and route distances, current revision, analysisUrl, and
   downloadUrl. Route points and preview geometry are omitted. No S3 read is required.
-- `GET /api/v1/tracks/:id?include=geometry`: the same metadata plus `analysis`
-  containing the detailed analysis JSON and `preview`. The analysis is read from
-  S3 for the same active revision as the metadata, with diagnostic fallback when
-  no active result exists. `analysis` is null if no completed analysis exists yet.
-  Unsupported or repeated `include` values return 400 with `INVALID_INCLUDE`.
-  The site retains the two-step metadata/analysis loading flow below.
 - `GET /api/v1/tracks/:id/analysis`: current active detailed JSON, or completed partial
   diagnostic JSON when no active version exists. The client does not choose a revision.
 

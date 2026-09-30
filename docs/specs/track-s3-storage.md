@@ -389,7 +389,6 @@ Do not expose internal IDs/keys, owner secrets, or CloudFront URLs/signatures.
 | Endpoint | Behavior |
 | --- | --- |
 | GET /api/v1/tracks/:id | Basic information and compact summary directly from MongoDB |
-| GET /api/v1/tracks/:id?include=geometry | Basic information plus preview and expanded `analysis` from the same revision in S3; null analysis when none is available |
 | GET /api/v1/tracks/:id/analysis | Detailed JSON for the currently active revision, with diagnostic fallback as specified below |
 | GET /api/v1/tracks/:id/gpx | Original GPX for the current active revision, with initial-source fallback |
 | GET /api/v1/tracks/:id/status | Owner-only attempt status, active availability, canRetry/interrupted |

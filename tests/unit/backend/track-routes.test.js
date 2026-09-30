@@ -23,25 +23,16 @@ function request({ body = '<gpx />', headers = {}, params = {} } = {}) {
 }
 
 describe('track HTTP handlers', () => {
-  it('expands geometry only for the supported include parameter', async () => {
+  it('does not expand metadata when an obsolete include parameter is supplied', async () => {
     const publicId = 'publicTrackId00000001';
-    const trackService = { getPublicTrack: vi.fn().mockResolvedValue({ id: publicId, analysis: { points: [] } }) };
+    const trackService = { getPublicTrack: vi.fn().mockResolvedValue({ id: publicId }) };
     const handlers = createTrackHandlers(trackService, {});
     const source = request({ params: { id: publicId } });
     source.query = { include: 'geometry' };
     const result = response();
     await handlers.publicTrack(source, result);
-    expect(result.body.data.analysis).toEqual({ points: [] });
-    expect(trackService.getPublicTrack).toHaveBeenCalledWith(publicId, null, { includeGeometry: true });
-    trackService.getPublicTrack.mockClear();
-    for (const include of ['unknown', '', ['geometry', 'geometry'], { value: 'geometry' }]) {
-      source.query = { include };
-      const invalid = response();
-      await handlers.publicTrack(source, invalid);
-      expect(invalid.statusCode).toBe(400);
-      expect(invalid.body.error.code).toBe('INVALID_INCLUDE');
-    }
-    expect(trackService.getPublicTrack).not.toHaveBeenCalled();
+    expect(result.body).toEqual({ data: { id: publicId } });
+    expect(trackService.getPublicTrack).toHaveBeenCalledWith(publicId, null);
   });
 
   it('requires authentication for upload', async () => {
@@ -279,7 +270,7 @@ describe('track HTTP handlers', () => {
     expect(result.statusCode).toBe(200);
     expect(result.body.data.analysisLevel).toBe('BASIC');
     expect(authService.getUser).not.toHaveBeenCalled();
-    expect(trackService.getPublicTrack).toHaveBeenCalledWith(publicId, null, { includeGeometry: false });
+    expect(trackService.getPublicTrack).toHaveBeenCalledWith(publicId, null);
   });
 
   it('returns homepage tracks publicly without checking a session', async () => {

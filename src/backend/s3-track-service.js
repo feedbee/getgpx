@@ -8,7 +8,6 @@ import { PAGE_SIZE, cursorOf, decodeCursor, titleFromFilename, resultOf, statusO
 import { logger } from './logger.js';
 import { safeErrorDetails } from './safe-error-details.js';
 import { createS3TrackProcessor } from './s3-track-processor.js';
-import { profileStep } from './request-profile.js';
 
 export function createS3TrackService({ trackRepository, objectStore, enrichmentCacheRepository,
   savedTrackRepository, userRepository, analyzeSource, enrichAnalysis,
@@ -96,21 +95,13 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
         missingOsmTags: track.active?.enrichmentSource === 'VALHALLA',
         retrySource: track.active?.enrichmentSource === 'VALHALLA' ? 'openStreetMap' : 'valhalla' };
     },
-    async getPublicTrack(publicId, profile, { includeGeometry = false } = {}) {
+    async getPublicTrack(publicId) {
       const track = await findReadable(publicId);
       if (!track) return null;
       const uploader = userRepository?.findPublicProfileById
         ? await userRepository.findPublicProfileById(track.ownerId) : null;
       const data = publicTrack(track, uploader);
-      if (includeGeometry) {
-        const key = resultOf(track)?.analysisKey;
-        const detail = key
-          ? await profileStep(profile, 'track.readAnalysis', () => objectStore.readAnalysis(key))
-          : null;
-        data.analysis = detail ? { ...detail.analysis, ...data.metrics, name: data.title } : null;
-      } else {
-        delete data.preview;
-      }
+      delete data.preview;
       return data;
     },
     fileDescriptor,

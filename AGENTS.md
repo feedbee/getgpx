@@ -9,3 +9,5 @@
 - When adding, removing, or changing a supported environment variable, update the table in `docs/environment-variables.md` in the same change, including its default, requirement condition, and behavior. Keep `.env.example` aligned.
 - Read [docs/README.md](docs/README.md), especially architecture and testing conventions, before changing boundaries.
 - For every new or changed user-facing string, follow [docs/localization.md](docs/localization.md): update all registered language catalogs in the same change, localize formatting and units, and run the catalog check included in `npm run check`.
+
+- Preserve the track read boundary: `GET /api/v1/tracks/:id` returns point-free metadata from MongoDB; `GET /api/v1/tracks/:id/analysis` delivers detailed analysis with geometry from S3. The site loads these separately. Do not reintroduce `include=geometry` or embed detailed analysis in metadata responses. See [docs/tracks.md](docs/tracks.md).

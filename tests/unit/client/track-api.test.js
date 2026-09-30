@@ -2,14 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { createTrackApi, readPublicTrackMetadata } from '../../../src/client/track-api.js';
 
 describe('track API', () => {
-  it('requests geometry explicitly while keeping metadata reads lightweight', async () => {
+  it('requests metadata and detailed analysis separately', async () => {
     const fetchImplementation = vi.fn().mockResolvedValue({ ok: true });
     const api = createTrackApi(fetchImplementation);
     await api.publicTrack('track-1');
-    await api.publicTrack('track-1', { includeGeometry: true });
+    await api.analysis('/api/v1/tracks/track-1/analysis');
     await api.replace({ id: 'track-1', file: { name: 'ride.gpx' } });
     expect(fetchImplementation.mock.calls[0][0]).toBe('/api/v1/tracks/track-1');
-    expect(fetchImplementation.mock.calls[1][0]).toBe('/api/v1/tracks/track-1?include=geometry');
+    expect(fetchImplementation.mock.calls[1][0]).toBe('/api/v1/tracks/track-1/analysis');
     expect(fetchImplementation.mock.calls[2]).toEqual(['/api/v1/tracks/track-1/gpx',
       expect.objectContaining({ method: 'PUT' })]);
   });

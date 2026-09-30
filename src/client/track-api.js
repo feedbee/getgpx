@@ -18,8 +18,7 @@ export function createTrackApi(fetchImplementation = fetch) {
     management: (id) => fetchImplementation(trackUrl(id, '/manage'), { headers: jsonHeaders }),
     savedState: (id) => fetchImplementation(trackUrl(id, '/saved'), { headers: jsonHeaders }),
     status: (id) => fetchImplementation(trackUrl(id, '/status'), { headers: jsonHeaders }),
-    publicTrack: (id, { includeGeometry = false } = {}) => fetchImplementation(
-      trackUrl(id, includeGeometry ? '?include=geometry' : ''), { headers: jsonHeaders }),
+    publicTrack: (id) => fetchImplementation(trackUrl(id), { headers: jsonHeaders }),
     analysis: (url) => fetchImplementation(url, { headers: jsonHeaders }),
     homepage: () => fetchImplementation('/homepage', { headers: jsonHeaders }),
     list: ({ saved, parameters }) => fetchImplementation(`/api/v1/tracks/${saved ? 'saved' : 'mine'}?${parameters}`, { headers: jsonHeaders }),
