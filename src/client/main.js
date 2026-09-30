@@ -3,7 +3,8 @@ import { renderAppShell } from './app-shell.js';
 import { createTrackApi } from './track-api.js';
 import { createUploadFlow } from './track-upload-flow.js';
 import { createTrackCollection } from './track-collection.js';
-import { createRouteSummaryView, formatDuration } from './route-page-summary.js';
+import { createRouteSummaryView } from './route-page-summary.js';
+import { prepareRenderableTrack, renderLoadedTrackHeader, createRouteDetailView } from './route-detail-ui.js';
 import { createElevationProfile } from './elevation-profile.js';
 import { bindProfileInteractions } from './profile-interactions.js';
 import { createProfileViewport } from './profile-viewport.js';
@@ -13,9 +14,7 @@ import { createActiveRoutePoint } from './active-route-point.js';
 import { createTrackDeletion } from './track-delete-ui.js';
 import { createTrackEditor } from './track-editor-ui.js';
 import { bindUploadInteractions } from './upload-interactions.js';
-import { distanceValue, elevationValue, number } from './measurements.js';
-import { neutralAnalysis } from './analysis-presentation.js';
-import { t, bindText, bindAttribute, htmlMessage, preferences, formatMeasurement } from './i18n.js';
+import { t, bindText, bindAttribute, preferences } from './i18n.js';
 import L from 'leaflet';
 import { createRouteMap } from './route-map.js';
 import 'leaflet/dist/leaflet.css';
@@ -26,12 +25,8 @@ import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, favoriteButtonSta
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js';
 import { setButtonLoading } from './button-loading-ui.js';
-import { closeRouteTypeDropdownOnEscape, closeRouteTypeDropdownsOutside, routeTypeDefinition, routeTypeIcon, setRouteTypeDropdown } from './route-type-ui.js';
+import { closeRouteTypeDropdownOnEscape, closeRouteTypeDropdownsOutside, setRouteTypeDropdown } from './route-type-ui.js';
 import { availableExternalTrackLinks, renderExternalTrackLinks } from './external-track-links-ui.js';
-import { detectClimbs, detectDescents } from './domain/climbs.js';
-import { calculateSegmentGrades } from './domain/gradient.js';
-import { nearestRoutePointIndex } from './domain/profile-math.js';
-import { classifySurface } from './domain/surface.js';
 
 const app = document.querySelector('#app');
 const trackApi = createTrackApi();
@@ -78,7 +73,10 @@ const activePoint = createActiveRoutePoint({ getTrack: () => currentTrack,
   onMapPoint: (point) => routeMap.setActivePoint(point) });
 const poiController = createPoiController({ getTrack: () => currentTrack, getActivePointIndex: () => activePoint.index,
   onActivePoint: activePoint.set, onMapSelection: (index) => routeMap.renderPoiSelection(index) });
-const routeSummaryView = createRouteSummaryView({ updatePageLanguage, renderPointsOfInterest: poiController.renderPointsOfInterest, setDetailedView,
+const routeDetailView = createRouteDetailView({ getProfileColorMode: () => profileColorMode,
+  onReady: () => routeMap.invalidateSize() });
+const routeSummaryView = createRouteSummaryView({ updatePageLanguage, renderPointsOfInterest: poiController.renderPointsOfInterest,
+  setDetailedView: routeDetailView.setDetailedView,
   onFiltersRendered: refreshRouteFocus });
 const routeFilters = createRouteFilters({ getTrack: () => currentTrack, onChange: refreshRouteFocus });
 const routeMap = createRouteMap({ getPoiSelection: () => poiController.selection, getMapColorMode: () => mapColorMode,
@@ -285,78 +283,17 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
   document.querySelector('.route-metrics').hidden = false;
   document.querySelector('.route-workspace').hidden = false;
   document.querySelector('#route-state-note').hidden = true;
-  setDetailedView('ready');
+  routeDetailView.setDetailedView('ready');
   routeMap.clearRangeFocus();
   routeFilters.reset();
-  currentTrack = neutralAnalysis(rawTrack);
   poiController.reset();
-  const grades = calculateSegmentGrades(currentTrack.points);
-  currentTrack.points = currentTrack.points.map((point, index) => ({
-    ...point,
-    grade: Number.isFinite(point.grade) ? point.grade : grades[index],
-    surface: point.surface || classifySurface(point.surfaceTags),
-  }));
-  currentTrack.pointsOfInterest = (currentTrack.pointsOfInterest || []).map((point) => ({
-    ...point,
-    routePointIndex: nearestRoutePointIndex(currentTrack.points, point),
-  }));
-  currentTrack.climbs ??= detectClimbs(currentTrack.points);
-  currentTrack.descents ??= detectDescents(currentTrack.points);
+  currentTrack = prepareRenderableTrack(rawTrack);
   profileViewport.reset(currentTrack);
-  bindText(document.querySelector('#track-name'), () => currentTrack.name || t('common.unnamed'));
-  bindText(document.querySelector('#compact-track-name'), () => currentTrack.name || t('common.unnamed'));
-  const type = routeTypeDefinition(routeType);
-  const typeMetric = document.querySelector('#route-type-metric');
-  typeMetric.innerHTML = `${routeTypeIcon(type.id)}<b>${htmlMessage(`activity.${type.id}`)}</b>`;
-  bindAttribute(typeMetric, 'aria-label', () => t('route.typeValue', { type: routeTypeDefinition(type.id).label }));
-  const compactTypeMetric = document.querySelector('#compact-route-type-metric');
-  compactTypeMetric.innerHTML = `${routeTypeIcon(type.id)}<b>${htmlMessage(`activity.${type.id}`)}</b>`;
-  bindAttribute(compactTypeMetric, 'aria-label', () => t('route.typeValue', { type: routeTypeDefinition(type.id).label }));
-  bindText(document.querySelector('#distance'), () => number(distanceValue(currentTrack.distanceKm, preferences.value), preferences.value));
-  bindText(document.querySelector('#compact-distance'), () => number(distanceValue(currentTrack.distanceKm, preferences.value), preferences.value));
-  bindText(document.querySelector('#ascent'), () => currentTrack.hasElevation ? number(elevationValue(currentTrack.ascentM, preferences.value), { ...preferences.value, digits: 0 }) : '—');
-  bindText(document.querySelector('#compact-ascent'), () => currentTrack.hasElevation ? number(elevationValue(currentTrack.ascentM, preferences.value), { ...preferences.value, digits: 0 }) : '—');
-  bindText(document.querySelector('#descent'), () => currentTrack.hasElevation ? number(elevationValue(currentTrack.descentM, preferences.value), { ...preferences.value, digits: 0 }) : '—');
-  bindText(document.querySelector('#compact-descent'), () => currentTrack.hasElevation ? number(elevationValue(currentTrack.descentM, preferences.value), { ...preferences.value, digits: 0 }) : '—');
-  const [duration] = formatDuration(currentTrack.estimatedDurationMs || currentTrack.movingTimeMs);
-  bindText(document.querySelector('#duration'), () => duration);
-  bindText(document.querySelector('#duration-unit'), () => t('common.hour'));
-  bindText(document.querySelector('#compact-duration'), () => duration);
-  bindText(document.querySelector('#compact-duration-unit'), () => t('common.hour'));
-  bindText(document.querySelector('#profile-ascent'), () => number(elevationValue(currentTrack.ascentM, preferences.value), { ...preferences.value, digits: 0 }));
-  bindText(document.querySelector('#profile-descent'), () => number(elevationValue(currentTrack.descentM, preferences.value), { ...preferences.value, digits: 0 }));
-  const speedBadge = document.querySelector('#average-speed-badge');
-  const routeSpeed = currentTrack.effectiveSpeedKmh || currentTrack.movingAverageSpeedKmh;
-  bindText(speedBadge, () => formatMeasurement('speed', routeSpeed));
-  bindText(document.querySelector('#compact-speed'), () => formatMeasurement('speed', routeSpeed));
-  bindAttribute(speedBadge, 'title', () => currentTrack.movingAverageSpeedKmh
-    ? t('route.recordedSpeed', { speed: formatMeasurement('speed', routeSpeed) })
-    : routeSpeed ? t('route.estimatedSpeed', { speed: formatMeasurement('speed', routeSpeed) }) : t('route.noSpeed'));
-  updatePageLanguage();
+  renderLoadedTrackHeader(currentTrack, routeType, updatePageLanguage);
   routeMap.draw(currentTrack);
   if (currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
   routeSummaryView.renderSourceInfo(analysisSources || { gpx: 'SUCCESS', valhalla: 'PENDING', openStreetMap: 'PENDING' });
   activePoint.set(0);
-}
-
-function setDetailedView(state) {
-  const ready = state === 'ready';
-  for (const selector of ['#map', '.map-mode', '#map-note', '#hover-readout', '.profile-toolbar', '#profile-wrap']) {
-    document.querySelector(selector).hidden = !ready;
-  }
-  for (const legend of document.querySelectorAll('.profile-card .route-legend')) {
-    legend.hidden = !ready || legend.id !== `${profileColorMode}-legend`;
-  }
-  for (const selector of ['#map-load-state', '#profile-load-state']) {
-    const element = document.querySelector(selector);
-    element.hidden = ready;
-    element.classList.toggle('is-processing', state === 'loading');
-    if (!ready) bindText(element, () => t(state === 'loading' ? 'common.loadingRoute' : 'errors.fileUnavailable'));
-  }
-  document.querySelectorAll('[data-surface-filter],[data-waytype-filter],[data-quality-filter],[data-terrain-range]')
-    .forEach((control) => { control.disabled = !ready || control.dataset.summaryEmpty === 'true'; });
-  document.querySelectorAll('[data-poi-index]').forEach((control) => { control.disabled = !ready; });
-  if (ready) routeMap.invalidateSize();
 }
 
 async function loadPublicTrack(trackId, retries = 0) {
