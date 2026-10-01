@@ -1,6 +1,5 @@
 import express from 'express';
 import { describe, expect, it, vi } from 'vitest';
-import { createTrackInternalRouter } from '../../../../src/backend/track-internal-router.js';
 import { createApiRouter } from '../../../../src/backend/api/router.js';
 import { request } from './http.js';
 
@@ -58,14 +57,68 @@ describe('versioned API boundary', () => {
   it('applies the same origin policy before an Nginx signing handoff', async () => {
     const fileDescriptor = vi.fn();
     const sign = vi.fn();
-    const server = express();
-    server.use(createTrackInternalRouter({ fileDescriptor }, { getUser: async () => null },
-      { delivery: 'nginx' }, { origin: 'https://getgpx.test', sign }));
-    const result = await request(server, { url: '/internal/track-files/example/download',
+    const server = app({ fileDescriptor }, { getUser: async () => null },
+      { delivery: 'nginx', fileDelivery: { redirectFor: sign } });
+    const result = await request(server, { url: '/api/v1/tracks/example/gpx',
       headers: { origin: 'https://evil.test' } });
     expect(result.status).toBe(403);
     expect(fileDescriptor).not.toHaveBeenCalled();
     expect(sign).not.toHaveBeenCalled();
+  });
+
+  it.each(['GET', 'HEAD'])('uses the public API for nginx %s handoff without opening S3', async (method) => {
+    const fileDescriptor = vi.fn(async () => ({ key: 'prod/tracks/object/revision/source.gpx', filename: 'Заезд.gpx' }));
+    const getPublicGpx = vi.fn();
+    const redirectFor = vi.fn(() => '/_track_files/tracks/object/revision/source.gpx?Expires=1&Signature=test&Key-Pair-Id=K1');
+    const server = app({ fileDescriptor, getPublicGpx }, {}, { delivery: 'nginx', fileDelivery: { redirectFor },
+      sessionMiddleware: (req, _res, next) => { req.authenticatedUser = null; next(); } });
+    const result = await request(server, { method, url: '/api/v1/tracks/example/gpx' });
+    expect(result.status).toBe(200);
+    expect(result.headers['x-accel-redirect']).toContain('/_track_files/');
+    expect(result.headers['content-disposition']).toContain("filename*=UTF-8''");
+    expect(result.headers['cache-control']).toBe('private, no-store');
+    expect(result.text).toBe('');
+    expect(getPublicGpx).not.toHaveBeenCalled();
+    expect(fileDescriptor).toHaveBeenCalledWith('example', 'gpx', null);
+  });
+
+  it.each([[null, 404, 'TRACK_NOT_FOUND'], [{ key: null }, 409, 'TRACK_ANALYSIS_NOT_READY']])('returns nginx file errors as API JSON', async (descriptor, status, code) => {
+    const redirectFor = vi.fn();
+    const server = app({ fileDescriptor: async () => descriptor }, { getUser: async () => null },
+      { delivery: 'nginx', fileDelivery: { redirectFor } });
+    const result = await request(server, { url: '/api/v1/tracks/example/analysis' });
+    expect(result.status).toBe(status);
+    expect(result.json().error.code).toBe(code);
+    expect(result.headers).not.toHaveProperty('x-accel-redirect');
+    expect(redirectFor).not.toHaveBeenCalled();
+  });
+
+  it.each(['descriptor', 'sign'])('logs nginx %s failures and keeps details out of the response', async (stage) => {
+    const log = { error: vi.fn() };
+    const failure = Object.assign(new Error('private signature'), { code: 'FAILED' });
+    const server = app({ fileDescriptor: async () => {
+      if (stage === 'descriptor') throw failure;
+      return { key: 'key' };
+    } }, { getUser: async () => null }, { delivery: 'nginx',
+      fileDelivery: { redirectFor: () => { throw failure; } },
+      sessionMiddleware: (req, _res, next) => { req.log = log; next(); } });
+    const result = await request(server, { url: '/api/v1/tracks/example/analysis' });
+    expect(result.status).toBe(502);
+    expect(result.json().error.code).toBe('TRACK_FILE_UNAVAILABLE');
+    expect(result.text).not.toContain('private signature');
+    expect(result.headers).not.toHaveProperty('x-accel-redirect');
+    expect(log.error).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'track_file_delivery_failed', kind: 'analysis', publicId: 'example', stage, errorCode: 'FAILED',
+    }), 'Track file delivery failed');
+  });
+
+  it('keeps PUT GPX in Node and removes the old signing endpoint', async () => {
+    const redirectFor = vi.fn();
+    const server = app({}, { getUser: async () => null }, { delivery: 'nginx', fileDelivery: { redirectFor } });
+    expect((await request(server, { method: 'PUT', url: '/api/v1/tracks/example/gpx' })).status).toBe(401);
+    expect((await request(server, { method: 'POST', url: '/api/v1/tracks/example/gpx' })).status).toBe(405);
+    expect((await request(server, { url: '/internal/track-files/example/gpx' })).status).toBe(404);
+    expect(redirectFor).not.toHaveBeenCalled();
   });
 
   it('allows same-origin and direct calls, preserving guest restrictions', async () => {

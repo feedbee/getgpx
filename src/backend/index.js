@@ -10,7 +10,7 @@ import { createApiRouter } from './api/router.js';
 import { createHomepageRouter } from './site/homepage-routes.js';
 import { createS3TrackService } from './s3-track-service.js';
 import { loadTrackStorageConfig } from './track-storage-config.js';
-import { createTrackInternalRouter } from './track-internal-router.js';
+import { createTrackFileDelivery } from './track-file-delivery.js';
 import { logger } from './logger.js';
 import { createHomepageTrackCache } from './homepage-track-cache.js';
 import { safeErrorDetails } from './safe-error-details.js';
@@ -47,15 +47,13 @@ async function start() {
   if (homepageCache) await homepageCache.start();
   const apiRouter = createApiRouter(trackService, authentication.service, {
     delivery: trackConfig.delivery,
+    fileDelivery: trackConfig.delivery === 'nginx' ? createTrackFileDelivery(trackConfig) : null,
     origin: process.env.GOOGLE_REDIRECT_URI,
     sessionMiddleware: authentication.sessionMiddleware,
   });
   const homepageRouter = createHomepageRouter(homepageCache
     ? { getHomepageTracks: homepageCache.getHomepageTracks } : trackService);
-  const internalTrackRouter = trackConfig.delivery === 'nginx'
-    ? createTrackInternalRouter(trackService, authentication.service, trackConfig, { origin: process.env.GOOGLE_REDIRECT_URI })
-    : null;
-  const server = createApp({ database, authRouter: authentication.middleware, apiRouter, homepageRouter, internalTrackRouter }).listen(port, host, () => {
+  const server = createApp({ database, authRouter: authentication.middleware, apiRouter, homepageRouter }).listen(port, host, () => {
     logger.info({ host, port }, 'Server listening');
   });
 

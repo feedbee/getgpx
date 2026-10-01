@@ -24,6 +24,29 @@ function request({ body = '<gpx />', headers = {}, params = {} } = {}) {
 }
 
 describe('track HTTP handlers', () => {
+  it.each(['analysis', 'gpx'])('hands public %s delivery to nginx after selecting the object', async (kind) => {
+    const publicId = 'w43WIsUese7VXUMlFLNH_';
+    const descriptor = { key: 'prod/tracks/object/revision/' + (kind === 'gpx' ? 'source.gpx' : 'analysis.json'), filename: 'ride.gpx' };
+    const fileDescriptor = vi.fn(async () => descriptor);
+    const redirectFor = vi.fn(() => '/_track_files/tracks/object/revision/file?Signature=test');
+    const source = request({ params: { id: publicId } });
+    source.authenticatedUser = { id: 'owner' };
+    const result = response();
+    result.end = vi.fn();
+    const handlers = createTrackHandlers({ fileDescriptor }, {}, { delivery: 'nginx', fileDelivery: { redirectFor } });
+
+    await handlers[kind](source, result);
+
+    expect(fileDescriptor).toHaveBeenCalledWith(publicId, kind, source.authenticatedUser);
+    expect(redirectFor).toHaveBeenCalledWith(descriptor, kind);
+    expect(result.statusCode).toBe(200);
+    expect(result.headers['x-accel-redirect']).toContain('/_track_files/');
+    expect(result.headers['cache-control']).toBe('private, no-store');
+    expect(result.headers['content-type']).toBe(kind === 'gpx' ? 'application/gpx+xml' : 'application/json');
+    expect(result.body).toBeUndefined();
+    expect(result.end).toHaveBeenCalled();
+  });
+
   it('does not expand metadata when an obsolete include parameter is supplied', async () => {
     const publicId = 'publicTrackId00000001';
     const trackService = { getPublicTrack: vi.fn().mockResolvedValue({ id: publicId }) };
@@ -301,11 +324,11 @@ describe('track HTTP handlers', () => {
     const trackId = new ObjectId();
     const stream = { on: vi.fn(), pipe: vi.fn() };
     const handlers = createTrackHandlers({
-      getPublicDownload: vi.fn().mockResolvedValue({ filename: 'Заезд.gpx', stream }),
+      getPublicGpx: vi.fn().mockResolvedValue({ filename: 'Заезд.gpx', stream }),
     }, { getUser: vi.fn() });
     const result = response();
 
-    await handlers.download(request({ params: { id: trackId.toString() } }), result);
+    await handlers.gpx(request({ params: { id: trackId.toString() } }), result);
 
     expect(result.headers['content-type']).toBe('application/gpx+xml');
     expect(result.headers['content-disposition']).toContain("filename*=UTF-8''%D0%97%D0%B0%D0%B5%D0%B7%D0%B4.gpx");

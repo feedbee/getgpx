@@ -24,6 +24,9 @@ at `/api/v1/openapi.json`. The website and external clients use the same API.
 `metrics`, `distributions`, `climbs`, `descents`, `pointsOfInterest`, `sources`,
 `completeness`, `revision`, `processing`, public `author`, and file URLs. `downloadURL` maps available formats to URLs, currently
 `{ gpx: "/api/v1/tracks/{id}/gpx" }`; unavailable formats are omitted.
+The GPX GET operation has OpenAPI operation ID `downloadGpx`; this names the
+operation for generated clients and does not change its URL. Future file formats
+can add keys to `downloadURL` without changing its object structure.
 Each data group has one representation. Author information contains display name
 and avatar, without account identifiers or email.
 

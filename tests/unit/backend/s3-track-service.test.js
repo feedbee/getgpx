@@ -189,7 +189,7 @@ describe('S3 track service', () => {
     });
     await service.replaceFile({ publicId: track.publicId, ownerId: 'owner', filename: 'new.gpx', source: Readable.from('GPX') });
     expect((await service.getPublicTrack(track.publicId)).metrics.distanceKm).toBe(10);
-    expect((await service.fileDescriptor(track.publicId, 'download')).key).toBe('old-source');
+    expect((await service.fileDescriptor(track.publicId, 'gpx')).key).toBe('old-source');
     expect(store.readSource).not.toHaveBeenCalled();
   });
 

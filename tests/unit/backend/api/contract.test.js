@@ -69,12 +69,13 @@ describe('API v1 contract', () => {
   });
 
   it('documents every actual route and only anonymous reads omit security', () => {
-    const actual = trackRoutes.map(([method, path, operationId]) => `${method} ${path.replace(':id', '{id}')} ${operationId}`).sort();
-    const declared = Object.entries(contract.paths).flatMap(([path, item]) => Object.entries(item).map(([method, op]) => `${method} ${path} ${op.operationId}`)).sort();
+    const actual = trackRoutes.map(([method, path]) => `${method} ${path.replace(':id', '{id}')}`).sort();
+    const declared = Object.entries(contract.paths).flatMap(([path, item]) => Object.entries(item).map(([method]) => `${method} ${path}`)).sort();
     expect(actual).toEqual(declared);
-    for (const [method, , operationId] of trackRoutes) {
-      const op = Object.values(contract.paths).flatMap(Object.values).find((op) => op.operationId === operationId);
-      expect(op.security).toEqual(['publicTrack', 'analysis', 'download'].includes(operationId) && method === 'get' ? [] : [{ sessionCookie: [] }]);
+    for (const [method, path, handler] of trackRoutes) {
+      const op = contract.paths[path.replace(':id', '{id}')][method];
+      expect(op.operationId).toBe(handler === 'gpx' ? 'downloadGpx' : handler);
+      expect(op.security).toEqual(['publicTrack', 'analysis', 'gpx'].includes(handler) && method === 'get' ? [] : [{ sessionCookie: [] }]);
     }
   });
 

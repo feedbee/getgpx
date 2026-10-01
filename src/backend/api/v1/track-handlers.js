@@ -43,8 +43,33 @@ function contentDisposition(filename) {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
-export function createTrackHandlers(trackService, authService, { delivery = 'stream' } = {}) {
+export function createTrackHandlers(trackService, authService, { delivery = 'stream', fileDelivery } = {}) {
   if (!trackService || !authService) throw new Error('Track and authentication services are required.');
+
+  async function nginxFile(request, response, publicId, kind) {
+    let stage = 'descriptor';
+    try {
+      const user = request.authenticatedUser === undefined
+        ? await authService.getUser(sessionTokenFromRequest(request)) : request.authenticatedUser;
+      const descriptor = await trackService.fileDescriptor(publicId, kind, user);
+      if (!descriptor) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
+      if (!descriptor.key) return error(response, 409, 'TRACK_ANALYSIS_NOT_READY',
+        kind === 'gpx' ? 'Файл ещё не готов.' : 'Анализ ещё не готов.');
+      stage = 'sign';
+      const redirect = fileDelivery.redirectFor(descriptor, kind);
+      const disposition = kind === 'gpx' ? contentDisposition(descriptor.filename) : null;
+      response.setHeader('Content-Type', kind === 'gpx' ? 'application/gpx+xml' : 'application/json');
+      if (disposition) response.setHeader('Content-Disposition', disposition);
+      response.setHeader('X-Accel-Redirect', redirect);
+      response.setHeader('Cache-Control', 'private, no-store');
+      return response.status(200).end();
+    } catch (deliveryError) {
+      request.log?.error({ event: 'track_file_delivery_failed', publicId, kind, stage,
+        ...safeErrorDetails(deliveryError) }, 'Track file delivery failed');
+      return error(response, 502, 'TRACK_FILE_UNAVAILABLE',
+        kind === 'gpx' ? 'Файл временно недоступен.' : 'Анализ временно недоступен.');
+    }
+  }
 
   async function authenticatedOwner(request, response) {
     const user = request.authenticatedUser === undefined
@@ -233,12 +258,12 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
       return send(response, 200, { data: { ids: deletedIds.map(String) } });
     },
 
-    async download(request, response) {
+    async gpx(request, response) {
       const publicId = isPublicId(request.params.id) ? request.params.id : null;
       if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
-      if (delivery === 'nginx') return error(response, 503, 'TRACK_DELIVERY_UNAVAILABLE', 'Файл временно недоступен.');
+      if (delivery === 'nginx') return nginxFile(request, response, publicId, 'gpx');
       if (request.method === 'HEAD' && trackService.fileDescriptor) {
-        const descriptor = await trackService.fileDescriptor(publicId, 'download');
+        const descriptor = await trackService.fileDescriptor(publicId, 'gpx');
         if (!descriptor) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
         if (!descriptor.key) return error(response, 409, 'TRACK_ANALYSIS_NOT_READY', 'Файл ещё не готов.');
         response.setHeader('Content-Type', 'application/gpx+xml');
@@ -246,31 +271,31 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
         response.setHeader('Cache-Control', 'private, no-store');
         return response.status(200).end();
       }
-      let download;
-      try { download = await trackService.getPublicDownload(publicId); }
+      let gpx;
+      try { gpx = await trackService.getPublicGpx(publicId); }
       catch (readError) {
-        request.log?.error({ event: 'track_file_delivery_failed', kind: 'download', stage: 'open',
-          ...safeErrorDetails(readError) }, 'Track download failed');
+        request.log?.error({ event: 'track_file_delivery_failed', kind: 'gpx', stage: 'open',
+          ...safeErrorDetails(readError) }, 'Track GPX delivery failed');
         return error(response, 502, 'TRACK_FILE_UNAVAILABLE', 'Файл временно недоступен.');
       }
-      if (!download) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
-      if (download.unavailable) return error(response, 409, 'TRACK_ANALYSIS_NOT_READY', 'Файл ещё не готов.');
+      if (!gpx) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
+      if (gpx.unavailable) return error(response, 409, 'TRACK_ANALYSIS_NOT_READY', 'Файл ещё не готов.');
       response.setHeader('Content-Type', 'application/gpx+xml');
-      response.setHeader('Content-Disposition', contentDisposition(download.filename));
+      response.setHeader('Content-Disposition', contentDisposition(gpx.filename));
       response.setHeader('Cache-Control', 'private, no-store');
-      response.on?.('close', () => { if (!response.writableEnded) download.stream.destroy?.(); });
-      download.stream.on('error', (streamError) => {
-        request.log?.error({ event: 'track_file_delivery_failed', kind: 'download', stage: 'stream',
-          ...safeErrorDetails(streamError) }, 'Track download failed');
+      response.on?.('close', () => { if (!response.writableEnded) gpx.stream.destroy?.(); });
+      gpx.stream.on('error', (streamError) => {
+        request.log?.error({ event: 'track_file_delivery_failed', kind: 'gpx', stage: 'stream',
+          ...safeErrorDetails(streamError) }, 'Track GPX delivery failed');
         response.destroy?.();
       });
-      download.stream.pipe(response);
+      gpx.stream.pipe(response);
     },
 
     async analysis(request, response) {
       const publicId = isPublicId(request.params.id) ? request.params.id : null;
       if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
-      if (delivery === 'nginx') return error(response, 503, 'TRACK_DELIVERY_UNAVAILABLE', 'Анализ временно недоступен.');
+      if (delivery === 'nginx') return nginxFile(request, response, publicId, 'analysis');
       if (request.method === 'HEAD' && trackService.fileDescriptor) {
         const descriptor = await trackService.fileDescriptor(publicId, 'analysis');
         if (!descriptor) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');

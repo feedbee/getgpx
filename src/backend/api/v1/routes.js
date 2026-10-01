@@ -13,7 +13,7 @@ export const trackRoutes = Object.freeze([
   ['put', '/tracks/:id/gpx', 'replace'],
   ['post', '/tracks/:id/retry-analysis', 'retry'],
   ['delete', '/tracks/:id', 'remove'],
-  ['get', '/tracks/:id/gpx', 'download'],
+  ['get', '/tracks/:id/gpx', 'gpx'],
   ['get', '/tracks/:id/analysis', 'analysis'],
   ['get', '/tracks/:id', 'publicTrack'],
 ]);

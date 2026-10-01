@@ -12,7 +12,8 @@ Living documents describe the current system:
 8. [ADR-001: MongoDB](decisions/001-mongodb.md) — persistence decision and consequences.
 9. [ADR-002: S3 track objects](decisions/002-track-objects-in-s3.md) — immutable track source/analysis storage.
 10. [Google authentication](authentication.md) — current sign-in contract and security boundaries.
-11. [Saved tracks](tracks.md) — current UX, persistence, and API.
+11. [Nginx X-Accel-Redirect handoff](nginx-x-accel-handoff.md) — self-contained infrastructure task and deployment checks.
+12. [Saved tracks](tracks.md) — current UX, persistence, and API.
 
 Public API:
 

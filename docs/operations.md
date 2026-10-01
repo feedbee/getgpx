@@ -16,16 +16,14 @@ version control. `.env.example` lists the complete application configuration.
 
 Production must set `TRACK_S3_PREFIX=prod` explicitly. In nginx delivery mode,
 also supply `TRACK_CLOUDFRONT_DOMAIN`, `TRACK_CLOUDFRONT_PUBLIC_KEY_ID`, and
-`TRACK_CLOUDFRONT_PRIVATE_KEY_PATH`. The application serves
-`/internal/track-files/:id/:kind` on its normal HTTP listener in nginx mode.
-Nginx must deny direct browser requests to this path while allowing its own
-internal subrequests. Nginx, CloudFront, bucket policy, and IAM setup
-are maintained in the separate infrastructure deployment. Public file locations must
-use `/api/v1/tracks/:id/gpx` and `/api/v1/tracks/:id/analysis`. Forward the original
-`Origin`, `Sec-Fetch-Site`, and `Sec-Fetch-Mode` headers to the signing subrequest:
-the internal router applies the same browser-origin policy as the API. Do not add
-CORS grants or cache signed responses. Deploy these proxy changes together with
-API v1; this repository cannot update the external Nginx configuration.
+`TRACK_CLOUDFRONT_PRIVATE_KEY_PATH`. Public GET/HEAD file requests now reach Node through the regular API proxy. Node
+returns errors directly or uses X-Accel-Redirect to hand a ready object to Nginx's
+internal-only /_track_files/ location. The old /internal/track-files endpoint and
+auth_request protocol are removed. Forward the original Host, Cookie, Origin,
+Sec-Fetch-Site and Sec-Fetch-Mode on normal API requests; do not forward identity
+headers to CloudFront. Deploy the application and proxy protocol changes together.
+See [the self-contained infrastructure task](nginx-x-accel-handoff.md) for the exact
+handoff, header, error, logging, rollout and verification requirements.
 
 Set `HOMEPAGE_TRACK_CACHE_ENABLED=true` to cache the homepage tracks response in each
 server process. It is disabled by default. The process attempts an initial load,
@@ -83,8 +81,9 @@ may contain user or credential data. The public API retains its generic
 `UPLOAD_FAILED` response.
 
 Replacement failures use `track_replacement_failed` with the same stage fields.
-File delivery failures use `track_file_delivery_failed` (`kind` and `stage=open|stream`)
-or `track_file_handoff_failed` (`stage=descriptor|sign`) in nginx mode. Background
-worker, heartbeat, diagnostic-write, and cleanup failures have separate event names
-and track/revision identifiers where available. These events include only validated
-error names/codes and upstream HTTP status, never raw provider messages or stacks.
+File delivery failures use `track_file_delivery_failed` with `kind=gpx|analysis`
+and `stage=descriptor|sign` for Nginx handoffs or `stage=open|stream` for Node streams.
+Handoff errors include `publicId`, safe error names/codes and upstream status when
+available. They never log signed URLs, raw provider messages or stacks.
+Background worker, heartbeat, diagnostic-write and cleanup failures have separate
+event names and track/revision identifiers where available.

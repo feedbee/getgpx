@@ -300,7 +300,7 @@ describeWithMongo('MongoDB S3 track contract', () => {
       const failed = await service.getPublicTrack(publicId);
       expect(failed.processing).toMatchObject({ status: 'FAILED', canRetry: true });
       expect(failed.revision).toBe(initial.revision);
-      expect((await service.fileDescriptor(publicId, 'download')).key).toBe(storedInitial.result.sourceKey);
+      expect((await service.fileDescriptor(publicId, 'gpx')).key).toBe(storedInitial.result.sourceKey);
       failEnrichment = false;
       await service.retryAnalysis({ publicId, ownerId });
       await jobs.shift()();

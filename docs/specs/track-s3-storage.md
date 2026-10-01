@@ -372,52 +372,32 @@ service/router; no Nginx or CloudFront configuration is required in this mode.
 
 ### nginx mode: application contract
 
-Node performs authorization, selects the current object, and generates a CloudFront
-signed URL with a 60-second expiry. The file body never passes through Node during
-HTTP delivery. Storage access for processing/retry is unaffected by delivery mode.
+All public requests reach the same Node API as stream mode. Node applies the API
+origin policy, resolves identity, authorizes the current file descriptor, and returns
+JSON errors directly. For a ready GPX or analysis object it signs the CloudFront
+viewer URL for 60 seconds and returns HTTP 200 with no body and
+`X-Accel-Redirect: /_track_files/tracks/<object-id>/<revision>/<filename>?<signed-query>`.
+The regular Content-Type, Content-Disposition (GPX only), and
+Cache-Control: private, no-store headers describe the eventual file response.
+The adapter validates the configured S3 prefix, object path, file kind and signed
+URL before emitting the local URI. CloudFront's origin path supplies the S3 prefix.
+The internal service kinds are `gpx` and `analysis`.
 
-Provide an internal-only application endpoint:
-`GET /internal/track-files/:id/:kind`, where kind is `analysis` or `download`.
-The infrastructure forwards the original identity to this endpoint. Successful response:
-HTTP 200, no body, Cache-Control: no-store, and these internal response headers:
+Nginx consumes X-Accel-Redirect and proxies through an internal-only location to a
+fixed CloudFront host with verified TLS. It never forwards identity headers, exposes
+the signed URI, or caches file responses. Node never reads the file body in this
+mode. The previous /internal/track-files endpoint and X-Track-File-* protocol are
+removed. auth_request and reconstruction of application errors are unnecessary.
 
-- `X-Track-File-URL`: complete HTTPS signed URL on the configured CloudFront domain.
-  The viewer path omits `TRACK_S3_PREFIX`: with `TRACK_S3_PREFIX=prod`, the S3 key
-  `prod/tracks/<id>/<revision>/analysis.json` is signed as
-  `/tracks/<id>/<revision>/analysis.json`. CloudFront's matching origin path `/prod`
-  supplies the prefix when requesting S3. Reject keys outside the configured prefix.
-- `X-Track-File-Content-Type`: controlled file content type.
-- `X-Track-File-Content-Disposition`: safe disposition for GPX, omitted for JSON.
-- `X-Track-File-Revision`: selected opaque revision for diagnostics/contract testing.
+Deploy the Node change and the Nginx protocol update together. Detailed requirements
+and acceptance checks for infrastructure agents without application-code access are
+in [the nginx handoff task](../nginx-x-accel-handoff.md).
 
-Application errors use the same status and safe JSON shape as the public API. The
-separate infrastructure task determines how Nginx consumes these headers and proxies
-the file while preserving this public contract. No production Nginx config, AWS
-provisioning, or infrastructure setup guide is part of this application change.
-
-Mount the internal handler on the application's existing HTTP listener, only in nginx
-mode. Nginx must block direct external requests to `/internal/` and use an internal
-subrequest to reach this route. A spoofed client header on the public
-file route cannot enable the handler. A direct request to the public Node file route
-in nginx mode returns a safe delivery-unavailable response without a URL; the external
-Nginx deployment is responsible for intercepting those same public URLs.
-
-Required infrastructure guarantees, documented here as integration requirements:
-
-- Browser access to `/internal/` is blocked by Nginx; only its internal subrequests reach the handler.
-- Signed URLs/headers are consumed internally, never redirected or copied to browsers.
-- Proxy only the configured CloudFront domain with TLS verification and correct Host/SNI;
-  do not forward the user's cookies or Authorization to CloudFront.
-- Preserve public error semantics, suppress upstream redirects/internal headers/error
-  bodies, and prevent signatures from entering infrastructure logs (including error logs).
-- Every file request performs the application access check. No public cache bypasses it.
-- S3/CloudFront resource and key configuration are provided externally.
-
-Application logs must omit signed URLs, signature query parameters, credentials,
-private-key contents, GPX data, and raw provider errors. Infrastructure acceptance
-must separately verify browser non-disclosure and its own log policy. If auth_request
-is used externally, its status restrictions require explicit error mapping rather
-than assuming 404/409 are passed through unchanged.
+Application logs omit signed URIs, signature parameters, credentials, GPX data and
+raw provider errors. Descriptor and signing failures log track_file_delivery_failed
+at error level with publicId, kind, stage and safe error details before returning 502.
+Infrastructure must independently log transport failures without disclosing signed
+URIs, including in its standard error log.
 
 ## Application configuration
 
@@ -525,7 +505,7 @@ credentials, databases, and open ports. Use synthetic GPX fixtures, not user dat
 | Write failures | Cover source/analysis/diagnostic S3 writes and Mongo insert/commit/delete, including ambiguous outcomes |
 | Cleanup | Mongo removed first; repeat delete safe; orphans allowed; no unrelated prefix/key touched |
 | Vite stream | Upload, polling, list, map, partial view, download, replacement, and retry work without Nginx |
-| nginx application | Internal handoff signs current object, checks identity, returns no body, and never reads S3 for delivery |
+| nginx application | Public API signs current object, checks identity, returns a local X-Accel-Redirect with no body, and never reads S3 for delivery |
 | Public isolation | Public listener cannot expose internal signing route, even with spoofed headers |
 | Confidentiality | No secrets/signed URLs in public application responses, client assets, or application logs |
 | Stream failures | HEAD has no body; client abort closes upstream; midstream failure does not append JSON |
@@ -536,7 +516,7 @@ clock, analysis/preview simplification, unchanged provider contracts, API shapes
 test keys, configuration validation, and client loading/error states.
 Integration tests cover real MongoDB conditional operations and S3 adapter behavior
 against an available isolated test service. Test both application delivery modes;
-nginx handoff can be exercised with a controlled internal caller without adding an
+nginx handoff can be exercised through the public API without adding an
 Nginx configuration to this repository.
 
 Actual Nginx-to-CloudFront browser delivery, AWS policy, TLS/upstream failure behavior,

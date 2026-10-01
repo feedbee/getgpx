@@ -779,7 +779,7 @@
         }
       },
       "get": {
-        "operationId": "download",
+        "operationId": "downloadGpx",
         "summary": "Download the original GPX",
         "description": "Downloads the original GPX bytes through a same-origin URL. The active revision remains available during replacement; before first publication, the stored initial source is served.",
         "tags": [

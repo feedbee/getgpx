@@ -8,7 +8,7 @@ import { createHomepageRouter } from './src/backend/site/homepage-routes.js';
 import express from 'express';
 import { createS3TrackService } from './src/backend/s3-track-service.js';
 import { loadTrackStorageConfig } from './src/backend/track-storage-config.js';
-import { createTrackInternalRouter } from './src/backend/track-internal-router.js';
+import { createTrackFileDelivery } from './src/backend/track-file-delivery.js';
 import { createRequestLogger, logger } from './src/backend/logger.js';
 
 export default defineConfig(({ command, mode }) => {
@@ -40,15 +40,13 @@ export default defineConfig(({ command, mode }) => {
       const http = express();
       http.disable('x-powered-by');
       http.use('/api', createApiRouter(trackService, authentication.service, {
-        delivery: trackConfig.delivery, origin: environment.GOOGLE_REDIRECT_URI,
+        delivery: trackConfig.delivery,
+        fileDelivery: trackConfig.delivery === 'nginx' ? createTrackFileDelivery(trackConfig) : null, origin: environment.GOOGLE_REDIRECT_URI,
         sessionMiddleware: authentication.sessionMiddleware,
       }));
       http.use(authentication.middleware);
       http.use(createHomepageRouter(trackService));
       server.middlewares.use(http);
-      if (trackConfig.delivery === 'nginx') {
-        server.middlewares.use(createTrackInternalRouter(trackService, authentication.service, trackConfig, { origin: environment.GOOGLE_REDIRECT_URI }));
-      }
       server.httpServer?.once('close', () => database.close());
     },
   };

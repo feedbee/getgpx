@@ -29,6 +29,7 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
     return authorizeTrackRead(identity, track) ? track : null;
   }
   async function fileDescriptor(publicId, kind, identity = null) {
+    if (!['analysis', 'gpx'].includes(kind)) throw new Error('Unsupported track file kind.');
     const track = await findReadable(publicId, identity);
     if (!track) return null;
     const result = track.result;
@@ -89,8 +90,8 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
       return publicTrack(track, uploader);
     },
     fileDescriptor,
-    async getPublicDownload(publicId) {
-      const descriptor = await fileDescriptor(publicId, 'download');
+    async getPublicGpx(publicId) {
+      const descriptor = await fileDescriptor(publicId, 'gpx');
       if (!descriptor) return null;
       if (!descriptor.key) return { unavailable: true };
       return { filename: descriptor.filename, stream: await objectStore.openRead(descriptor.key) };

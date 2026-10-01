@@ -7,7 +7,7 @@ import { request } from './api/http.js';
 
 function app() {
   const auth = { getUser: async () => null };
-  const tracks = { getHomepageTracks: async () => [], getPublicTrack: async (id) => ({ id }), getPublicDownload: async () => null };
+  const tracks = { getHomepageTracks: async () => [], getPublicTrack: async (id) => ({ id }), getPublicGpx: async () => null };
   const server = express();
   server.use('/api', createApiRouter(tracks, auth));
   server.use(createAuthRouter(auth));
