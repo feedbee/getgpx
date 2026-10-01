@@ -1,3 +1,4 @@
+import { trackData } from './track-data.js';
 import { ObjectId } from 'mongodb';
 import { normalizeRouteType } from '../route-types.js';
 import { InvalidTrackCursorError } from './track-contracts.js';
@@ -20,52 +21,46 @@ export function titleFromFilename(filename) { return filename.split(/[\\/]/).at(
 export function resultOf(track) { return track.active || track.diagnostic || null; }
 export function statusOf(track) {
   if (!track) return null;
-  const attempt = track.attempt;
   const interrupted = hasExpiredAttempt(track);
-  return { id: track.publicId, status: interrupted ? 'FAILED' : attempt?.status || track.analysisStatus,
-    step: attempt?.step || track.analysisStep,
-    error: interrupted ? { code: 'PROCESSING_INTERRUPTED' }
-      : attempt?.error ? { code: attempt.error.code } : null,
-    hasActive: Boolean(track.active), canRetry: Boolean(attempt?.status === 'FAILED' || hasExpiredAttempt(track)),
-    interrupted };
+  const status = interrupted ? 'FAILED' : track.attempt?.status || track.analysisStatus;
+  return { id: track.publicId, status,
+    step: status === 'PROCESSING' ? track.attempt?.step || track.analysisStep || 'QUEUED' : null,
+    error: interrupted ? { code: 'PROCESSING_INTERRUPTED' } : track.attempt?.error ? { code: track.attempt.error.code } : null,
+    canRetry: status !== 'PROCESSING' && Boolean(track.attempt?.status === 'FAILED' || interrupted
+      || track.active?.enrichmentSource === 'VALHALLA'),
+  };
 }
-export function publicTrack(track, uploader = null) {
+export function publicTrack(track, author = null) {
   if (!track) return null;
   const result = resultOf(track);
   const id = track.publicId;
+  const { status, step, error, canRetry } = statusOf(track);
+  const processing = { status, step, error, canRetry };
   return {
     id, title: track.title, routeType: normalizeRouteType(track.routeType),
-    status: track.analysisStatus, processing: track.attempt ? statusOf(track) : null,
-    resultKind: track.active ? 'ACTIVE' : result ? 'DIAGNOSTIC' : 'NONE',
-    revision: result?.revision || null, metrics: result?.metrics || null,
-    summary: result?.summary || null,
+    processing, revision: result?.revision || null,
+    metrics: result?.metrics || trackData({ effectiveSpeedKmh: track.attempt?.metadataOverrides?.speedKmh }).metrics,
+    distributions: result?.distributions || { surfaces: [], roadQualities: [], wayTypes: [] },
+    climbs: result?.climbs || [], descents: result?.descents || [], pointsOfInterest: result?.pointsOfInterest || [],
     originalFilename: result?.originalFilename || track.attempt?.originalFilename || null,
     sourcePointCount: result?.sourcePointCount ?? null,
-    pointsOfInterestCount: result?.pointsOfInterestCount ?? 0,
-    preview: result?.preview || null, completeness: result?.completeness || null,
-    analysisSources: result?.analysisSources || { gpx: track.analysisStatus === 'PROCESSING' ? 'PENDING' : 'FAILED', valhalla: 'PENDING', openStreetMap: 'PENDING' },
-    analysisLevel: result ? (track.active ? 'FULL' : 'BASIC') : 'NONE',
+    completeness: result?.completeness || null,
+    sources: result?.analysisSources || { gpx: track.analysisStatus === 'PROCESSING' ? 'PENDING' : 'FAILED', valhalla: 'PENDING', openStreetMap: 'PENDING' },
     externalLinks: track.externalLinks || {}, createdAt: track.createdAt?.toISOString() || null,
-    uploader, analysisUrl: result?.analysisKey ? `/api/v1/tracks/${id}/analysis` : null,
-    downloadUrl: result?.sourceKey || track.attempt?.sourceKey ? `/api/v1/tracks/${id}/gpx` : null,
+    author, analysisUrl: result?.analysisKey ? `/api/v1/tracks/${id}/analysis` : null,
+    gpxUrl: result?.sourceKey || track.attempt?.sourceKey ? `/api/v1/tracks/${id}/gpx` : null,
   };
 }
 export function card(track) {
-  const id = track.publicId;
-  const result = resultOf(track);
-  return { id, title: track.title, routeType: normalizeRouteType(track.routeType),
-    createdAt: track.createdAt?.toISOString() || null, status: track.analysisStatus,
-    step: track.attempt?.step || track.analysisStep,
-    distanceKm: result?.metrics?.distanceKm ?? null, ascentM: result?.metrics?.ascentM ?? null,
-    descentM: result?.metrics?.descentM ?? null, speedKmh: result?.metrics?.effectiveSpeedKmh ?? null,
-    estimatedDurationMs: result?.metrics?.estimatedDurationMs ?? null,
-    preview: result?.preview || null, externalLinks: track.externalLinks || {},
-    url: `/tracks/${id}`, downloadUrl: `/api/v1/tracks/${id}/gpx` };
+  const value = publicTrack(track);
+  const { id, title, routeType, createdAt, processing, metrics, externalLinks, gpxUrl, author } = value;
+  return { id, title, routeType, createdAt, processing, metrics, externalLinks, gpxUrl, author,
+    preview: resultOf(track)?.preview || null, url: `/tracks/${id}` };
 }
 export function homepage(track) {
   const result = resultOf(track);
   return { id: track.publicId, title: track.title, routeType: normalizeRouteType(track.routeType),
     distanceKm: result?.metrics?.distanceKm ?? null, ascentM: result?.metrics?.ascentM ?? null,
-    pointsOfInterestCount: result?.pointsOfInterestCount ?? 0, url: `/tracks/${track.publicId}`,
+    pointsOfInterestCount: result?.pointsOfInterest?.length ?? 0, url: `/tracks/${track.publicId}`,
     analysisUrl: result?.analysisKey ? `/api/v1/tracks/${track.publicId}/analysis` : null };
 }

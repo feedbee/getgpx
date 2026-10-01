@@ -51,8 +51,8 @@ describe('track API', () => {
   it('sends bulk saved-track removal to the saved endpoint', async () => {
     const fetchImplementation = vi.fn().mockResolvedValue({ ok: true });
     await createTrackApi(fetchImplementation).remove({ ids: ['track-1'], saved: true });
-    expect(fetchImplementation).toHaveBeenCalledWith('/api/v1/tracks/saved', {
-      method: 'DELETE', headers: { accept: 'application/json', 'content-type': 'application/json' },
+    expect(fetchImplementation).toHaveBeenCalledWith('/api/v1/tracks/saved/deletions', {
+      method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify({ ids: ['track-1'] }),
     });
   });

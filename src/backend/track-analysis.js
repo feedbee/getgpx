@@ -7,7 +7,7 @@ import { fetchOsmWayTags, fetchTrackElevations, matchTrackWithValhalla } from '.
 import { TRACK_UPLOAD_LIMITS } from './track-repository.js';
 import { analysisFailure } from './analysis-warning.js';
 import { logger } from './logger.js';
-import { createRoutePreview, simplifyRoute } from '../client/domain/route-simplification.js';
+import { simplifyRoute } from '../client/domain/route-simplification.js';
 
 const DEFAULT_SPEED_KMH = 20;
 
@@ -38,7 +38,7 @@ export function analyzeGpxSource(xml, { filename, maxPersistedPoints = 10_000, p
     : points.some(({ ele }) => Number.isFinite(ele)) ? 'GPX_PARTIAL' : 'NONE';
   // Preview uses original geometry so turns discarded by the 10,000-point analysis cap remain available.
   return { ...track, points, sourcePointCount, effectiveSpeedKmh, estimatedDurationMs, elevationSource,
-    preview: createRoutePreview(track.points, previewMaxPoints) };
+    preview: simplifyRoute(track.points, previewMaxPoints).map(({ lat, lon }) => ({ lat, lon })) };
 }
 
 export async function enrichTrackAnalysis(baseAnalysis, {

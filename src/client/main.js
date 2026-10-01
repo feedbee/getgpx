@@ -3,6 +3,7 @@ import { renderAppShell } from './app-shell.js';
 import { createTrackApi, readPublicTrackMetadata } from './track-api.js';
 import { createUploadFlow } from './track-upload-flow.js';
 import { createTrackCollection } from './track-collection.js';
+import { analysisForView } from './track-data.js';
 import { createRouteSummaryView } from './route-page-summary.js';
 import { prepareRenderableTrack, renderLoadedTrackHeader, createRouteDetailView } from './route-detail-ui.js';
 import { createElevationProfile } from './elevation-profile.js';
@@ -84,7 +85,7 @@ const routeMap = createRouteMap({ getPoiSelection: () => poiController.selection
   onActivePoint: activePoint.set, onPointContext: activePoint.setPointContext, onPoiHover: poiController.hover,
   onPoiLeave: poiController.leave, onPoiToggle: poiController.toggle });
 const elevationProfile = createElevationProfile({ getTrack: () => currentTrack, getViewRange: () => profileViewport.range,
-  getSummaryMetrics: () => publicTrackData?.summary?.metrics, getColorMode: () => profileColorMode,
+  getSummaryMetrics: () => publicTrackData?.metrics, getColorMode: () => profileColorMode,
   getFocusPlacement: () => profileFocusPlacement, getRouteFilter: routeFilters.selectedRouteFilter,
   getTerrainRange: routeFilters.selectedTerrainRange });
 
@@ -101,7 +102,7 @@ function closeUserMenu() {
 function renderTrackAttribution() {
   if (!publicTrackData) return;
   const uploader = resolveTrackUploader(publicTrackData, currentUser, publicTrackOwnershipVerified);
-  const attributionText = () => formatTrackAttribution({ ...publicTrackData, uploader });
+  const attributionText = () => formatTrackAttribution({ ...publicTrackData, author: uploader });
   const attribution = document.querySelector('#track-attribution');
   attribution.hidden = !attributionText();
   bindText(document.querySelector('#track-attribution-text'), attributionText);
@@ -131,16 +132,16 @@ function setAuthUser(user) {
 }
 
 async function loadTrackManagement(trackId) {
-  const response = await trackApi.management(trackId);
+  const response = await trackApi.status(trackId);
   if (!response.ok) return;
   const { data } = await response.json();
   if (trackId !== publicTrackId) return;
   publicTrackOwnershipVerified = true;
   renderTrackAttribution();
   document.querySelector('#owner-track-actions').hidden = false;
-  trackEditor.setFields(data);
+  if (publicTrackData) trackEditor.setFields(publicTrackData);
   document.querySelectorAll('.source-retry').forEach((button) => {
-    button.hidden = !data.canRetry || button.dataset.retrySource !== data.retrySource;
+    button.hidden = !data.canRetry || button.dataset.retrySource !== (publicTrackData?.sources?.valhalla === 'SUCCESS' && publicTrackData?.sources?.openStreetMap === 'FAILED' ? 'openStreetMap' : 'valhalla');
   });
 }
 
@@ -204,7 +205,7 @@ async function initHomeExampleMap() {
     if (!analysisUrl) throw new Error('Track unavailable');
     const response = await trackApi.analysis(analysisUrl);
     if (!response.ok) throw new Error('Track unavailable');
-    const track = (await response.json()).analysis;
+    const track = analysisForView(await response.json());
     if (!track?.points?.length) throw new Error('Track unavailable');
     const coordinates = track.points.map((point) => [point.lat, point.lon]);
     [container, previewContainer].filter(Boolean).forEach((mapContainer) => {
@@ -310,6 +311,7 @@ async function loadPublicTrack(trackId, retries = 0) {
   }
   const { data } = result;
   publicTrackData = data;
+  if (currentUser) loadTrackManagement(trackId);
   routeSummaryView.renderBasicTrackHeader(data);
   renderExternalTrackLinks(document.querySelector('#external-track-links'), data.externalLinks);
   const linksSection = document.querySelector('#external-track-links-section');
@@ -317,10 +319,10 @@ async function loadPublicTrack(trackId, retries = 0) {
   document.querySelector('#external-track-links-nav').hidden = linksSection.hidden;
   renderTrackAttribution();
   const download = document.querySelector('#download-track');
-  download.href = data.downloadUrl || '#';
-  download.hidden = !data.downloadUrl;
+  download.href = data.gpxUrl || '#';
+  download.hidden = !data.gpxUrl;
   if (!data.analysisUrl) {
-    routeSummaryView.renderUnavailableTrack(data.status === 'READY' ? { ...data, analysisNote: t('errors.fileUnavailable') } : data);
+    routeSummaryView.renderUnavailableTrack(data.revision ? { ...data, analysisNote: t('errors.fileUnavailable') } : data);
     return;
   }
   try {
@@ -329,8 +331,8 @@ async function loadPublicTrack(trackId, retries = 0) {
     const detail = await analysisResponse.json();
     if (detail.revision !== data.revision && retries < 2) return loadPublicTrack(trackId, retries + 1);
     if (detail.revision !== data.revision) throw new Error('Track revision changed');
-    const analysis = { ...detail.analysis, ...data.metrics, name: data.title };
-    renderTrack(analysis, { analysisSources: data.analysisSources, routeType: data.routeType });
+    const analysis = analysisForView(detail, data);
+    renderTrack(analysis, { analysisSources: data.sources, routeType: data.routeType });
   } catch {
     routeSummaryView.renderUnavailableTrack({ ...data, analysisNote: t('errors.fileUnavailable') });
   }

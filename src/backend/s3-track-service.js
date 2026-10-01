@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { ObjectId } from 'mongodb';
 import { DEFAULT_USER_TIERS } from './configuration.js';
-import { normalizeRouteType } from '../route-types.js';
 import { TrackLimitReachedError, EXTERNAL_ANALYSIS_TIMEOUT_MS } from './track-contracts.js';
 import { hasExpiredAttempt, trackObjectKeys } from './s3-track-repository.js';
 import { PAGE_SIZE, cursorOf, decodeCursor, titleFromFilename, resultOf, statusOf, publicTrack, card, homepage } from './s3-track-presenters.js';
@@ -82,32 +81,18 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
       }
     },
     getStatus: async ({ publicId, ownerId }) => statusOf(await trackRepository.findOwnedByPublicId(publicId, ownerId)),
-    async getManagement({ publicId, ownerId }) {
-      const track = await trackRepository.findOwnedByPublicId(publicId, ownerId);
-      if (!track) return null;
-      const result = resultOf(track);
-      return { id: track.publicId, title: track.title, routeType: normalizeRouteType(track.routeType),
-        speedKmh: result?.metrics?.effectiveSpeedKmh ?? null, externalLinks: track.externalLinks || {},
-        analysis: statusOf(track), replacement: track.attempt?.kind === 'REPLACE' ? statusOf(track) : null,
-        canRetry: Boolean(track.attempt?.status === 'FAILED' || hasExpiredAttempt(track)
-          || track.active?.enrichmentSource === 'VALHALLA'),
-        interrupted: hasExpiredAttempt(track),
-        missingOsmTags: track.active?.enrichmentSource === 'VALHALLA',
-        retrySource: track.active?.enrichmentSource === 'VALHALLA' ? 'openStreetMap' : 'valhalla' };
-    },
     async getPublicTrack(publicId) {
       const track = await findReadable(publicId);
       if (!track) return null;
       const uploader = userRepository?.findPublicProfileById
         ? await userRepository.findPublicProfileById(track.ownerId) : null;
-      const data = publicTrack(track, uploader);
-      delete data.preview;
-      return data;
+      return publicTrack(track, uploader);
     },
     fileDescriptor,
     async getPublicDownload(publicId) {
       const descriptor = await fileDescriptor(publicId, 'download');
-      if (!descriptor?.key) return null;
+      if (!descriptor) return null;
+      if (!descriptor.key) return { unavailable: true };
       return { filename: descriptor.filename, stream: await objectStore.openRead(descriptor.key) };
     },
     async getPublicAnalysis(publicId) {
@@ -116,7 +101,7 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
       if (!descriptor.key) return { unavailable: true };
       return { stream: await objectStore.openRead(descriptor.key) };
     },
-    async updateDetails({ publicId, ownerId, title, speedKmh, routeType, externalLinks }) {
+    async updateDetails({ publicId, ownerId, ...changes }) {
       for (let attempt = 0; attempt < 2; attempt++) {
         const existing = await trackRepository.findOwnedByPublicId(publicId, ownerId);
         if (!existing) return null;
@@ -126,11 +111,11 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
           throw conflict;
         }
         const updated = !existing.active && existing.attempt?.status === 'PROCESSING'
-          ? await trackRepository.updateProcessingDetails({ trackId: existing._id, ownerId,
-            title, speedKmh, routeType, externalLinks })
-          : existing.active ? await trackRepository.updateDetails({ trackId: existing._id, ownerId,
-            title, speedKmh, estimatedDurationMs: existing.active.metrics.distanceKm / speedKmh * 3_600_000,
-            routeType, externalLinks }) : null;
+          ? await trackRepository.updateProcessingDetails({ trackId: existing._id, ownerId, ...changes })
+          : existing.active ? await trackRepository.updateDetails({ trackId: existing._id, ownerId, ...changes,
+            ...(changes.speedKmh === undefined ? {} : {
+              estimatedDurationMs: existing.active.metrics.distanceKm / changes.speedKmh * 3_600_000,
+            }) }) : null;
         if (updated) {
           const uploader = userRepository?.findPublicProfileById
             ? await userRepository.findPublicProfileById(updated.ownerId) : null;
@@ -143,7 +128,8 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
     async replaceFile({ publicId, ownerId, filename, source, onStage = () => {} }) {
       onStage('track_lookup');
       const existing = await trackRepository.findOwnedByPublicId(publicId, ownerId);
-      if (!existing || existing.attempt?.status === 'PROCESSING' && !hasExpiredAttempt(existing)) return null;
+      if (!existing) { const error = new Error('Track not found'); error.code = 'TRACK_NOT_FOUND'; throw error; }
+      if (existing.attempt?.status === 'PROCESSING' && !hasExpiredAttempt(existing)) return null;
       const revision = randomUUID();
       onStage('source_upload');
       const sourceKey = await objectStore.writeSource({ trackId: String(existing._id), revision, source });
@@ -168,7 +154,8 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
     },
     async retryAnalysis({ publicId, ownerId }) {
       const existing = await trackRepository.findOwnedByPublicId(publicId, ownerId);
-      if (!existing || existing.attempt?.status === 'PROCESSING' && !hasExpiredAttempt(existing)) return null;
+      if (!existing) { const error = new Error('Track not found'); error.code = 'TRACK_NOT_FOUND'; throw error; }
+      if (existing.attempt?.status === 'PROCESSING' && !hasExpiredAttempt(existing)) return null;
       if (!existing.attempt && existing.active?.enrichmentSource !== 'VALHALLA') return null;
       const from = existing.attempt?.sourceKey || existing.active?.sourceKey;
       if (!from) return null;
@@ -210,20 +197,20 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
       const page = tracks.slice(0, PAGE_SIZE);
       const favorites = new Set((await savedTrackRepository.savedTrackIds({ userId: ownerId,
         trackIds: page.map((track) => track._id) })).map(String));
-      return { items: page.map((track) => ({ ...card(track), isFavorite: favorites.has(String(track._id)) })),
+      return { items: page.map((track) => ({ ...card(track), isFavorite: favorites.has(String(track._id)), savedAt: null })),
         nextCursor: tracks.length > PAGE_SIZE ? cursorOf(page.at(-1), 'createdAt') : null };
     },
     async listSavedTracks({ userId, query = '', cursor = '' }) {
       const relations = await savedTrackRepository.list({ userId, query, before: decodeCursor(cursor, 'savedAt'), limit: PAGE_SIZE });
       const page = relations.slice(0, PAGE_SIZE);
-      return { items: page.map((relation) => ({ ...card(relation.track), savedAt: relation.savedAt.toISOString(),
+      return { items: page.map((relation) => ({ ...card(relation.track), isFavorite: true, savedAt: relation.savedAt.toISOString(),
         author: relation.author?.displayName ? { displayName: relation.author.displayName,
           avatarUrl: relation.author.avatarUrl || null } : null })),
       nextCursor: relations.length > PAGE_SIZE ? cursorOf(page.at(-1), 'savedAt') : null };
     },
     async getSavedState({ publicId, userId }) {
       const track = await trackRepository.findByPublicId(publicId);
-      return track ? savedTrackRepository.isSaved({ userId, trackId: track._id }) : false;
+      return track ? savedTrackRepository.isSaved({ userId, trackId: track._id }) : null;
     },
     async saveTrack({ publicId, userId }) {
       const track = await trackRepository.findByPublicId(publicId);

@@ -2,18 +2,16 @@ import { ObjectId } from 'mongodb';
 import { createPublicId } from './public-id.js';
 import { normalizeTrackName } from './track-repository.js';
 import { normalizeRouteType } from '../route-types.js';
-import { createTrackSummary } from './track-summary.js';
+import { trackData } from './track-data.js';
 
 const LEASE_MS = 120_000;
 
 function compact(analysis, sourceKey, analysisKey, revision, originalFilename, analysisSources, completeness) {
-  const summary = createTrackSummary(analysis, { analysisSources, completeness });
+  const data = trackData(analysis);
   return {
     revision, sourceKey, analysisKey, originalFilename,
-    metrics: summary.metrics,
-    summary,
+    ...data,
     sourcePointCount: analysis.sourcePointCount ?? null,
-    pointsOfInterestCount: analysis.pointsOfInterest?.length ?? 0,
     preview: analysis.preview ?? null,
     analysisSources,
     completeness,
@@ -43,7 +41,7 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
     },
     async createProcessing({ trackId, ownerId, sourceKey, revision, originalFilename, title, routeType }, now = new Date()) {
       const document = {
-        _id: trackId, schemaVersion: 3, ownerId, originalFilename, title,
+        _id: trackId, schemaVersion: 4, ownerId, originalFilename, title,
         routeType: normalizeRouteType(routeType), normalizedName: normalizeTrackName(title),
         analysisStatus: 'PROCESSING', analysisStep: 'QUEUED',
         attempt: { revision, sourceKey, originalFilename, kind: 'INITIAL', status: 'PROCESSING',
@@ -77,7 +75,7 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
       ];
       return tracks.find(filter, { projection: { ownerId: 1, publicId: 1, title: 1, routeType: 1,
         createdAt: 1, externalLinks: 1, analysisStatus: 1, analysisStep: 1, active: 1, diagnostic: 1,
-        'attempt.status': 1, 'attempt.step': 1 } }).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).toArray();
+        'attempt.status': 1, 'attempt.step': 1, 'attempt.error': 1, 'attempt.leaseUntil': 1 } }).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).toArray();
     },
     claim({ trackId, ownerId, revision, workerId }, now = new Date()) {
       return tracks.findOneAndUpdate(
@@ -115,13 +113,11 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
         const override = previous.attempt.metadataOverrides;
         const retainedMetadata = previous.attempt.kind !== 'INITIAL' && previous.active;
         const speedKmh = override?.speedKmh ?? (retainedMetadata
-          ? previous.active.metrics.effectiveSpeedKmh : null);
+          ? previous.active.metrics.speedKmh : null);
         if (speedKmh != null) {
           const duration = active.metrics.distanceKm / speedKmh * 3_600_000;
-          active.metrics.effectiveSpeedKmh = speedKmh;
+          active.metrics.speedKmh = speedKmh;
           active.metrics.estimatedDurationMs = duration;
-          active.summary.metrics.effectiveSpeedKmh = speedKmh;
-          active.summary.metrics.estimatedDurationMs = duration;
         }
         const effectiveTitle = override?.title ?? (retainedMetadata ? previous.title : title);
         const filter = { ...attemptFilter(identity), 'attempt.metadataVersion': previous.attempt.metadataVersion ?? { $exists: false } };
@@ -155,23 +151,26 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
       analysisStep: 'QUEUED', updatedAt: now } }], { returnDocument: 'after' });
     },
     updateDetails({ trackId, ownerId, title, speedKmh, estimatedDurationMs, routeType, externalLinks }, now = new Date()) {
+      const fields = { updatedAt: now };
+      if (title !== undefined) Object.assign(fields, { title, normalizedName: normalizeTrackName(title) });
+      if (routeType !== undefined) fields.routeType = normalizeRouteType(routeType);
+      if (externalLinks !== undefined) fields.externalLinks = externalLinks;
+      if (speedKmh !== undefined) Object.assign(fields, { 'active.metrics.speedKmh': speedKmh,
+        'active.metrics.estimatedDurationMs': estimatedDurationMs });
       return tracks.findOneAndUpdate({ _id: trackId, ownerId, active: { $exists: true },
         $or: [{ attempt: { $exists: false } }, { 'attempt.status': 'FAILED' }] },
-      { $set: { title, normalizedName: normalizeTrackName(title), routeType: normalizeRouteType(routeType),
-        externalLinks, 'active.metrics.effectiveSpeedKmh': speedKmh,
-        'active.metrics.estimatedDurationMs': estimatedDurationMs,
-        'active.summary.metrics.effectiveSpeedKmh': speedKmh,
-        'active.summary.metrics.estimatedDurationMs': estimatedDurationMs, updatedAt: now } },
-      { returnDocument: 'after' });
+      { $set: fields }, { returnDocument: 'after' });
     },
     updateProcessingDetails({ trackId, ownerId, title, speedKmh, routeType, externalLinks }, now = new Date()) {
+      const fields = { updatedAt: now };
+      if (title !== undefined) Object.assign(fields, { title, normalizedName: normalizeTrackName(title),
+        'attempt.metadataOverrides.title': title, 'attempt.metadataOverrides.normalizedName': normalizeTrackName(title) });
+      if (speedKmh !== undefined) fields['attempt.metadataOverrides.speedKmh'] = speedKmh;
+      if (routeType !== undefined) fields.routeType = normalizeRouteType(routeType);
+      if (externalLinks !== undefined) fields.externalLinks = externalLinks;
       return tracks.findOneAndUpdate({ _id: trackId, ownerId, active: { $exists: false },
-        'attempt.status': 'PROCESSING' }, {
-        $set: { title, normalizedName: normalizeTrackName(title), routeType: normalizeRouteType(routeType),
-          externalLinks, 'attempt.metadataOverrides': { title, normalizedName: normalizeTrackName(title), speedKmh },
-          updatedAt: now },
-        $inc: { 'attempt.metadataVersion': 1 },
-      }, { returnDocument: 'after' });
+        'attempt.status': 'PROCESSING' }, { $set: fields, $inc: { 'attempt.metadataVersion': 1 } },
+      { returnDocument: 'after' });
     },
     deleteOwned(trackId, ownerId) { return tracks.findOneAndDelete({ _id: trackId, ownerId }); },
   };

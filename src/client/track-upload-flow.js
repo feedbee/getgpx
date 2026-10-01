@@ -68,14 +68,14 @@ export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, 
 
   async function loadUploadMetadata(trackId) {
     if (metadata?.id === trackId) return;
-    const response = await trackApi.management(trackId);
+    const response = await trackApi.publicTrack(trackId);
     if (!response.ok) return;
     const { data } = await response.json();
     if (activeTrackId !== trackId) return;
     metadata = {
       id: trackId,
       title: data.title,
-      speedKmh: data.speedKmh || 20,
+      speedKmh: data.metrics?.speedKmh || 20,
       routeType: data.routeType,
       externalLinks: data.externalLinks || {},
     };

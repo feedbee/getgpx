@@ -15,7 +15,6 @@ export async function readPublicTrackMetadata(trackApi, trackId) {
 export function createTrackApi(fetchImplementation = fetch) {
   const trackUrl = (id, suffix = '') => `/api/v1/tracks/${id}${suffix}`;
   return {
-    management: (id) => fetchImplementation(trackUrl(id, '/manage'), { headers: jsonHeaders }),
     savedState: (id) => fetchImplementation(trackUrl(id, '/saved'), { headers: jsonHeaders }),
     status: (id) => fetchImplementation(trackUrl(id, '/status'), { headers: jsonHeaders }),
     publicTrack: (id) => fetchImplementation(trackUrl(id), { headers: jsonHeaders }),
@@ -37,8 +36,8 @@ export function createTrackApi(fetchImplementation = fetch) {
       method: 'PATCH', headers: { ...jsonHeaders, 'content-type': 'application/json' }, body: JSON.stringify(details),
     }),
     retry: (id) => fetchImplementation(trackUrl(id, '/retry-analysis'), { method: 'POST', headers: jsonHeaders }),
-    remove: ({ id, ids, saved }) => fetchImplementation(saved ? '/api/v1/tracks/saved' : ids ? '/api/v1/tracks' : trackUrl(id), {
-      method: 'DELETE',
+    remove: ({ id, ids, saved }) => fetchImplementation(saved ? '/api/v1/tracks/saved/deletions' : ids ? '/api/v1/tracks/deletions' : trackUrl(id), {
+      method: ids || saved ? 'POST' : 'DELETE',
       headers: ids || saved ? { ...jsonHeaders, 'content-type': 'application/json' } : jsonHeaders,
       body: ids || saved ? JSON.stringify({ ids }) : undefined,
     }),

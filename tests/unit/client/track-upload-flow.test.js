@@ -22,7 +22,7 @@ describe('track upload flow', () => {
       const api = {
         upload: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { id: 'track-1', step: 'QUEUED' } }) }),
         status: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { status: 'READY', step: 'COMPLETE' } }) }),
-        management: vi.fn().mockResolvedValue({ ok: false }),
+        publicTrack: vi.fn().mockResolvedValue({ ok: false }),
       };
       const flow = createUploadFlow({ trackApi: api, isAuthenticated: () => true,
         getPublicTrackId: () => null, documentRef });

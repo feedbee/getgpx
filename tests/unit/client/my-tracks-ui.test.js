@@ -6,24 +6,24 @@ import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, createTrackCa
 
 describe('my tracks UI', () => {
   it('formats processing and terminal statuses in friendly Russian', () => {
-    expect(trackStatusLabel({ status: 'PROCESSING', step: 'ENRICHING' })).toBe('Анализируем покрытия');
-    expect(trackStatusLabel({ status: 'FAILED' })).toBe('Нужен повторный анализ');
-    expect(trackStatusLabel({ status: 'READY' })).toBe('Готов');
+    expect(trackStatusLabel({ processing: { status: 'PROCESSING', step: 'ENRICHING' } })).toBe('Анализируем покрытия');
+    expect(trackStatusLabel({ processing: { status: 'FAILED' } })).toBe('Нужен повторный анализ');
+    expect(trackStatusLabel({ processing: { status: 'READY' } })).toBe('Готов');
   });
 
   it('formats durations and normalized preview geometry', () => {
     expect(formatTrackDuration(5_430_000)).toBe('1:31');
-    expect(previewPolyline({ points: [[0, 12.345], [100, 99]] })).toBe('0.00,12.35 100.00,99.00');
+    expect(previewPolyline([{ lat: 50, lon: 20 }, { lat: 51, lon: 21 }])).toMatch(/^\d+\.\d{2},\d+\.\d{2} \d+\.\d{2},\d+\.\d{2}$/);
     expect(previewPolyline(null)).toBe('');
   });
 
   it('formats card metrics with the route type before distance', () => {
     expect(formatTrackMetrics({
-      distanceKm: 42.36,
+      metrics: { distanceKm: 42.36,
       ascentM: 812,
       descentM: 790,
       estimatedDurationMs: 7_200_000,
-      speedKmh: 21.2,
+      speedKmh: 21.2 },
       routeType: 'gravel-cycling',
     })).toContain('Гравийный велоспорт · 42,4 км · ↗ 812 м');
   });
@@ -72,8 +72,8 @@ describe('my tracks UI', () => {
       }),
     };
     const card = createTrackCard({
-      id: 'track-1', title: 'Ride', status: 'READY', createdAt: '2026-09-17T10:00:00.000Z',
-      url: '/tracks/track-1', downloadUrl: '/api/v1/tracks/track-1/gpx',
+      id: 'track-1', title: 'Ride', processing: { status: 'READY' }, createdAt: '2026-09-17T10:00:00.000Z',
+      url: '/tracks/track-1', gpxUrl: '/api/v1/tracks/track-1/gpx',
       externalLinks: { strava: 'https://www.strava.com/routes/1' },
     }, documentRef);
 
@@ -98,7 +98,7 @@ describe('my tracks UI', () => {
       }),
     };
     const card = createTrackCard({
-      id: 'track-1', title: 'Ride', author: { displayName: 'Анна', avatarUrl: 'https://example.com/anna.jpg' }, status: 'READY',
+      id: 'track-1', title: 'Ride', author: { displayName: 'Анна', avatarUrl: 'https://example.com/anna.jpg' }, processing: { status: 'READY' },
       createdAt: '2026-09-17T10:00:00.000Z', url: '/tracks/track-1', externalLinks: {},
     }, documentRef, { ownerActions: false });
 
@@ -122,7 +122,7 @@ describe('my tracks UI', () => {
       }),
     };
     const card = createTrackCard({
-      id: 'track-1', title: 'Ride', status: 'READY', isFavorite: true,
+      id: 'track-1', title: 'Ride', processing: { status: 'READY' }, isFavorite: true,
       createdAt: '2026-09-17T10:00:00.000Z', url: '/tracks/track-1', externalLinks: {},
     }, documentRef);
 

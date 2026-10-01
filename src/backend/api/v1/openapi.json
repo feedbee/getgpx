@@ -3,7 +3,7 @@
   "info": {
     "title": "GetGPX API",
     "version": "1.0.0",
-    "description": "## Getting started\n\nGetGPX API v1 exposes public track data and authenticated track management on the same origin as the website. This reference documents **all** supported track operations. Metadata and geometry are deliberately separate.\n\n```sh\ncurl -H 'Accept: application/json' 'https://getgpx.com/api/v1/tracks/TRACK_ID'\ncurl 'https://getgpx.com/api/v1/tracks/TRACK_ID/analysis'\ncurl -OJ 'https://getgpx.com/api/v1/tracks/TRACK_ID/gpx'\n```\n\nReplace the example host with your GetGPX deployment and TRACK_ID with the public ID from a track URL.\n\n## Authentication today\n\nThe three public GET operations need no login. All other operations require the existing **HttpOnly getgpx_session cookie**. Sign in on the website first, then return to this documentation on the same origin. The browser supplies its cookie automatically; Swagger cannot create an HttpOnly cookie using its Authorize dialog. Never paste a session cookie into documentation or browser storage. Scripts can use an existing cookie jar (`curl --cookie session.cookies ...`); this is an interim mechanism, not a supported automated login flow. Sessions expire after 30 days of inactivity and renew on activity. There are no API keys, personal tokens, API OAuth flow, or mandatory User-Agent requirements yet.\n\nGoogle sign-in (/auth/*), the homepage feed (/homepage), health checks and internal signing routes are website/infrastructure features, not this API contract.\n\n## Upload and processing\n\nSend raw GPX with Content-Type: application/gpx+xml, a percent-encoded X-GPX-Filename and X-Track-Type. A successful upload returns 202 and Location. Poll that status URL with your session until READY or FAILED. Keep any active result visible during replacement. Mutation examples are executable and can permanently change or delete your own data.\n\n## Data conventions\n\nDistances use km, elevations m, speeds km/h, durations ms and slopes/percentages percent. Dates use UTC ISO 8601. Missing data is null or absent as the schema specifies. The author is the uploader. Titles and filenames are user content. Public IDs are opaque and case-sensitive. Lists contain at most 24 items with an opaque nextCursor. Success JSON uses data, except the standalone analysis document; GPX is a file. Error codes are stable; human-readable messages are optional and must not be parsed.\n\n## Browser access and compatibility\n\nSame-origin browser requests and direct server/CLI calls are supported. Cross-origin browser scripts are refused; no CORS access is granted. This is not a restriction on server-side proxies. Public download links and safe top-level navigation remain possible. POST/PUT/PATCH/DELETE always enforce the existing session/ownership rules.\n\nv1 is a stable contract. Clients should ignore unfamiliar additive fields and tolerate new category IDs. Incompatible changes require a new major version and a migration plan. The application release number is independent of API version. Rate limits/User-Agent policies and personal tokens are later phases.\n"
+    "description": "## Getting started\n\nUse the public ID from a track URL:\n\n```sh\ncurl -H 'Accept: application/json' 'https://getgpx.com/api/v1/tracks/TRACK_ID'\ncurl 'https://getgpx.com/api/v1/tracks/TRACK_ID/analysis'\ncurl -OJ 'https://getgpx.com/api/v1/tracks/TRACK_ID/gpx'\n```\n\nReplace the example host with your deployment. Metadata contains no route points. The analysis contains geometry and shares the same metric, terrain and distribution types.\n\n## Authentication\n\nPublic metadata, GPX and analysis require no authentication. Other operations require the HttpOnly getgpx_session cookie. Sign in on the website on the same origin; the browser sends its cookie automatically. The documentation Authorize dialog cannot set an HttpOnly cookie. Scripts can use an existing cookie jar with curl --cookie. Sessions expire after 30 days of inactivity and renew on activity.\n\n## Upload and processing\n\nSend raw GPX with Content-Type: application/gpx+xml, a percent-encoded X-GPX-Filename and X-Track-Type. Successful uploads return 202 and Location. Poll the status URL until processing finishes. Existing results remain available during replacement. Mutation requests change your data; deletion is permanent.\n\n## Data conventions\n\nDistances use km, elevations and terrain lengths m, speeds km/h, durations ms and slopes percent. Dates use UTC ISO 8601. Missing measurements are null. IDs are opaque and case-sensitive. Lists are ordered newest first and use an opaque nextCursor, which is null at the end. JSON responses use data; analysis is a standalone document and GPX is a file. Parse error.code, not human-readable messages. PATCH changes only supplied fields. An empty externalLinks object clears links.\n\n## Browser access\n\nRequests from browser scripts must use the same origin. Direct server and CLI requests are supported. Safe top-level download links are permitted.\n"
   },
   "servers": [
     {
@@ -45,7 +45,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProcessingResponse"
+                  "$ref": "#/components/schemas/ProcessingStatusResponse"
                 }
               }
             },
@@ -59,91 +59,28 @@
             }
           },
           "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error401"
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "413": {
-            "description": "Payload exceeds the configured limit (GPX: 25 MiB; JSON: 16 KiB).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error413"
           },
           "422": {
-            "description": "Invalid input.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error422"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
           },
           "415": {
-            "description": "Unsupported GPX content type.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error415"
           },
           "409": {
-            "description": "User track quota reached (TRACK_LIMIT_REACHED).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error409"
           }
         },
         "parameters": [
@@ -189,128 +126,6 @@
             }
           }
         }
-      },
-      "delete": {
-        "operationId": "removeMany",
-        "summary": "Delete selected tracks",
-        "description": "Permanently deletes owned tracks and stored objects. Missing or non-owned IDs are omitted from deletedIds. Duplicate IDs are processed once.",
-        "tags": [
-          "Track management"
-        ],
-        "security": [
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeletedIdsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Malformed JSON or invalid cursor.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Payload exceeds the configured limit (GPX: 25 MiB; JSON: 16 KiB).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Invalid input.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Unsupported JSON charset or encoding.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Ids"
-              }
-            }
-          }
-        }
       }
     },
     "/tracks/mine": {
@@ -338,71 +153,22 @@
             }
           },
           "400": {
-            "description": "Malformed JSON or invalid cursor.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error400"
           },
           "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error401"
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "422": {
-            "description": "Invalid input.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error422"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
           }
         },
         "parameters": [
@@ -445,77 +211,28 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SavedTrackPageResponse"
+                  "$ref": "#/components/schemas/TrackPageResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Malformed JSON or invalid cursor.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error400"
           },
           "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error401"
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "422": {
-            "description": "Invalid input.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error422"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
           }
         },
         "parameters": [
@@ -537,135 +254,13 @@
             "description": "Opaque nextCursor returned by the previous page. Omit on the first request."
           }
         ]
-      },
-      "delete": {
-        "operationId": "unsaveMany",
-        "summary": "Remove selected favorites",
-        "description": "Does not delete tracks. Returns only IDs removed from the current user favorites.",
-        "tags": [
-          "Favorites"
-        ],
-        "security": [
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RemovedIdsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Malformed JSON or invalid cursor.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Payload exceeds the configured limit (GPX: 25 MiB; JSON: 16 KiB).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Invalid input.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "415": {
-            "description": "Unsupported JSON charset or encoding.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Ids"
-              }
-            }
-          }
-        }
       }
     },
     "/tracks/{id}": {
       "get": {
         "operationId": "publicTrack",
         "summary": "Read track metadata",
-        "description": "Lightweight point-free metadata and complete precomputed summary from MongoDB. No S3 read. Geometry is only available from /analysis; there is no include=geometry option. A processing or failed track still returns 200 with its available information. Missing measurements are null. summary may be null before analysis is available.",
+        "description": "Track metadata, metrics, terrain, road distributions and points of interest. Route geometry is available at analysisUrl. During processing, available data is returned and revision is null until a result exists.",
         "tags": [
           "Tracks"
         ],
@@ -682,51 +277,16 @@
             }
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "404": {
-            "description": "Track not found or not owned by the current user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error404"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
           }
         },
         "parameters": [
@@ -743,7 +303,7 @@
       "patch": {
         "operationId": "update",
         "summary": "Edit track metadata",
-        "description": "Owner only. Compatibility note: despite PATCH, title, routeType and speedKmh must all be supplied. Omitting externalLinks clears links. Changes speed/duration without re-analysis. Updating an initial processing track is allowed; replacing an active track temporarily prevents editing.",
+        "description": "Owner only. Updates only supplied fields. Omitted fields retain their values. An empty externalLinks object clears all links. Returns the current track.",
         "tags": [
           "Track management"
         ],
@@ -758,117 +318,40 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UpdatedTrackResponse"
+                  "$ref": "#/components/schemas/TrackResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Malformed JSON or invalid cursor.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error400"
           },
           "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error401"
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "404": {
-            "description": "Track not found or not owned by the current user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error404"
           },
           "409": {
-            "description": "Processing conflict or analysis not ready.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error409"
           },
           "413": {
-            "description": "Payload exceeds the configured limit (GPX: 25 MiB; JSON: 16 KiB).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error413"
           },
           "422": {
-            "description": "Invalid input.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error422"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
           },
           "415": {
-            "description": "Unsupported JSON charset or encoding.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error415"
           }
         },
         "parameters": [
@@ -916,61 +399,19 @@
             }
           },
           "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error401"
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "404": {
-            "description": "Track not found or not owned by the current user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error404"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
           }
         },
         "parameters": [
@@ -1004,161 +445,25 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProcessingResponse"
+                  "$ref": "#/components/schemas/ProcessingStatusResponse"
                 }
               }
             }
           },
           "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error401"
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "404": {
-            "description": "Track not found or not owned by the current user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error404"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/PublicId"
-            }
-          }
-        ]
-      }
-    },
-    "/tracks/{id}/manage": {
-      "get": {
-        "operationId": "management",
-        "summary": "Read editable track information",
-        "description": "Owner-only metadata and processing/retry state for editing tools.",
-        "tags": [
-          "Track management"
-        ],
-        "security": [
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ManagementResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Track not found or not owned by the current user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
           }
         },
         "parameters": [
@@ -1177,7 +482,7 @@
       "post": {
         "operationId": "retry",
         "summary": "Retry analysis",
-        "description": "Owner only. Starts a new revision when retry is eligible. Returns 409 for missing, non-owned, currently processing or non-retryable tracks.",
+        "description": "Owner only. Starts another analysis when processing.canRetry is true. Returns 404 for a missing track and 409 when another operation is running or retry is unavailable.",
         "tags": [
           "Track management"
         ],
@@ -1192,77 +497,28 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProcessingResponse"
+                  "$ref": "#/components/schemas/ProcessingStatusResponse"
                 }
               }
             }
           },
           "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error401"
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "404": {
-            "description": "Track not found or not owned by the current user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error404"
           },
           "409": {
-            "description": "Processing conflict or analysis not ready.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error409"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
           }
         },
         "parameters": [
@@ -1302,61 +558,19 @@
             }
           },
           "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error401"
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "404": {
-            "description": "Track not found or not owned by the current user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error404"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
           }
         },
         "parameters": [
@@ -1394,61 +608,19 @@
             }
           },
           "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error401"
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "404": {
-            "description": "Track not found or not owned by the current user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error404"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
           }
         },
         "parameters": [
@@ -1486,61 +658,19 @@
             }
           },
           "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error401"
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "404": {
-            "description": "Track not found or not owned by the current user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error404"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
           }
         },
         "parameters": [
@@ -1559,7 +689,7 @@
       "put": {
         "operationId": "replace",
         "summary": "Replace the original GPX",
-        "description": "Owner only. Raw file replacement keeps the public ID and metadata. Existing active source and analysis remain available until the new revision publishes atomically. 409 also covers a missing or non-owned track with a syntactically valid ID.",
+        "description": "Owner only. Replaces the original GPX, keeping the track ID and metadata. Existing files remain available until the new result is ready.",
         "tags": [
           "Track management"
         ],
@@ -1574,97 +704,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProcessingResponse"
+                  "$ref": "#/components/schemas/ProcessingStatusResponse"
                 }
               }
             }
           },
           "401": {
-            "description": "Missing or invalid website session.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error401"
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "404": {
-            "description": "Track not found or not owned by the current user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error404"
           },
           "409": {
-            "description": "Processing conflict or analysis not ready.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error409"
           },
           "413": {
-            "description": "Payload exceeds the configured limit (GPX: 25 MiB; JSON: 16 KiB).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error413"
           },
           "422": {
-            "description": "Invalid input.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error422"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
           }
         },
         "parameters": [
@@ -1740,81 +810,25 @@
             }
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "404": {
-            "description": "Track not found or not owned by the current user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error404"
           },
           "409": {
-            "description": "Processing conflict or analysis not ready.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error409"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "502": {
-            "description": "Stored file could not be read.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error502"
           },
           "503": {
-            "description": "File delivery unavailable; check reverse-proxy configuration.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error503"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
           }
         },
         "parameters": [
@@ -1833,7 +847,7 @@
       "get": {
         "operationId": "analysis",
         "summary": "Read detailed analysis",
-        "description": "Detailed JSON with route points and elevation profile, streamed from S3 (or proxied by Nginx). Not wrapped in data. Active revision, with diagnostic fallback if there is no active result. Compare revision with the metadata response and refetch metadata if it changed. Storage snapshots retain calculated title/speed; apply current metadata title and metrics for presentation. HEAD is also supported.",
+        "description": "Immutable analysis for the current revision, including route geometry. Compare revision with track metadata. Metrics describe this source revision; track metadata contains the current user-selected speed and duration. Returned directly from object storage.",
         "tags": [
           "Tracks"
         ],
@@ -1850,81 +864,25 @@
             }
           },
           "403": {
-            "description": "Cross-origin browser request refused.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error403"
           },
           "404": {
-            "description": "Track not found or not owned by the current user.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error404"
           },
           "409": {
-            "description": "Processing conflict or analysis not ready.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error409"
           },
           "500": {
-            "description": "Unexpected server or persistence failure.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error500"
           },
           "502": {
-            "description": "Stored file could not be read.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error502"
           },
           "503": {
-            "description": "File delivery unavailable; check reverse-proxy configuration.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error503"
           },
           "405": {
-            "description": "Method not allowed for this resource.",
-            "headers": {
-              "Allow": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Error405"
           }
         },
         "parameters": [
@@ -1937,6 +895,128 @@
             }
           }
         ]
+      }
+    },
+    "/tracks/deletions": {
+      "post": {
+        "operationId": "removeMany",
+        "summary": "Delete selected tracks",
+        "description": "Removes the selected items belonging to the current user. Returns only affected IDs. Duplicate IDs are processed once.",
+        "tags": [
+          "Track management"
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AffectedIdsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error405"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Ids"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tracks/saved/deletions": {
+      "post": {
+        "operationId": "unsaveMany",
+        "summary": "Remove selected favorites",
+        "description": "Removes the selected items belonging to the current user. Returns only affected IDs. Duplicate IDs are processed once.",
+        "tags": [
+          "Favorites"
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AffectedIdsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error422"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "405": {
+            "$ref": "#/components/responses/Error405"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Ids"
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -2008,50 +1088,6 @@
         ],
         "additionalProperties": false
       },
-      "Metrics": {
-        "type": "object",
-        "properties": {
-          "distanceKm": {
-            "type": "number",
-            "nullable": true,
-            "description": "Distance in kilometres."
-          },
-          "ascentM": {
-            "type": "number",
-            "nullable": true,
-            "description": "Ascent in metres."
-          },
-          "descentM": {
-            "type": "number",
-            "nullable": true,
-            "description": "Descent in metres."
-          },
-          "minElevationM": {
-            "type": "number",
-            "nullable": true,
-            "description": "Minimum elevation in metres."
-          },
-          "maxElevationM": {
-            "type": "number",
-            "nullable": true,
-            "description": "Maximum elevation in metres."
-          },
-          "effectiveSpeedKmh": {
-            "type": "number",
-            "nullable": true,
-            "description": "Effective speed in kilometres per hour."
-          },
-          "estimatedDurationMs": {
-            "type": "number",
-            "nullable": true,
-            "description": "Estimated duration in milliseconds."
-          },
-          "hasElevation": {
-            "type": "boolean"
-          }
-        },
-        "additionalProperties": false
-      },
       "Distribution": {
         "type": "object",
         "properties": {
@@ -2071,158 +1107,6 @@
           "id",
           "distanceKm",
           "percent"
-        ],
-        "additionalProperties": false
-      },
-      "Terrain": {
-        "type": "object",
-        "properties": {
-          "startKm": {
-            "type": "number"
-          },
-          "endKm": {
-            "type": "number"
-          },
-          "lengthM": {
-            "type": "number"
-          },
-          "gainM": {
-            "type": "number"
-          },
-          "dropM": {
-            "type": "number"
-          },
-          "averageGrade": {
-            "type": "number",
-            "description": "Average slope in percent. Descents currently use a positive magnitude."
-          },
-          "score": {
-            "type": "number"
-          },
-          "label": {
-            "type": "string",
-            "description": "Legacy translation key for the climb category."
-          },
-          "color": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "startKm",
-          "endKm",
-          "lengthM",
-          "averageGrade",
-          "score",
-          "label",
-          "color"
-        ],
-        "additionalProperties": false
-      },
-      "SummaryPoi": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "nameGenerated": {
-            "type": "boolean"
-          },
-          "type": {
-            "type": "string"
-          },
-          "symbol": {
-            "type": "string"
-          },
-          "distanceKm": {
-            "type": "number",
-            "nullable": true
-          }
-        },
-        "required": [
-          "name",
-          "type",
-          "symbol",
-          "distanceKm"
-        ],
-        "additionalProperties": false
-      },
-      "Summary": {
-        "type": "object",
-        "properties": {
-          "metrics": {
-            "$ref": "#/components/schemas/Metrics"
-          },
-          "distributions": {
-            "type": "object",
-            "properties": {
-              "surfaces": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Distribution"
-                }
-              },
-              "roadQualities": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Distribution"
-                }
-              },
-              "wayTypes": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Distribution"
-                }
-              }
-            },
-            "required": [
-              "surfaces",
-              "roadQualities",
-              "wayTypes"
-            ],
-            "additionalProperties": false
-          },
-          "climbs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Terrain"
-            }
-          },
-          "descents": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Terrain"
-            }
-          },
-          "pointsOfInterest": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SummaryPoi"
-            }
-          },
-          "pointsOfInterestCount": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "analysisSources": {
-            "$ref": "#/components/schemas/AnalysisSources"
-          },
-          "completeness": {
-            "type": "string",
-            "enum": [
-              "FULL",
-              "PARTIAL"
-            ]
-          }
-        },
-        "required": [
-          "metrics",
-          "distributions",
-          "climbs",
-          "descents",
-          "pointsOfInterest",
-          "pointsOfInterestCount",
-          "analysisSources",
-          "completeness"
         ],
         "additionalProperties": false
       },
@@ -2252,1122 +1136,6 @@
         },
         "additionalProperties": false
       },
-      "Author": {
-        "type": "object",
-        "properties": {
-          "displayName": {
-            "type": "string"
-          },
-          "avatarUrl": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "displayName",
-          "avatarUrl"
-        ],
-        "additionalProperties": false
-      },
-      "Processing": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/PublicId"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "PROCESSING",
-              "READY",
-              "FAILED"
-            ]
-          },
-          "step": {
-            "type": "string",
-            "enum": [
-              "QUEUED",
-              "PARSING",
-              "ENRICHING",
-              "PUBLISHING"
-            ]
-          },
-          "error": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "code"
-            ],
-            "additionalProperties": false,
-            "nullable": true
-          },
-          "hasActive": {
-            "type": "boolean"
-          },
-          "canRetry": {
-            "type": "boolean"
-          },
-          "interrupted": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "id",
-          "status",
-          "error",
-          "hasActive",
-          "canRetry",
-          "interrupted"
-        ],
-        "additionalProperties": false
-      },
-      "Preview": {
-        "type": "object",
-        "properties": {
-          "viewBox": {
-            "type": "string"
-          },
-          "points": {
-            "type": "array",
-            "items": {
-              "type": "array",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 2,
-              "maxItems": 2
-            }
-          }
-        },
-        "required": [
-          "viewBox",
-          "points"
-        ],
-        "additionalProperties": false
-      },
-      "Track": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/PublicId"
-          },
-          "title": {
-            "type": "string"
-          },
-          "routeType": {
-            "$ref": "#/components/schemas/RouteType"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "PROCESSING",
-              "READY",
-              "FAILED"
-            ]
-          },
-          "processing": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "$ref": "#/components/schemas/PublicId"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "PROCESSING",
-                  "READY",
-                  "FAILED"
-                ]
-              },
-              "step": {
-                "type": "string",
-                "enum": [
-                  "QUEUED",
-                  "PARSING",
-                  "ENRICHING",
-                  "PUBLISHING"
-                ]
-              },
-              "error": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "code"
-                ],
-                "additionalProperties": false,
-                "nullable": true
-              },
-              "hasActive": {
-                "type": "boolean"
-              },
-              "canRetry": {
-                "type": "boolean"
-              },
-              "interrupted": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "id",
-              "status",
-              "error",
-              "hasActive",
-              "canRetry",
-              "interrupted"
-            ],
-            "additionalProperties": false,
-            "nullable": true
-          },
-          "resultKind": {
-            "type": "string",
-            "enum": [
-              "ACTIVE",
-              "DIAGNOSTIC",
-              "NONE"
-            ]
-          },
-          "revision": {
-            "type": "string",
-            "nullable": true
-          },
-          "metrics": {
-            "type": "object",
-            "properties": {
-              "distanceKm": {
-                "type": "number",
-                "nullable": true,
-                "description": "Distance in kilometres."
-              },
-              "ascentM": {
-                "type": "number",
-                "nullable": true,
-                "description": "Ascent in metres."
-              },
-              "descentM": {
-                "type": "number",
-                "nullable": true,
-                "description": "Descent in metres."
-              },
-              "minElevationM": {
-                "type": "number",
-                "nullable": true,
-                "description": "Minimum elevation in metres."
-              },
-              "maxElevationM": {
-                "type": "number",
-                "nullable": true,
-                "description": "Maximum elevation in metres."
-              },
-              "effectiveSpeedKmh": {
-                "type": "number",
-                "nullable": true,
-                "description": "Effective speed in kilometres per hour."
-              },
-              "estimatedDurationMs": {
-                "type": "number",
-                "nullable": true,
-                "description": "Estimated duration in milliseconds."
-              },
-              "hasElevation": {
-                "type": "boolean"
-              }
-            },
-            "additionalProperties": false,
-            "nullable": true
-          },
-          "summary": {
-            "type": "object",
-            "properties": {
-              "metrics": {
-                "$ref": "#/components/schemas/Metrics"
-              },
-              "distributions": {
-                "type": "object",
-                "properties": {
-                  "surfaces": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/Distribution"
-                    }
-                  },
-                  "roadQualities": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/Distribution"
-                    }
-                  },
-                  "wayTypes": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/Distribution"
-                    }
-                  }
-                },
-                "required": [
-                  "surfaces",
-                  "roadQualities",
-                  "wayTypes"
-                ],
-                "additionalProperties": false
-              },
-              "climbs": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Terrain"
-                }
-              },
-              "descents": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Terrain"
-                }
-              },
-              "pointsOfInterest": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SummaryPoi"
-                }
-              },
-              "pointsOfInterestCount": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "analysisSources": {
-                "$ref": "#/components/schemas/AnalysisSources"
-              },
-              "completeness": {
-                "type": "string",
-                "enum": [
-                  "FULL",
-                  "PARTIAL"
-                ]
-              }
-            },
-            "required": [
-              "metrics",
-              "distributions",
-              "climbs",
-              "descents",
-              "pointsOfInterest",
-              "pointsOfInterestCount",
-              "analysisSources",
-              "completeness"
-            ],
-            "additionalProperties": false,
-            "nullable": true
-          },
-          "originalFilename": {
-            "type": "string",
-            "nullable": true
-          },
-          "sourcePointCount": {
-            "type": "integer",
-            "nullable": true
-          },
-          "pointsOfInterestCount": {
-            "type": "integer"
-          },
-          "completeness": {
-            "type": "string",
-            "nullable": true,
-            "enum": [
-              "FULL",
-              "PARTIAL",
-              null
-            ]
-          },
-          "analysisSources": {
-            "$ref": "#/components/schemas/AnalysisSources"
-          },
-          "analysisLevel": {
-            "type": "string",
-            "enum": [
-              "FULL",
-              "BASIC",
-              "NONE"
-            ]
-          },
-          "externalLinks": {
-            "$ref": "#/components/schemas/ExternalLinks"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "uploader": {
-            "type": "object",
-            "properties": {
-              "displayName": {
-                "type": "string"
-              },
-              "avatarUrl": {
-                "type": "string",
-                "nullable": true
-              }
-            },
-            "required": [
-              "displayName",
-              "avatarUrl"
-            ],
-            "additionalProperties": false,
-            "nullable": true
-          },
-          "analysisUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "downloadUrl": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "routeType",
-          "status",
-          "processing",
-          "resultKind",
-          "revision",
-          "metrics",
-          "summary",
-          "originalFilename",
-          "sourcePointCount",
-          "pointsOfInterestCount",
-          "completeness",
-          "analysisSources",
-          "analysisLevel",
-          "externalLinks",
-          "createdAt",
-          "uploader",
-          "analysisUrl",
-          "downloadUrl"
-        ],
-        "additionalProperties": false
-      },
-      "UpdatedTrack": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/PublicId"
-          },
-          "title": {
-            "type": "string"
-          },
-          "routeType": {
-            "$ref": "#/components/schemas/RouteType"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "PROCESSING",
-              "READY",
-              "FAILED"
-            ]
-          },
-          "processing": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "$ref": "#/components/schemas/PublicId"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "PROCESSING",
-                  "READY",
-                  "FAILED"
-                ]
-              },
-              "step": {
-                "type": "string",
-                "enum": [
-                  "QUEUED",
-                  "PARSING",
-                  "ENRICHING",
-                  "PUBLISHING"
-                ]
-              },
-              "error": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "code"
-                ],
-                "additionalProperties": false,
-                "nullable": true
-              },
-              "hasActive": {
-                "type": "boolean"
-              },
-              "canRetry": {
-                "type": "boolean"
-              },
-              "interrupted": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "id",
-              "status",
-              "error",
-              "hasActive",
-              "canRetry",
-              "interrupted"
-            ],
-            "additionalProperties": false,
-            "nullable": true
-          },
-          "resultKind": {
-            "type": "string",
-            "enum": [
-              "ACTIVE",
-              "DIAGNOSTIC",
-              "NONE"
-            ]
-          },
-          "revision": {
-            "type": "string",
-            "nullable": true
-          },
-          "metrics": {
-            "type": "object",
-            "properties": {
-              "distanceKm": {
-                "type": "number",
-                "nullable": true,
-                "description": "Distance in kilometres."
-              },
-              "ascentM": {
-                "type": "number",
-                "nullable": true,
-                "description": "Ascent in metres."
-              },
-              "descentM": {
-                "type": "number",
-                "nullable": true,
-                "description": "Descent in metres."
-              },
-              "minElevationM": {
-                "type": "number",
-                "nullable": true,
-                "description": "Minimum elevation in metres."
-              },
-              "maxElevationM": {
-                "type": "number",
-                "nullable": true,
-                "description": "Maximum elevation in metres."
-              },
-              "effectiveSpeedKmh": {
-                "type": "number",
-                "nullable": true,
-                "description": "Effective speed in kilometres per hour."
-              },
-              "estimatedDurationMs": {
-                "type": "number",
-                "nullable": true,
-                "description": "Estimated duration in milliseconds."
-              },
-              "hasElevation": {
-                "type": "boolean"
-              }
-            },
-            "additionalProperties": false,
-            "nullable": true
-          },
-          "summary": {
-            "type": "object",
-            "properties": {
-              "metrics": {
-                "$ref": "#/components/schemas/Metrics"
-              },
-              "distributions": {
-                "type": "object",
-                "properties": {
-                  "surfaces": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/Distribution"
-                    }
-                  },
-                  "roadQualities": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/Distribution"
-                    }
-                  },
-                  "wayTypes": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/Distribution"
-                    }
-                  }
-                },
-                "required": [
-                  "surfaces",
-                  "roadQualities",
-                  "wayTypes"
-                ],
-                "additionalProperties": false
-              },
-              "climbs": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Terrain"
-                }
-              },
-              "descents": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Terrain"
-                }
-              },
-              "pointsOfInterest": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SummaryPoi"
-                }
-              },
-              "pointsOfInterestCount": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "analysisSources": {
-                "$ref": "#/components/schemas/AnalysisSources"
-              },
-              "completeness": {
-                "type": "string",
-                "enum": [
-                  "FULL",
-                  "PARTIAL"
-                ]
-              }
-            },
-            "required": [
-              "metrics",
-              "distributions",
-              "climbs",
-              "descents",
-              "pointsOfInterest",
-              "pointsOfInterestCount",
-              "analysisSources",
-              "completeness"
-            ],
-            "additionalProperties": false,
-            "nullable": true
-          },
-          "originalFilename": {
-            "type": "string",
-            "nullable": true
-          },
-          "sourcePointCount": {
-            "type": "integer",
-            "nullable": true
-          },
-          "pointsOfInterestCount": {
-            "type": "integer"
-          },
-          "completeness": {
-            "type": "string",
-            "nullable": true,
-            "enum": [
-              "FULL",
-              "PARTIAL",
-              null
-            ]
-          },
-          "analysisSources": {
-            "$ref": "#/components/schemas/AnalysisSources"
-          },
-          "analysisLevel": {
-            "type": "string",
-            "enum": [
-              "FULL",
-              "BASIC",
-              "NONE"
-            ]
-          },
-          "externalLinks": {
-            "$ref": "#/components/schemas/ExternalLinks"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "uploader": {
-            "type": "object",
-            "properties": {
-              "displayName": {
-                "type": "string"
-              },
-              "avatarUrl": {
-                "type": "string",
-                "nullable": true
-              }
-            },
-            "required": [
-              "displayName",
-              "avatarUrl"
-            ],
-            "additionalProperties": false,
-            "nullable": true
-          },
-          "analysisUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "downloadUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "preview": {
-            "type": "object",
-            "properties": {
-              "viewBox": {
-                "type": "string"
-              },
-              "points": {
-                "type": "array",
-                "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "number"
-                  },
-                  "minItems": 2,
-                  "maxItems": 2
-                }
-              }
-            },
-            "required": [
-              "viewBox",
-              "points"
-            ],
-            "additionalProperties": false,
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "routeType",
-          "status",
-          "processing",
-          "resultKind",
-          "revision",
-          "metrics",
-          "summary",
-          "originalFilename",
-          "sourcePointCount",
-          "pointsOfInterestCount",
-          "completeness",
-          "analysisSources",
-          "analysisLevel",
-          "externalLinks",
-          "createdAt",
-          "uploader",
-          "analysisUrl",
-          "downloadUrl",
-          "preview"
-        ],
-        "additionalProperties": false
-      },
-      "TrackCard": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/PublicId"
-          },
-          "title": {
-            "type": "string"
-          },
-          "routeType": {
-            "$ref": "#/components/schemas/RouteType"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "PROCESSING",
-              "READY",
-              "FAILED"
-            ]
-          },
-          "step": {
-            "type": "string"
-          },
-          "distanceKm": {
-            "type": "number",
-            "nullable": true
-          },
-          "ascentM": {
-            "type": "number",
-            "nullable": true
-          },
-          "descentM": {
-            "type": "number",
-            "nullable": true
-          },
-          "speedKmh": {
-            "type": "number",
-            "nullable": true
-          },
-          "estimatedDurationMs": {
-            "type": "number",
-            "nullable": true
-          },
-          "preview": {
-            "type": "object",
-            "properties": {
-              "viewBox": {
-                "type": "string"
-              },
-              "points": {
-                "type": "array",
-                "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "number"
-                  },
-                  "minItems": 2,
-                  "maxItems": 2
-                }
-              }
-            },
-            "required": [
-              "viewBox",
-              "points"
-            ],
-            "additionalProperties": false,
-            "nullable": true
-          },
-          "externalLinks": {
-            "$ref": "#/components/schemas/ExternalLinks"
-          },
-          "url": {
-            "type": "string"
-          },
-          "downloadUrl": {
-            "type": "string"
-          },
-          "isFavorite": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "routeType",
-          "createdAt",
-          "status",
-          "distanceKm",
-          "ascentM",
-          "descentM",
-          "speedKmh",
-          "estimatedDurationMs",
-          "preview",
-          "externalLinks",
-          "url",
-          "downloadUrl",
-          "isFavorite"
-        ],
-        "additionalProperties": false
-      },
-      "SavedTrackCard": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/PublicId"
-          },
-          "title": {
-            "type": "string"
-          },
-          "routeType": {
-            "$ref": "#/components/schemas/RouteType"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "PROCESSING",
-              "READY",
-              "FAILED"
-            ]
-          },
-          "step": {
-            "type": "string"
-          },
-          "distanceKm": {
-            "type": "number",
-            "nullable": true
-          },
-          "ascentM": {
-            "type": "number",
-            "nullable": true
-          },
-          "descentM": {
-            "type": "number",
-            "nullable": true
-          },
-          "speedKmh": {
-            "type": "number",
-            "nullable": true
-          },
-          "estimatedDurationMs": {
-            "type": "number",
-            "nullable": true
-          },
-          "preview": {
-            "type": "object",
-            "properties": {
-              "viewBox": {
-                "type": "string"
-              },
-              "points": {
-                "type": "array",
-                "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "number"
-                  },
-                  "minItems": 2,
-                  "maxItems": 2
-                }
-              }
-            },
-            "required": [
-              "viewBox",
-              "points"
-            ],
-            "additionalProperties": false,
-            "nullable": true
-          },
-          "externalLinks": {
-            "$ref": "#/components/schemas/ExternalLinks"
-          },
-          "url": {
-            "type": "string"
-          },
-          "downloadUrl": {
-            "type": "string"
-          },
-          "savedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "author": {
-            "type": "object",
-            "properties": {
-              "displayName": {
-                "type": "string"
-              },
-              "avatarUrl": {
-                "type": "string",
-                "nullable": true
-              }
-            },
-            "required": [
-              "displayName",
-              "avatarUrl"
-            ],
-            "additionalProperties": false,
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "routeType",
-          "createdAt",
-          "status",
-          "distanceKm",
-          "ascentM",
-          "descentM",
-          "speedKmh",
-          "estimatedDurationMs",
-          "preview",
-          "externalLinks",
-          "url",
-          "downloadUrl",
-          "savedAt",
-          "author"
-        ],
-        "additionalProperties": false
-      },
-      "TrackPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TrackCard"
-            },
-            "maxItems": 24
-          },
-          "nextCursor": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "items",
-          "nextCursor"
-        ],
-        "additionalProperties": false
-      },
-      "SavedTrackPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SavedTrackCard"
-            },
-            "maxItems": 24
-          },
-          "nextCursor": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "items",
-          "nextCursor"
-        ],
-        "additionalProperties": false
-      },
-      "Management": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/PublicId"
-          },
-          "title": {
-            "type": "string"
-          },
-          "routeType": {
-            "$ref": "#/components/schemas/RouteType"
-          },
-          "speedKmh": {
-            "type": "number",
-            "nullable": true
-          },
-          "externalLinks": {
-            "$ref": "#/components/schemas/ExternalLinks"
-          },
-          "analysis": {
-            "$ref": "#/components/schemas/Processing"
-          },
-          "replacement": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "$ref": "#/components/schemas/PublicId"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "PROCESSING",
-                  "READY",
-                  "FAILED"
-                ]
-              },
-              "step": {
-                "type": "string",
-                "enum": [
-                  "QUEUED",
-                  "PARSING",
-                  "ENRICHING",
-                  "PUBLISHING"
-                ]
-              },
-              "error": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "code"
-                ],
-                "additionalProperties": false,
-                "nullable": true
-              },
-              "hasActive": {
-                "type": "boolean"
-              },
-              "canRetry": {
-                "type": "boolean"
-              },
-              "interrupted": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "id",
-              "status",
-              "error",
-              "hasActive",
-              "canRetry",
-              "interrupted"
-            ],
-            "additionalProperties": false,
-            "nullable": true
-          },
-          "canRetry": {
-            "type": "boolean"
-          },
-          "interrupted": {
-            "type": "boolean"
-          },
-          "missingOsmTags": {
-            "type": "boolean"
-          },
-          "retrySource": {
-            "type": "string",
-            "enum": [
-              "openStreetMap",
-              "valhalla"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "routeType",
-          "speedKmh",
-          "externalLinks",
-          "analysis",
-          "replacement",
-          "canRetry",
-          "interrupted",
-          "missingOsmTags",
-          "retrySource"
-        ],
-        "additionalProperties": false
-      },
       "Error": {
         "type": "object",
         "properties": {
@@ -3380,7 +1148,7 @@
               },
               "message": {
                 "type": "string",
-                "description": "Optional human-readable legacy message. Do not parse or depend on its language."
+                "description": "Optional human-readable message. Use code for programmatic handling."
               }
             },
             "required": [
@@ -3431,12 +1199,8 @@
             "$ref": "#/components/schemas/ExternalLinks"
           }
         },
-        "required": [
-          "title",
-          "routeType",
-          "speedKmh"
-        ],
-        "additionalProperties": true
+        "additionalProperties": false,
+        "minProperties": 1
       },
       "SavedState": {
         "type": "object",
@@ -3462,143 +1226,261 @@
         ],
         "additionalProperties": false
       },
-      "DeletedIds": {
+      "Processing": {
         "type": "object",
         "properties": {
-          "deletedIds": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PublicId"
-            }
+          "status": {
+            "type": "string",
+            "enum": [
+              "PROCESSING",
+              "READY",
+              "FAILED"
+            ]
+          },
+          "step": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "QUEUED",
+              "PARSING",
+              "ENRICHING",
+              "PUBLISHING",
+              null
+            ]
+          },
+          "error": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "code": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false
+          },
+          "canRetry": {
+            "type": "boolean"
           }
         },
         "required": [
-          "deletedIds"
+          "status",
+          "step",
+          "error",
+          "canRetry"
         ],
         "additionalProperties": false
       },
-      "RemovedIds": {
-        "type": "object",
-        "properties": {
-          "removedIds": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PublicId"
-            }
-          }
-        },
-        "required": [
-          "removedIds"
-        ],
-        "additionalProperties": false
-      },
-      "Category": {
+      "ProcessingStatus": {
         "type": "object",
         "properties": {
           "id": {
-            "type": "string"
+            "$ref": "#/components/schemas/PublicId"
           },
-          "label": {
-            "type": "string"
-          },
-          "color": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "label",
-          "color"
-        ],
-        "additionalProperties": false
-      },
-      "Surface": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "color": {
-            "type": "string"
-          },
-          "raw": {
+          "status": {
             "type": "string",
-            "nullable": true
+            "enum": [
+              "PROCESSING",
+              "READY",
+              "FAILED"
+            ]
           },
-          "highway": {
+          "step": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "enum": [
+              "QUEUED",
+              "PARSING",
+              "ENRICHING",
+              "PUBLISHING",
+              null
+            ]
           },
-          "smoothness": {
-            "type": "string",
-            "nullable": true
+          "error": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "code": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false
           },
-          "tracktype": {
-            "type": "string",
-            "nullable": true
-          },
-          "quality": {
-            "$ref": "#/components/schemas/Category"
-          },
-          "inferred": {
+          "canRetry": {
             "type": "boolean"
           }
         },
         "required": [
           "id",
-          "label",
-          "color",
-          "raw",
-          "highway",
-          "smoothness",
-          "tracktype",
-          "quality",
-          "inferred"
+          "status",
+          "step",
+          "error",
+          "canRetry"
         ],
         "additionalProperties": false
       },
-      "Point": {
+      "Author": {
         "type": "object",
         "properties": {
-          "lat": {
-            "type": "number",
-            "description": "WGS84 latitude in degrees."
+          "displayName": {
+            "type": "string"
           },
-          "lon": {
-            "type": "number",
-            "description": "WGS84 longitude in degrees."
-          },
-          "ele": {
-            "type": "number",
-            "nullable": true,
-            "description": "Elevation in metres."
-          },
-          "time": {
+          "avatarUrl": {
             "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          },
-          "distanceKm": {
-            "type": "number"
-          },
-          "surface": {
-            "$ref": "#/components/schemas/Surface"
-          },
-          "grade": {
-            "type": "number",
-            "nullable": true,
-            "description": "Signed slope in percent."
+            "nullable": true
           }
         },
         "required": [
-          "lat",
-          "lon",
-          "ele",
-          "time",
-          "distanceKm"
+          "displayName",
+          "avatarUrl"
+        ],
+        "additionalProperties": false,
+        "nullable": true
+      },
+      "Metrics": {
+        "type": "object",
+        "properties": {
+          "distanceKm": {
+            "type": "number",
+            "nullable": true
+          },
+          "ascentM": {
+            "type": "number",
+            "nullable": true
+          },
+          "descentM": {
+            "type": "number",
+            "nullable": true
+          },
+          "minElevationM": {
+            "type": "number",
+            "nullable": true
+          },
+          "maxElevationM": {
+            "type": "number",
+            "nullable": true
+          },
+          "speedKmh": {
+            "type": "number",
+            "nullable": true
+          },
+          "estimatedDurationMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "movingTimeMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "movingAverageSpeedKmh": {
+            "type": "number",
+            "nullable": true
+          },
+          "averageSpeedKmh": {
+            "type": "number",
+            "nullable": true
+          },
+          "hasElevation": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "distanceKm",
+          "ascentM",
+          "descentM",
+          "minElevationM",
+          "maxElevationM",
+          "speedKmh",
+          "estimatedDurationMs",
+          "durationMs",
+          "movingTimeMs",
+          "movingAverageSpeedKmh",
+          "averageSpeedKmh",
+          "hasElevation"
+        ],
+        "additionalProperties": false,
+        "nullable": true
+      },
+      "Distributions": {
+        "type": "object",
+        "properties": {
+          "surfaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Distribution"
+            }
+          },
+          "roadQualities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Distribution"
+            }
+          },
+          "wayTypes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Distribution"
+            }
+          }
+        },
+        "required": [
+          "surfaces",
+          "roadQualities",
+          "wayTypes"
+        ],
+        "additionalProperties": false
+      },
+      "Terrain": {
+        "type": "object",
+        "properties": {
+          "startKm": {
+            "type": "number"
+          },
+          "endKm": {
+            "type": "number"
+          },
+          "lengthM": {
+            "type": "number"
+          },
+          "elevationChangeM": {
+            "type": "number"
+          },
+          "averageGradePercent": {
+            "type": "number",
+            "description": "Non-negative slope magnitude in percent."
+          },
+          "score": {
+            "type": "number"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "hc",
+              "1",
+              "2",
+              "3",
+              "4",
+              "uncategorized"
+            ]
+          }
+        },
+        "required": [
+          "startKm",
+          "endKm",
+          "lengthM",
+          "elevationChangeM",
+          "averageGradePercent",
+          "score",
+          "category"
         ],
         "additionalProperties": false
       },
@@ -3622,112 +1504,180 @@
           },
           "symbol": {
             "type": "string"
+          },
+          "distanceKm": {
+            "type": "number",
+            "nullable": true
           }
         },
         "required": [
           "lat",
           "lon",
           "name",
+          "nameGenerated",
           "type",
-          "symbol"
+          "symbol",
+          "distanceKm"
         ],
         "additionalProperties": false
       },
-      "DetailedTerrain": {
-        "type": "object",
-        "properties": {
-          "startKm": {
-            "type": "number"
-          },
-          "endKm": {
-            "type": "number"
-          },
-          "lengthM": {
-            "type": "number"
-          },
-          "gainM": {
-            "type": "number"
-          },
-          "dropM": {
-            "type": "number"
-          },
-          "averageGrade": {
-            "type": "number",
-            "description": "Average slope in percent. Descents currently use a positive magnitude."
-          },
-          "score": {
-            "type": "number"
-          },
-          "label": {
-            "type": "string",
-            "description": "Legacy translation key for the climb category."
-          },
-          "color": {
-            "type": "string"
-          },
-          "startIndex": {
-            "type": "integer"
-          },
-          "endIndex": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "startKm",
-          "endKm",
-          "lengthM",
-          "averageGrade",
-          "score",
-          "label",
-          "color",
-          "startIndex",
-          "endIndex"
-        ],
-        "additionalProperties": false
-      },
-      "DetailedDistribution": {
+      "Surface": {
         "type": "object",
         "properties": {
           "id": {
+            "type": "string"
+          },
+          "raw": {
             "type": "string",
-            "description": "Stable category identifier; unknown categories must be tolerated."
+            "nullable": true
           },
-          "distanceKm": {
-            "type": "number"
+          "highway": {
+            "type": "string",
+            "nullable": true
           },
-          "percent": {
-            "type": "number",
-            "description": "Share from 0 to 100."
+          "smoothness": {
+            "type": "string",
+            "nullable": true
           },
-          "label": {
+          "tracktype": {
+            "type": "string",
+            "nullable": true
+          },
+          "quality": {
             "type": "string"
           },
-          "color": {
-            "type": "string"
+          "inferred": {
+            "type": "boolean"
           }
         },
         "required": [
           "id",
-          "distanceKm",
-          "percent",
-          "label",
-          "color"
+          "raw",
+          "highway",
+          "smoothness",
+          "tracktype",
+          "quality",
+          "inferred"
         ],
         "additionalProperties": false
       },
-      "Analysis": {
+      "Point": {
         "type": "object",
         "properties": {
-          "name": {
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lon": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "elevationM": {
+            "type": "number",
+            "nullable": true
+          },
+          "time": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "distanceKm": {
+            "type": "number"
+          },
+          "gradePercent": {
+            "type": "number",
+            "nullable": true
+          },
+          "surface": {
+            "$ref": "#/components/schemas/Surface"
+          }
+        },
+        "required": [
+          "lat",
+          "lon",
+          "elevationM",
+          "time",
+          "distanceKm",
+          "gradePercent"
+        ],
+        "additionalProperties": false
+      },
+      "Track": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PublicId"
+          },
+          "title": {
             "type": "string"
           },
-          "nameGenerated": {
-            "type": "boolean"
+          "routeType": {
+            "$ref": "#/components/schemas/RouteType"
           },
-          "points": {
+          "createdAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "processing": {
+            "$ref": "#/components/schemas/Processing"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/Metrics"
+          },
+          "externalLinks": {
+            "$ref": "#/components/schemas/ExternalLinks"
+          },
+          "author": {
+            "$ref": "#/components/schemas/Author"
+          },
+          "gpxUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "revision": {
+            "type": "string",
+            "nullable": true
+          },
+          "completeness": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "FULL",
+              "PARTIAL",
+              null
+            ]
+          },
+          "sources": {
+            "$ref": "#/components/schemas/AnalysisSources"
+          },
+          "originalFilename": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourcePointCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "analysisUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "distributions": {
+            "$ref": "#/components/schemas/Distributions"
+          },
+          "climbs": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Point"
+              "$ref": "#/components/schemas/Terrain"
+            }
+          },
+          "descents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Terrain"
             }
           },
           "pointsOfInterest": {
@@ -3735,152 +1685,141 @@
             "items": {
               "$ref": "#/components/schemas/Poi"
             }
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "routeType",
+          "createdAt",
+          "processing",
+          "metrics",
+          "externalLinks",
+          "author",
+          "gpxUrl",
+          "revision",
+          "completeness",
+          "sources",
+          "originalFilename",
+          "sourcePointCount",
+          "analysisUrl",
+          "distributions",
+          "climbs",
+          "descents",
+          "pointsOfInterest"
+        ],
+        "additionalProperties": false
+      },
+      "Preview": {
+        "type": "array",
+        "nullable": true,
+        "items": {
+          "type": "object",
+          "properties": {
+            "lat": {
+              "type": "number"
+            },
+            "lon": {
+              "type": "number"
+            }
           },
-          "distanceKm": {
-            "type": "number",
-            "nullable": true,
-            "description": "Distance in kilometres."
+          "required": [
+            "lat",
+            "lon"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "TrackListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PublicId"
           },
-          "ascentM": {
-            "type": "number",
-            "nullable": true,
-            "description": "Ascent in metres."
+          "title": {
+            "type": "string"
           },
-          "descentM": {
-            "type": "number",
-            "nullable": true,
-            "description": "Descent in metres."
+          "routeType": {
+            "$ref": "#/components/schemas/RouteType"
           },
-          "minElevationM": {
-            "type": "number",
-            "nullable": true,
-            "description": "Minimum elevation in metres."
-          },
-          "maxElevationM": {
-            "type": "number",
-            "nullable": true,
-            "description": "Maximum elevation in metres."
-          },
-          "effectiveSpeedKmh": {
-            "type": "number",
-            "nullable": true,
-            "description": "Effective speed in kilometres per hour."
-          },
-          "estimatedDurationMs": {
-            "type": "number",
-            "nullable": true,
-            "description": "Estimated duration in milliseconds."
-          },
-          "hasElevation": {
-            "type": "boolean"
-          },
-          "durationMs": {
-            "type": "number",
-            "nullable": true
-          },
-          "movingTimeMs": {
-            "type": "number",
-            "nullable": true
-          },
-          "movingSpeedThresholdKmh": {
-            "type": "number",
-            "nullable": true
-          },
-          "movingAverageSpeedKmh": {
-            "type": "number",
-            "nullable": true
-          },
-          "averageSpeedKmh": {
-            "type": "number",
-            "nullable": true
-          },
-          "sourcePointCount": {
-            "type": "integer"
-          },
-          "elevationSource": {
+          "createdAt": {
             "type": "string",
-            "enum": [
-              "GPX",
-              "GPX_PARTIAL",
-              "NONE",
-              "VALHALLA_DEM"
-            ]
+            "nullable": true,
+            "format": "date-time"
           },
-          "enrichmentSource": {
+          "processing": {
+            "$ref": "#/components/schemas/Processing"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/Metrics"
+          },
+          "externalLinks": {
+            "$ref": "#/components/schemas/ExternalLinks"
+          },
+          "author": {
+            "$ref": "#/components/schemas/Author"
+          },
+          "gpxUrl": {
             "type": "string",
-            "enum": [
-              "VALHALLA",
-              "VALHALLA_OSM"
-            ]
+            "nullable": true
           },
           "preview": {
             "$ref": "#/components/schemas/Preview"
           },
-          "climbs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DetailedTerrain"
-            }
+          "url": {
+            "type": "string"
           },
-          "descents": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DetailedTerrain"
-            }
+          "isFavorite": {
+            "type": "boolean"
           },
-          "surfaces": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DetailedDistribution"
-            }
-          },
-          "roadQualities": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DetailedDistribution"
-            }
-          },
-          "wayTypes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DetailedDistribution"
-            }
+          "savedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
           }
         },
         "required": [
-          "name",
-          "points",
-          "pointsOfInterest",
-          "distanceKm",
-          "ascentM",
-          "descentM",
-          "hasElevation",
-          "sourcePointCount",
-          "effectiveSpeedKmh",
-          "estimatedDurationMs",
-          "elevationSource",
-          "preview"
+          "id",
+          "title",
+          "routeType",
+          "createdAt",
+          "processing",
+          "metrics",
+          "externalLinks",
+          "author",
+          "gpxUrl",
+          "preview",
+          "url",
+          "isFavorite",
+          "savedAt"
+        ],
+        "additionalProperties": false
+      },
+      "TrackPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrackListItem"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
         ],
         "additionalProperties": false
       },
       "AnalysisDocument": {
         "type": "object",
         "properties": {
-          "schemaVersion": {
-            "type": "integer",
-            "enum": [
-              1
-            ]
-          },
           "revision": {
             "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "READY",
-              "FAILED"
-            ]
           },
           "completeness": {
             "type": "string",
@@ -3889,20 +1828,55 @@
               "PARTIAL"
             ]
           },
-          "analysisSources": {
+          "sources": {
             "$ref": "#/components/schemas/AnalysisSources"
           },
-          "analysis": {
-            "$ref": "#/components/schemas/Analysis"
+          "metrics": {
+            "$ref": "#/components/schemas/Metrics"
+          },
+          "distributions": {
+            "$ref": "#/components/schemas/Distributions"
+          },
+          "climbs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Terrain"
+            }
+          },
+          "descents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Terrain"
+            }
+          },
+          "pointsOfInterest": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Poi"
+            }
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Point"
+            }
+          },
+          "sourceName": {
+            "type": "string",
+            "description": "Original name from the GPX track, route or metadata; falls back to the filename without its extension. Unchanged by edits to the track title."
           }
         },
         "required": [
-          "schemaVersion",
           "revision",
-          "status",
           "completeness",
-          "analysisSources",
-          "analysis"
+          "sources",
+          "metrics",
+          "distributions",
+          "climbs",
+          "descents",
+          "pointsOfInterest",
+          "points",
+          "sourceName"
         ],
         "additionalProperties": false
       },
@@ -3911,18 +1885,6 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/Track"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "additionalProperties": false
-      },
-      "UpdatedTrackResponse": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/UpdatedTrack"
           }
         },
         "required": [
@@ -3942,35 +1904,11 @@
         ],
         "additionalProperties": false
       },
-      "SavedTrackPageResponse": {
+      "ProcessingStatusResponse": {
         "type": "object",
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/SavedTrackPage"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "additionalProperties": false
-      },
-      "ManagementResponse": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/Management"
-          }
-        },
-        "required": [
-          "data"
-        ],
-        "additionalProperties": false
-      },
-      "ProcessingResponse": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/Processing"
+            "$ref": "#/components/schemas/ProcessingStatus"
           }
         },
         "required": [
@@ -4002,29 +1940,161 @@
         ],
         "additionalProperties": false
       },
-      "DeletedIdsResponse": {
+      "AffectedIds": {
         "type": "object",
         "properties": {
-          "data": {
-            "$ref": "#/components/schemas/DeletedIds"
+          "ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicId"
+            }
           }
         },
         "required": [
-          "data"
+          "ids"
         ],
         "additionalProperties": false
       },
-      "RemovedIdsResponse": {
+      "AffectedIdsResponse": {
         "type": "object",
         "properties": {
           "data": {
-            "$ref": "#/components/schemas/RemovedIds"
+            "$ref": "#/components/schemas/AffectedIds"
           }
         },
         "required": [
           "data"
         ],
         "additionalProperties": false
+      }
+    },
+    "responses": {
+      "Error400": {
+        "description": "Malformed JSON or cursor.\n\nCodes: INVALID_JSON (malformed JSON), INVALID_CURSOR (invalid pagination cursor).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error401": {
+        "description": "A valid session is required.\n\nCodes: AUTHENTICATION_REQUIRED (missing session), INVALID_SESSION (expired or invalid session).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error403": {
+        "description": "Browser origin is not allowed.\n\nCodes: CROSS_ORIGIN_FORBIDDEN (cross-origin browser request).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error404": {
+        "description": "Track or resource not found.\n\nCodes: TRACK_NOT_FOUND (unknown or inaccessible track), API_NOT_FOUND (unknown API route).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error405": {
+        "description": "Method not allowed.\n\nCodes: METHOD_NOT_ALLOWED (unsupported method; see Allow).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "headers": {
+          "Allow": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Error409": {
+        "description": "Operation conflicts with current state or quota.\n\nCodes: TRACK_ANALYSIS_NOT_READY (no stored result), TRACK_EDIT_CONFLICT (processing prevents editing), REPLACEMENT_IN_PROGRESS (another attempt is running), ANALYSIS_NOT_RETRYABLE (retry unavailable), TRACK_LIMIT_REACHED (account quota).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error413": {
+        "description": "Request body exceeds the permitted size.\n\nCodes: GPX_FILE_TOO_LARGE (GPX exceeds 25 MiB), PAYLOAD_TOO_LARGE (JSON body exceeds limit).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error415": {
+        "description": "Unsupported content type or encoding.\n\nCodes: UNSUPPORTED_GPX_TYPE (unsupported GPX Content-Type), UNSUPPORTED_MEDIA_TYPE (unsupported encoding or charset).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error422": {
+        "description": "Invalid request fields.\n\nCodes: INVALID_REQUEST_BODY (empty, non-object or unknown PATCH fields), INVALID_TRACK_TITLE, INVALID_TRACK_SPEED, INVALID_ROUTE_TYPE, INVALID_EXTERNAL_LINKS, INVALID_GPX_FILENAME, INVALID_SEARCH_QUERY, INVALID_TRACK_IDS.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error500": {
+        "description": "Operation failed.\n\nCodes: INTERNAL_ERROR, UPLOAD_FAILED, REPLACEMENT_FAILED.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error502": {
+        "description": "Stored file could not be read.\n\nCodes: TRACK_FILE_UNAVAILABLE (stored file could not be read).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error503": {
+        "description": "File delivery is unavailable.\n\nCodes: TRACK_DELIVERY_UNAVAILABLE (file delivery is unavailable).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       }
     }
   }

@@ -11,7 +11,7 @@ import { trackRoutes } from '../../../../src/backend/api/v1/routes.js';
 import { createApiRouter } from '../../../../src/backend/api/router.js';
 import { createS3TrackService } from '../../../../src/backend/s3-track-service.js';
 import { analyzeGpxSource, enrichTrackAnalysis } from '../../../../src/backend/track-analysis.js';
-import { createTrackSummary } from '../../../../src/backend/track-summary.js';
+import { trackData, analysisDocument } from '../../../../src/backend/track-data.js';
 import { publicTrack, card, statusOf } from '../../../../src/backend/s3-track-presenters.js';
 import { serialize } from '../../../../src/backend/api/v1/serialization.js';
 import { request } from './http.js';
@@ -32,14 +32,14 @@ async function fixture(enriched = true) {
   }) : base;
   const analysisSources = { gpx: 'SUCCESS', valhalla: enriched ? 'SUCCESS' : 'FAILED', openStreetMap: enriched ? 'SUCCESS' : 'FAILED' };
   const completeness = enriched ? 'FULL' : 'PARTIAL';
-  const summary = createTrackSummary(analysis, { analysisSources, completeness });
+  const summary = trackData(analysis);
   const result = { revision: 'revision1', sourceKey: 'private/source.gpx', analysisKey: 'private/analysis.json',
-    metrics: summary.metrics, summary, preview: analysis.preview, completeness, analysisSources,
+    ...summary, preview: analysis.preview, completeness, analysisSources,
     originalFilename: 'ride.gpx', sourcePointCount: analysis.sourcePointCount, pointsOfInterestCount: analysis.pointsOfInterest.length };
   const track = { _id: '0123456789abcdef01234567', publicId: 'publicTrackId00000001', ownerId: 'private-owner',
     title: 'Contract ride', routeType: 'cycling', createdAt: new Date('2026-09-01T00:00:00Z'),
     analysisStatus: enriched ? 'READY' : 'FAILED', [enriched ? 'active' : 'diagnostic']: result };
-  const document = { schemaVersion: 1, revision: result.revision, status: track.analysisStatus, completeness, analysisSources, analysis };
+  const document = analysisDocument({ revision: result.revision, completeness, analysisSources, analysis });
   const objectStore = { assertKey: (key) => key, openRead: vi.fn(async () => Readable.from(JSON.stringify(document))) };
   const service = createS3TrackService({
     trackRepository: { findByPublicId: async () => track, findOwnedByPublicId: async () => track,
@@ -74,7 +74,7 @@ describe('API v1 contract', () => {
     conforms('AnalysisDocument', document);
     const server = express();
     server.use('/api', createApiRouter(service, { getUser: async () => ({ id: '0123456789abcdef01234567' }) }));
-    for (const [suffix, schema] of [['', 'TrackResponse'], ['/manage', 'ManagementResponse'], ['/status', 'ProcessingResponse']]) {
+    for (const [suffix, schema] of [['', 'TrackResponse'], ['/status', 'ProcessingStatusResponse']]) {
       const result = await request(server, { url: `/api/v1/tracks/${track.publicId}${suffix}` });
       expect(result.status).toBe(200);
       conforms(schema, result.json());
@@ -84,7 +84,7 @@ describe('API v1 contract', () => {
     }
     expect(objectStore.openRead).not.toHaveBeenCalled();
     conforms('TrackPage', await service.listMyTracks({ ownerId: track.ownerId }));
-    conforms('SavedTrackPage', await service.listSavedTracks({ userId: track.ownerId }));
+    conforms('TrackPage', await service.listSavedTracks({ userId: track.ownerId }));
     const detailed = await request(server, { url: `/api/v1/tracks/${track.publicId}/analysis` });
     conforms('AnalysisDocument', detailed.json());
   });
@@ -94,14 +94,14 @@ describe('API v1 contract', () => {
     delete track.active;
     track.analysisStatus = 'PROCESSING';
     track.attempt = { status: 'PROCESSING', step: 'QUEUED', revision: 'pending', sourceKey: 'private/source', originalFilename: 'ride.gpx' };
-    conforms('Processing', statusOf(track));
+    conforms('ProcessingStatus', statusOf(track));
     const value = publicTrack(track);
     value.ownerId = 'secret';
-    value.metrics = { distanceKm: 10, internal: 'secret' };
+    value.metrics = { ...trackData({}).metrics, distanceKm: 10, internal: 'secret' };
     const selected = serialize(contract.components.schemas.Track, value);
     conforms('Track', selected);
     expect(JSON.stringify(selected)).not.toContain('secret');
     expect(selected).not.toHaveProperty('preview');
-    conforms('TrackCard', { ...card(track), isFavorite: false });
+    conforms('TrackListItem', { ...card(track), isFavorite: false, savedAt: null });
   });
 });

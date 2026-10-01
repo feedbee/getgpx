@@ -87,6 +87,18 @@ describe('track HTTP handlers', () => {
     expect(removeResponse.body).toEqual({ data: { saved: false } });
   });
 
+  it('distinguishes an unknown track from an existing unsaved track', async () => {
+    const service = { getSavedState: vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(false) };
+    const handlers = createTrackHandlers(service, { getUser: async () => ({ id: new ObjectId().toString() }) });
+    const missing = response();
+    await handlers.savedState(request({ params: { id: 'Abcdef_1234567890XYZ' } }), missing);
+    expect(missing.statusCode).toBe(404);
+    expect(missing.body).toEqual({ error: { code: 'TRACK_NOT_FOUND' } });
+    const existing = response();
+    await handlers.savedState(request({ params: { id: 'Abcdef_1234567890XYZ' } }), existing);
+    expect(existing.body).toEqual({ data: { saved: false } });
+  });
+
   it('validates bulk removal from the authenticated user favorites', async () => {
     const userId = new ObjectId();
     const publicId = 'Abcdef_1234567890XYZ';
@@ -99,7 +111,7 @@ describe('track HTTP handlers', () => {
     await handlers.unsaveMany(source, result);
 
     expect(trackService.unsaveTracks).toHaveBeenCalledWith({ publicIds: [publicId], userId });
-    expect(result.body).toEqual({ data: { removedIds: [publicId] } });
+    expect(result.body).toEqual({ data: { ids: [publicId] } });
     const invalid = request();
     invalid.body = { ids: ['bad-id'] };
     const invalidResult = response();
@@ -300,6 +312,19 @@ describe('track HTTP handlers', () => {
     expect(stream.pipe).toHaveBeenCalledWith(result);
   });
 
+  it('accepts a title-only patch without clearing other fields', async () => {
+    const updateDetails = vi.fn(async () => ({ id: 'example', title: 'New' }));
+    const handlers = createTrackHandlers({ updateDetails }, { getUser: async () => ({ id: new ObjectId().toString() }) });
+    const source = request({ params: { id: 'example' } });
+    source.body = { title: ' New ' };
+    const result = response();
+    await handlers.update(source, result);
+    expect(result.statusCode).toBe(200);
+    expect(updateDetails).toHaveBeenCalledWith(expect.objectContaining({ title: 'New' }));
+    expect(updateDetails.mock.calls[0][0]).not.toHaveProperty('externalLinks');
+    expect(updateDetails.mock.calls[0][0]).not.toHaveProperty('speedKmh');
+  });
+
   it('validates owner edits and accepted cycling speed range', async () => {
     const ownerId = new ObjectId();
     const trackId = new ObjectId();
@@ -375,7 +400,7 @@ describe('track HTTP handlers', () => {
     await handlers.removeMany(source, result);
 
     expect(trackService.deleteTracks).toHaveBeenCalledWith({ ownerId, publicIds: [firstId.toString(), secondId.toString()] });
-    expect(result.body).toEqual({ data: { deletedIds: [firstId.toString(), secondId.toString()] } });
+    expect(result.body).toEqual({ data: { ids: [firstId.toString(), secondId.toString()] } });
   });
 
   it('rejects empty, oversized, or malformed bulk deletion input', async () => {

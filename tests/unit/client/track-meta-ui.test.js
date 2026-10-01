@@ -8,7 +8,7 @@ describe('track upload attribution', () => {
   it('formats uploader and upload date for the route header', () => {
     expect(formatTrackAttribution({
       createdAt: '2026-09-17T10:00:00.000Z',
-      uploader: { displayName: 'Jan Kowalski' },
+      author: { displayName: 'Jan Kowalski' },
     }, 'ru-RU', 'UTC')).toBe('Jan Kowalski · 17 сентября 2026 г.');
   });
 
@@ -20,7 +20,7 @@ describe('track upload attribution', () => {
   it('uses the current profile only when track ownership has been verified', () => {
     const currentUser = { displayName: 'Anna Nowak', avatarUrl: 'https://example.com/anna.jpg' };
 
-    expect(resolveTrackUploader({ uploader: null }, currentUser, false)).toBeNull();
-    expect(resolveTrackUploader({ uploader: null }, currentUser, true)).toEqual(currentUser);
+    expect(resolveTrackUploader({ author: null }, currentUser, false)).toBeNull();
+    expect(resolveTrackUploader({ author: null }, currentUser, true)).toEqual(currentUser);
   });
 });

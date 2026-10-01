@@ -1,3 +1,4 @@
+import { analysisDocument } from './track-data.js';
 import { PassThrough, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -58,9 +59,9 @@ export function createTrackObjectStore({ s3, send = (command) => s3.send(command
       await send(new CopyObjectCommand({ Bucket: bucket, Key: key, CopySource: `${bucket}/${fromKey.split('/').map(encodeURIComponent).join('/')}` }));
       return key;
     },
-    async writeAnalysis({ trackId, revision, analysis, status = 'READY', completeness = 'FULL', analysisSources = {} }) {
+    async writeAnalysis({ trackId, revision, analysis, completeness = 'FULL', analysisSources = {} }) {
       const key = keyFor(trackId, revision, 'analysis.json');
-      const body = JSON.stringify({ schemaVersion: 1, revision, status, completeness, analysisSources, analysis });
+      const body = JSON.stringify(analysisDocument({ revision, analysis, completeness, analysisSources }));
       await send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: 'application/json' }));
       return key;
     },

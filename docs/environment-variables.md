@@ -16,7 +16,7 @@ This is the complete application configuration reference. “Required” means t
 | `TRACK_S3_BUCKET` | None | Yes | Private S3 bucket for immutable GPX source and analysis objects. An invalid or missing name stops server startup. |
 | `AWS_REGION` | None | Yes | AWS region used to construct the S3 client. An invalid or missing region stops server startup. |
 | `TRACK_S3_PREFIX` | `dev` | No for development; set to `prod` in production | Prefix for S3 object keys. Separates environments sharing a bucket; changing it makes objects under the old prefix inaccessible through the new configuration. |
-| `TRACK_PREVIEW_MAX_POINTS` | `200` | No | Minimum 2; limits the simplified preview points retained for quick track display. |
+| `TRACK_PREVIEW_MAX_POINTS` | `200` | No | Minimum 2; limits the geographic preview coordinates retained in MongoDB and returned in track lists for client-side drawing. |
 | `TRACK_FILE_DELIVERY` | `stream` | No | `stream` serves GPX and analysis through Node. `nginx` enables the internal file route and CloudFront signed delivery, and requires the three CloudFront settings below. |
 | `AWS_ACCESS_KEY_ID` | Unset; AWS SDK searches other credential sources | Conditional | Static S3 access key. If supplied, `AWS_SECRET_ACCESS_KEY` must also be supplied. Prefer role or profile credentials where available. |
 | `AWS_SECRET_ACCESS_KEY` | Unset; AWS SDK searches other credential sources | Conditional | Secret paired with `AWS_ACCESS_KEY_ID`. Supplying only one of the pair stops startup. |

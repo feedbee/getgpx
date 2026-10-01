@@ -24,10 +24,10 @@ describe('route page summary', () => {
     const view = createRouteSummaryView({ documentRef, updatePageLanguage: vi.fn(),
       renderPointsOfInterest, setDetailedView, onFiltersRendered });
 
-    view.renderBasicTrackHeader({ title: 'Forest ride', routeType: 'cycling', resultKind: 'ACTIVE',
-      summary: { metrics: { distanceKm: 10, ascentM: 100, descentM: 100 },
+    view.renderBasicTrackHeader({ title: 'Forest ride', routeType: 'cycling', revision: 'one',
+      metrics: { distanceKm: 10, ascentM: 100, descentM: 100 },
         distributions: { surfaces: [], wayTypes: [], roadQualities: [] },
-        climbs: [], descents: [], pointsOfInterest: [], analysisSources: {} } });
+        climbs: [], descents: [], pointsOfInterest: [], sources: {} });
 
     expect(documentRef.querySelector('#track-name').textContent).toBe('Forest ride');
     expect(renderPointsOfInterest).toHaveBeenCalledWith([]);

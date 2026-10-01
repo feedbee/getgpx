@@ -99,6 +99,7 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
       const publicId = isPublicId(request.params.id) ? request.params.id : null;
       if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
       const saved = await trackService.getSavedState({ publicId, userId: identity.ownerId });
+      if (saved === null) return error(response, 404, 'TRACK_NOT_FOUND');
       return send(response, 200, { data: { saved } });
     },
 
@@ -133,7 +134,7 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
         return error(response, 422, 'INVALID_TRACK_IDS', 'Список треков содержит некорректный идентификатор.');
       }
       const removedIds = await trackService.unsaveTracks({ publicIds, userId: identity.ownerId });
-      return send(response, 200, { data: { removedIds } });
+      return send(response, 200, { data: { ids: removedIds } });
     },
 
     async publicTrack(request, response) {
@@ -145,32 +146,44 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
         : error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
     },
 
-    async management(request, response) {
-      const identity = await authenticatedOwner(request, response);
-      if (!identity) return;
-      const { ownerId } = identity;
-      const publicId = isPublicId(request.params.id) ? request.params.id : null;
-      if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
-      const track = await trackService.getManagement({ publicId, ownerId });
-      return track ? send(response, 200, { data: track }) : error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
-    },
-
     async update(request, response) {
       const identity = await authenticatedOwner(request, response);
       if (!identity) return;
       const { ownerId } = identity;
       const publicId = isPublicId(request.params.id) ? request.params.id : null;
       if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
-      const title = typeof request.body?.title === 'string' ? request.body.title.normalize('NFKC').trim() : '';
-      const speedKmh = Number(request.body?.speedKmh);
-      const routeType = request.body?.routeType;
-      const externalLinks = normalizeExternalTrackLinks(request.body?.externalLinks);
-      if (!title || title.length > 200) return error(response, 422, 'INVALID_TRACK_TITLE', 'Название должно содержать от 1 до 200 символов.');
-      if (!Number.isFinite(speedKmh) || speedKmh < 1 || speedKmh > 50) return error(response, 422, 'INVALID_TRACK_SPEED', 'Скорость должна быть от 1 до 50 км/ч.');
-      if (!isRouteType(routeType)) return error(response, 422, 'INVALID_ROUTE_TYPE', 'Выберите тип маршрута.');
-      if (!externalLinks) return error(response, 422, 'INVALID_EXTERNAL_LINKS', 'Проверьте ссылки на внешние сервисы. Допустимы только HTTPS-ссылки на соответствующий сервис.');
+      const body = request.body;
+      const fields = ['title', 'speedKmh', 'routeType', 'externalLinks'];
+      if (!body || typeof body !== 'object' || Array.isArray(body) || !Object.keys(body).length
+        || Object.keys(body).some((key) => !fields.includes(key))) {
+        return error(response, 422, 'INVALID_REQUEST_BODY');
+      }
+      const changes = {};
+      if (Object.hasOwn(body, 'title')) {
+        const title = typeof body.title === 'string' ? body.title.normalize('NFKC').trim() : '';
+        if (!title || title.length > 200) return error(response, 422, 'INVALID_TRACK_TITLE');
+        changes.title = title;
+      }
+      if (Object.hasOwn(body, 'speedKmh')) {
+        const speedKmh = body.speedKmh;
+        if (typeof speedKmh !== 'number' || !Number.isFinite(speedKmh) || speedKmh < 1 || speedKmh > 50) {
+          return error(response, 422, 'INVALID_TRACK_SPEED');
+        }
+        changes.speedKmh = speedKmh;
+      }
+      if (Object.hasOwn(body, 'routeType')) {
+        if (!isRouteType(body.routeType)) return error(response, 422, 'INVALID_ROUTE_TYPE');
+        changes.routeType = body.routeType;
+      }
+      if (Object.hasOwn(body, 'externalLinks')) {
+        const links = normalizeExternalTrackLinks(body.externalLinks);
+        if (!links || !body.externalLinks || typeof body.externalLinks !== 'object' || Array.isArray(body.externalLinks)) {
+          return error(response, 422, 'INVALID_EXTERNAL_LINKS');
+        }
+        changes.externalLinks = links;
+      }
       let track;
-      try { track = await trackService.updateDetails({ publicId, ownerId, title, speedKmh, routeType, externalLinks }); }
+      try { track = await trackService.updateDetails({ publicId, ownerId, ...changes }); }
       catch (updateError) {
         if (updateError?.code === 'TRACK_EDIT_CONFLICT') {
           return error(response, 409, 'TRACK_EDIT_CONFLICT', 'Дождитесь окончания обработки трека.');
@@ -188,13 +201,15 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
       if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
       const contentType = String(request.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
       const filename = filenameFromRequest(request);
-      if (!GPX_CONTENT_TYPES.has(contentType) || !filename) return error(response, 422, 'INVALID_GPX_FILE', 'Выберите GPX-файл.');
+      if (!GPX_CONTENT_TYPES.has(contentType)) return error(response, 415, 'UNSUPPORTED_GPX_TYPE');
+      if (!filename) return error(response, 422, 'INVALID_GPX_FILENAME');
       let replacementStage = 'track_lookup';
       try {
         const status = await trackService.replaceFile({ publicId, ownerId, filename, source: request,
           onStage: (stage) => { replacementStage = stage; } });
         return status ? send(response, 202, { data: status }) : error(response, 409, 'REPLACEMENT_IN_PROGRESS', 'Замена этого трека уже выполняется.');
       } catch (replaceError) {
+        if (replaceError?.code === 'TRACK_NOT_FOUND') return error(response, 404, 'TRACK_NOT_FOUND');
         if (replaceError instanceof GpxFileTooLargeError) return error(response, 413, replaceError.code, 'GPX-файл должен быть не больше 25 MiB.');
         request.log?.error({ event: 'track_replacement_failed', stage: replacementStage,
           ...safeErrorDetails(replaceError) }, 'Track replacement failed');
@@ -224,7 +239,7 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
         return error(response, 422, 'INVALID_TRACK_IDS', 'Список треков содержит некорректный идентификатор.');
       }
       const deletedIds = await trackService.deleteTracks({ publicIds: uniqueIds, ownerId });
-      return send(response, 200, { data: { deletedIds: deletedIds.map(String) } });
+      return send(response, 200, { data: { ids: deletedIds.map(String) } });
     },
 
     async download(request, response) {
@@ -248,6 +263,7 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
         return error(response, 502, 'TRACK_FILE_UNAVAILABLE', 'Файл временно недоступен.');
       }
       if (!download) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
+      if (download.unavailable) return error(response, 409, 'TRACK_ANALYSIS_NOT_READY', 'Файл ещё не готов.');
       response.setHeader('Content-Type', 'application/gpx+xml');
       response.setHeader('Content-Disposition', contentDisposition(download.filename));
       response.setHeader('Cache-Control', 'private, no-store');
@@ -355,7 +371,12 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
       const { ownerId } = identity;
       const publicId = isPublicId(request.params.id) ? request.params.id : null;
       if (!publicId) return error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
-      const status = await trackService.retryAnalysis({ publicId, ownerId });
+      let status;
+      try { status = await trackService.retryAnalysis({ publicId, ownerId }); }
+      catch (retryError) {
+        if (retryError?.code === 'TRACK_NOT_FOUND') return error(response, 404, 'TRACK_NOT_FOUND');
+        throw retryError;
+      }
       return status
         ? send(response, 202, { data: status })
         : error(response, 409, 'ANALYSIS_NOT_RETRYABLE', 'Для этого трека сейчас нельзя повторить анализ.');

@@ -1,3 +1,4 @@
+import { createRoutePreview } from './domain/route-simplification.js';
 import { t, bindText, bindAttribute, formatMeasurement, date, messageAttribute } from './i18n.js';
 import { renderExternalTrackLinks } from './external-track-links-ui.js';
 import { routeTypeDefinition, routeTypeIcon } from './route-type-ui.js';
@@ -11,7 +12,7 @@ const STATUS_LABELS = {
 };
 
 export function trackStatusLabel(track) {
-  return track.status === 'PROCESSING' ? t(STATUS_LABELS[track.step] || 'status.processing') : t(STATUS_LABELS[track.status] || 'status.processing');
+  return track.processing.status === 'PROCESSING' ? t(STATUS_LABELS[track.processing.step] || 'status.processing') : t(STATUS_LABELS[track.processing.status] || 'status.processing');
 }
 
 export function formatTrackDuration(ms) {
@@ -21,8 +22,8 @@ export function formatTrackDuration(ms) {
 }
 
 export function previewPolyline(preview) {
-  if (!Array.isArray(preview?.points) || preview.points.length < 2) return '';
-  return preview.points.map((point) => `${Number(point[0]).toFixed(2)},${Number(point[1]).toFixed(2)}`).join(' ');
+  if (!Array.isArray(preview) || preview.length < 2) return '';
+  return createRoutePreview(preview).points.map((point) => `${Number(point[0]).toFixed(2)},${Number(point[1]).toFixed(2)}`).join(' ');
 }
 
 export function cancelTrackSearch({ input, history, reload, pathname = '/my-tracks' }) {
@@ -53,11 +54,11 @@ export function formatTrackMetrics(track) {
   const routeType = routeTypeDefinition(track.routeType);
   return [
     routeType.shortLabel,
-    formatMeasurement('distance', track.distanceKm),
-    `↗ ${formatMeasurement('elevation', track.ascentM)}`,
-    `↘ ${formatMeasurement('elevation', track.descentM)}`,
-    formatTrackDuration(track.estimatedDurationMs),
-    formatMeasurement('speed', track.speedKmh),
+    formatMeasurement('distance', track.metrics?.distanceKm),
+    `↗ ${formatMeasurement('elevation', track.metrics?.ascentM)}`,
+    `↘ ${formatMeasurement('elevation', track.metrics?.descentM)}`,
+    formatTrackDuration(track.metrics?.estimatedDurationMs),
+    formatMeasurement('speed', track.metrics?.speedKmh),
   ].join(' · ');
 }
 
@@ -67,7 +68,7 @@ export function createTrackCard(track, documentRef = document, { ownerActions = 
   article.dataset.trackId = track.id;
   const displayTitle = track.title || t('common.unnamed');
   article.dataset.trackTitle = displayTitle;
-  article.dataset.trackSpeed = track.speedKmh || 20;
+  article.dataset.trackSpeed = track.metrics?.speedKmh || 20;
 
   const previewLink = documentRef.createElement('a');
   previewLink.className = 'track-preview';
@@ -81,7 +82,7 @@ export function createTrackCard(track, documentRef = document, { ownerActions = 
   const body = documentRef.createElement('div');
   body.className = 'track-card-body';
   const badge = documentRef.createElement('span');
-  badge.className = `track-status track-status-${track.status.toLowerCase()}`;
+  badge.className = `track-status track-status-${track.processing.status.toLowerCase()}`;
   bindText(badge, () => trackStatusLabel(track));
   const title = documentRef.createElement('a');
   title.className = 'track-card-title';
@@ -160,7 +161,7 @@ export function createTrackCard(track, documentRef = document, { ownerActions = 
   remove.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg>';
   const download = documentRef.createElement('a');
   download.className = 'track-card-download';
-  download.href = track.downloadUrl;
+  download.href = track.gpxUrl;
   download.setAttribute('download', '');
   bindAttribute(download, 'aria-label', () => t('tracks.download', { title: displayTitle }));
   download.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4-4 4 4 4-4M5 20h14"/></svg>';

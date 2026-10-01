@@ -162,7 +162,7 @@ describe('S3 track service', () => {
       metrics: { distanceKm: 25, ascentM: 300, descentM: 280, effectiveSpeedKmh: 20, estimatedDurationMs: 4_500_000 },
       summary: { metrics: { distanceKm: 25 }, distributions: { surfaces: [], wayTypes: [], roadQualities: [] },
         climbs: [], descents: [] },
-      preview: { viewBox: '0 0 100 100', points: [[0, 0], [100, 100]] } };
+      preview: [{ lat: 50, lon: 20 }, { lat: 51, lon: 21 }] };
     delete track.attempt;
     repository.listOwned = vi.fn(async () => [track]);
     const basic = await service.getPublicTrack(track.publicId);
@@ -170,9 +170,9 @@ describe('S3 track service', () => {
     expect(basic.metrics.distanceKm).toBe(25);
     expect(basic).not.toHaveProperty('analysis');
     expect(basic).not.toHaveProperty('preview');
-    expect(basic.summary.metrics.distanceKm).toBe(25);
+    expect(basic.metrics.distanceKm).toBe(25);
     expect(basic.analysisUrl).toBe(`/api/v1/tracks/${track.publicId}/analysis`);
-    expect(list.items[0].preview.points).toHaveLength(2);
+    expect(list.items[0].preview).toHaveLength(2);
     expect(store.openRead).not.toHaveBeenCalled();
     expect(store.readSource).not.toHaveBeenCalled();
   });

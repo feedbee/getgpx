@@ -54,11 +54,11 @@ describeWithMongo('MongoDB S3 track contract', () => {
     expect(edited.active).toBeUndefined();
     await repository.setStep(identity, 'ENRICHING', new Date(), 'GPX title');
     expect((await repository.findById(trackId)).title).toBe('My title');
-    await repository.publish(identity, { title: 'GPX title', analysis: { distanceKm: 50, effectiveSpeedKmh: 20 },
+    await repository.publish(identity, { title: 'GPX title', analysis: { distanceKm: 50, speedKmh: 20 },
       analysisKey: `dev/tracks/${trackId}/first/analysis.json`, analysisSources: {} });
     expect(await repository.findById(trackId)).toMatchObject({ title: 'My title', routeType: 'road-cycling',
       externalLinks: { komoot: 'https://komoot.com/tour/1' }, analysisStatus: 'READY',
-      active: { metrics: { effectiveSpeedKmh: 25, estimatedDurationMs: 7_200_000 } } });
+      active: { metrics: { speedKmh: 25, estimatedDurationMs: 7_200_000 } } });
     await tracks.deleteOne({ _id: trackId });
   });
 
@@ -71,11 +71,11 @@ describeWithMongo('MongoDB S3 track contract', () => {
     const identity = { trackId, ownerId, revision: 'first', workerId: 'worker-first' };
     await repository.claim(identity);
     await repository.fail(identity, { errorCode: 'ENRICHMENT_UNAVAILABLE', failedStep: 'ENRICHING',
-      diagnostic: { analysis: { distanceKm: 8, points: [{ ele: 20 }, { ele: 40 }] },
+      diagnostic: { analysis: { distanceKm: 8, minElevationM: 20, maxElevationM: 40, points: [{ ele: 20 }, { ele: 40 }] },
         analysisKey: `dev/tracks/${trackId}/first/analysis.json`, analysisSources: { gpx: 'SUCCESS', valhalla: 'FAILED' } } });
     const failed = await repository.findById(trackId);
     expect(failed.active).toBeUndefined();
-    expect(failed.diagnostic.summary).toMatchObject({ metrics: { distanceKm: 8,
+    expect(failed.diagnostic).toMatchObject({ metrics: { distanceKm: 8,
       minElevationM: 20, maxElevationM: 40 }, completeness: 'PARTIAL' });
     await tracks.deleteOne({ _id: trackId });
   });
@@ -88,7 +88,7 @@ describeWithMongo('MongoDB S3 track contract', () => {
       revision: 'first', originalFilename: 'ride.gpx', title: 'Ride', routeType: 'cycling' });
     const identity = { trackId, ownerId, revision: 'first', workerId: 'worker-one' };
     expect(await repository.claim(identity)).toBeTruthy();
-    const analysis = { distanceKm: 20, ascentM: 100, descentM: 90, effectiveSpeedKmh: 20,
+    const analysis = { distanceKm: 20, ascentM: 100, descentM: 90, speedKmh: 20,
       estimatedDurationMs: 3_600_000, sourcePointCount: 50_000,
       preview: { viewBox: '0 0 100 100', points: [[0, 0], [100, 100]] },
       points: Array.from({ length: 10_000 }, (_, index) => ({ lat: index / 1000, lon: index / 1000 })) };
@@ -96,8 +96,8 @@ describeWithMongo('MongoDB S3 track contract', () => {
       analysisSources: { gpx: 'SUCCESS' } })).toBeTruthy();
     const stored = await repository.findByPublicId(track.publicId);
     expect(stored.active.metrics.distanceKm).toBe(20);
-    expect(stored.active.summary.metrics.distanceKm).toBe(20);
-    expect(stored.active.summary).not.toHaveProperty('points');
+    expect(stored.active.metrics.distanceKm).toBe(20);
+    expect(stored.active).not.toHaveProperty('points');
     expect(JSON.stringify(stored).length).toBeLessThan(100_000);
     expect(stored.active.sourcePointCount).toBe(50_000);
     expect(stored).not.toHaveProperty('analysis');
@@ -133,11 +133,11 @@ describeWithMongo('MongoDB S3 track contract', () => {
       normalizedName: 'old', routeType: 'gravel-cycling', externalLinks: { komoot: 'https://www.komoot.com/tour/123' },
       createdAt: new Date(), analysisStatus: 'READY',
       active: { revision: 'old', sourceKey: `dev/tracks/${trackId}/old/source.gpx`,
-        analysisKey: `dev/tracks/${trackId}/old/analysis.json`, metrics: { distanceKm: 10, effectiveSpeedKmh: 25 } } });
+        analysisKey: `dev/tracks/${trackId}/old/analysis.json`, metrics: { distanceKm: 10, speedKmh: 25 } } });
     const pending = await repository.beginAttempt({ trackId, ownerId, revision: 'new', kind: 'REPLACE',
       sourceKey: `dev/tracks/${trackId}/new/source.gpx`, originalFilename: 'new.gpx' });
     expect(pending.active.metrics.distanceKm).toBe(10);
-    expect(pending.active.summary).toBeUndefined();
+    expect(pending.active).not.toHaveProperty('summary');
     const identity = { trackId, ownerId, revision: 'new', workerId: 'worker-new' };
     await repository.claim(identity);
     const previous = await repository.publish(identity, { title: 'New',
@@ -147,10 +147,10 @@ describeWithMongo('MongoDB S3 track contract', () => {
     const current = await repository.findById(trackId);
     expect(current).toMatchObject({ title: 'Old', normalizedName: 'old', routeType: 'gravel-cycling',
       externalLinks: { komoot: 'https://www.komoot.com/tour/123' }, analysisStatus: 'READY', active: { revision: 'new',
-      originalFilename: 'new.gpx', metrics: { distanceKm: 20, effectiveSpeedKmh: 25, estimatedDurationMs: 2_880_000 },
+      originalFilename: 'new.gpx', metrics: { distanceKm: 20, speedKmh: 25, estimatedDurationMs: 2_880_000 },
       sourceKey: `dev/tracks/${trackId}/new/source.gpx`,
       analysisKey: `dev/tracks/${trackId}/new/analysis.json` } });
-    expect(current.active.summary.metrics).toMatchObject({ distanceKm: 20, effectiveSpeedKmh: 25,
+    expect(current.active.metrics).toMatchObject({ distanceKm: 20, speedKmh: 25,
       estimatedDurationMs: 2_880_000 });
     expect(current).not.toHaveProperty('attempt');
     await tracks.deleteOne({ _id: trackId });
@@ -165,7 +165,7 @@ describeWithMongo('MongoDB S3 track contract', () => {
     const first = { trackId, ownerId, revision: 'first', workerId: 'worker-first' };
     await repository.claim(first);
     await repository.publish(first, { title: 'First', analysisKey: `dev/tracks/${trackId}/first/analysis.json`,
-      analysis: { distanceKm: 20, effectiveSpeedKmh: 20, estimatedDurationMs: 3_600_000,
+      analysis: { distanceKm: 20, speedKmh: 20, estimatedDurationMs: 3_600_000,
         points: [{ ele: 10 }, { ele: 20 }], climbs: [{ startKm: 1, endKm: 2, lengthM: 1000 }] },
       analysisSources: { gpx: 'SUCCESS' } });
     await repository.beginAttempt({ trackId, ownerId, revision: 'replacement', kind: 'REPLACE',
@@ -173,19 +173,19 @@ describeWithMongo('MongoDB S3 track contract', () => {
     const replacement = { trackId, ownerId, revision: 'replacement', workerId: 'worker-replacement' };
     await repository.claim(replacement);
     await repository.fail(replacement, { errorCode: 'ENRICHMENT_UNAVAILABLE', failedStep: 'ENRICHING' });
-    expect((await repository.findById(trackId)).active.summary.climbs).toHaveLength(1);
+    expect((await repository.findById(trackId)).active.climbs).toHaveLength(1);
     await repository.updateDetails({ trackId, ownerId, title: 'First', speedKmh: 25,
       estimatedDurationMs: 2_880_000, routeType: 'cycling', externalLinks: {} });
     const edited = await repository.findById(trackId);
-    expect(edited.active.summary.metrics.effectiveSpeedKmh).toBe(25);
+    expect(edited.active.metrics.speedKmh).toBe(25);
     await repository.beginAttempt({ trackId, ownerId, revision: 'retry', kind: 'RETRY',
       sourceKey: `dev/tracks/${trackId}/retry/source.gpx`, originalFilename: 'first.gpx' });
     const retry = { trackId, ownerId, revision: 'retry', workerId: 'worker-retry' };
     await repository.claim(retry);
     await repository.publish(retry, { title: 'Parsed again', analysisKey: `dev/tracks/${trackId}/retry/analysis.json`,
-      analysis: { distanceKm: 20, effectiveSpeedKmh: 20, estimatedDurationMs: 3_600_000 }, analysisSources: {} });
+      analysis: { distanceKm: 20, speedKmh: 20, estimatedDurationMs: 3_600_000 }, analysisSources: {} });
     const result = await repository.findById(trackId);
-    expect(result.active.summary.metrics).toMatchObject({ effectiveSpeedKmh: 25, estimatedDurationMs: 2_880_000 });
+    expect(result.active.metrics).toMatchObject({ speedKmh: 25, estimatedDurationMs: 2_880_000 });
     expect(result.title).toBe('First');
     await tracks.deleteOne({ _id: trackId });
   });

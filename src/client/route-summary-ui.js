@@ -1,3 +1,4 @@
+import { terrainForView } from './track-data.js';
 import { t, bindText, escapeHtml, formatMeasurement, htmlMessage, percent } from './i18n.js';
 import { roadQualityCategories, surfaceCategories, wayTypeCategories } from './domain/surface.js';
 
@@ -8,8 +9,8 @@ export function renderClimbs(track, documentRef = document) {
     const key = `${type}-${index}`;
     return `<button class="terrain-row" type="button" data-terrain-range="${key}" data-terrain-type="${type}" data-terrain-index="${index}" aria-pressed="false" style="--terrain-color:${item.color}"><b>#${index + 1}</b><i></i><span>${escapeHtml(t(item.label))}</span><span>△ ${percent(item.averageGrade)}</span><span>${type === 'climb' ? '↗' : '↘'} ${formatMeasurement('elevation', type === 'climb' ? item.gainM : item.dropM)}</span><span>↔ ${formatMeasurement('distance', item.lengthM / 1000, { digits: 2 })}</span></button>`;
   }).join('') : `<p class="empty-climbs">${htmlMessage('terrain.empty')}</p>`;
-  documentRef.querySelector('#climbs-list').innerHTML = rows(track.climbs, 'climb');
-  documentRef.querySelector('#descents-list').innerHTML = rows(track.descents, 'descent');
+  documentRef.querySelector('#climbs-list').innerHTML = rows(terrainForView(track.climbs), 'climb');
+  documentRef.querySelector('#descents-list').innerHTML = rows(terrainForView(track.descents, [], true), 'descent');
 }
 
 export function renderSurfaces(trackSummary, { documentRef = document, onFiltersRendered = () => {} } = {}) {

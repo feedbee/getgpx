@@ -38,3 +38,6 @@ Track work is split into route/controller, service/domain, and repository layers
 - `tests/unit/backend/api/`: contract validation, HTTP boundary and access-policy tests.
   `tests/contracts/api-v1.sha256` freezes the reviewed contract; approval is required
   before intentionally updating it.
+
+- `src/backend/track-data.js` projects canonical route data for MongoDB and S3.
+  `src/client/track-data.js` adapts transport fields into map/profile drawing models.

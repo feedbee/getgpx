@@ -37,10 +37,10 @@ export function createTrackEditor({ trackApi, uploadFlow, getPublicTrackId, getP
 
   async function openFromList(track, button) {
     await withButtonLoading(button, async () => {
-      const response = await trackApi.management(track.id);
+      const response = await trackApi.publicTrack(track.id);
       if (!response.ok) return;
       const { data } = await response.json();
-      open(data);
+      open({ ...data, speedKmh: data.metrics?.speedKmh });
     });
   }
 
@@ -111,7 +111,7 @@ export function createTrackEditor({ trackApi, uploadFlow, getPublicTrackId, getP
   bindText(documentRef.querySelector('#speed-input-label'), () => t('edit.speed', { unit: currentUnit('speed') }));
   function setFields(data) {
     documentRef.querySelector('#edit-track-title').value = data.title;
-    setSpeedDraft(data.speedKmh || 20);
+    setSpeedDraft(data.metrics?.speedKmh || 20);
     setRouteTypeDropdown(documentRef.querySelector('#edit-track-route-type'), data.routeType);
     setExternalLinkFields(data.externalLinks);
   }

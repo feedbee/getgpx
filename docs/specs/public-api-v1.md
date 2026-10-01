@@ -1,138 +1,103 @@
-# Public API v1 — phase 1
-
-Status: implemented (phase 1). Based on main 4c6ee36 and the user's approved
-routing, versioning, documentation, and three-phase scope.
-
-## Objective and scope
-
-Publish all existing track operations as one supported REST API used by the website
-and external clients. Anonymous reads are metadata, detailed analysis, and original
-GPX. All other operations retain existing session and ownership checks. No second
-implementation, new data storage, API tokens, mandatory User-Agent, or rate limiting.
-
-Phase 2 adds client identification and rate limits. Phase 3 may add personal access
-tokens. Google sign-in remains a website concern, not an API OAuth authorization flow.
+# Public API v1
 
 ## Contract
 
-The canonical machine-readable contract lives in `src/backend/api/v1/openapi.json`.
-OpenAPI describes every request, status, JSON envelope, field, unit, nullability,
-pagination rule, and cookie security requirement. It is served at
-`/api/v1/openapi.json`. OpenAPI specification version and API major version are
-independent of the application release version.
+The canonical contract is [OpenAPI](../../src/backend/api/v1/openapi.json), served
+at `/api/v1/openapi.json`. The website and external clients use the same API.
 
-- Mount track HTTP routes under `/api/v1`; use relative routes inside v1.
-- Preserve current methods, URLs, and response envelopes. Metadata and mutations use
-  `{ data: ... }`; errors use `{ error: { code, message? } }`. Clients branch on codes,
-  never on localized legacy prose. Detailed analysis is a standalone JSON document;
-  GPX is the original file, not JSON.
-- GET `/tracks/{id}` stays point-free and reads MongoDB only. Geometry stays in
-  GET `/tracks/{id}/analysis`, delivered from S3 with the existing streaming/nginx
-  adapter. Never add `include=geometry`. The website retains two-stage loading.
-- GET and PUT `/tracks/{id}/gpx` share the resource path. POST `/tracks` creates a
-  track. Processing responses are 202; initial upload returns a status Location.
-- Preserve existing PATCH semantics: title, routeType and speedKmh are required;
-  omitted externalLinks clears links. Document this compatibility constraint rather
-  than silently changing it while extracting the HTTP layer.
-- Lists use query (up to 100 characters), opaque cursor, 24-item pages and
-  `nextCursor: null` at the end. No public catalogue.
-- Canonical units: km, m, km/h, ms, percent; dates are UTC ISO 8601. Missing values
-  stay null or omitted as documented, never invented zeros.
-- Metadata has ACTIVE/DIAGNOSTIC/NONE results; availability and provenance remain
-  explicit. Analysis can return 409 before a completed result exists; missing tracks
-  return 404. Original GPX may already be available before analysis finishes.
-- Public author is the uploader's displayName/avatarUrl, never email or owner ID.
-- Explicit response schemas prevent accidental publication of repository fields.
-  Freeze the current S3 analysis representation with a complete documented schema
-  and tests; do not buffer or rewrite streamed geometry in the HTTP router.
+- Base path: `/api/v1`.
+- JSON responses use `{ data: ... }`; errors use `{ error: { code, message? } }`.
+  Clients handle the stable error code. Detailed analysis is a standalone JSON
+  document; GPX responses contain the original file.
+- Public reads: track metadata, detailed analysis, and original GPX.
+- Protected operations: upload, edit, replace, retry, delete, owner lists and
+  favorites. They use the HttpOnly `getgpx_session` cookie obtained by signing in
+  on the website. Personal access tokens are not available.
+- Lists use an optional search query of up to 100 characters, an opaque cursor,
+  24-item pages and `nextCursor: null` at the end.
+- Units: km, m, km/h, ms and percent. Dates are UTC ISO 8601. Unknown numeric values
+  are null. IDs are opaque strings.
 
-## Website and API boundaries
+## Track resources
 
-`src/backend/api/v1/` owns routes, HTTP validation, response serialization and OpenAPI.
-`src/backend/api/` owns version composition, same-origin policy, JSON error handling,
-and documentation. `src/backend/site/` owns homepage and sign-in HTTP routes.
-Services, repositories, processing and object delivery remain shared and unversioned.
-The browser uses `src/client/track-api.js` and never imports backend API modules.
-Production and Vite use the same API composition; do not copy route registrations.
+`GET /tracks/{id}` returns editable metadata and point-free route data:
+`metrics`, `distributions`, `climbs`, `descents`, `pointsOfInterest`, `sources`,
+`completeness`, `revision`, `processing`, public `author`, and file URLs.
+Each data group has one representation. Author information contains display name
+and avatar, without account identifiers or email.
 
-Website-only `/auth/*`, `/homepage`, health and internal signing paths are excluded
-from the public OpenAPI. Session resolution is a transport adapter and preserves
-sliding expiry. API handlers consume resolved identity; future token auth can supply
-that identity without duplicating track handlers.
+`GET /tracks/{id}/analysis` returns the stored analysis document with route
+`points`. Its metrics, distributions, terrain segments and POIs have the same
+shapes as metadata. It describes the original analysis of that revision; editable
+speed and estimated duration in metadata may differ. `sourceName` contains the
+original GPX name or filename fallback, while metadata `title` is editable.
 
-## Access policy and errors
+Processing has one model: `status`, `step`, `error`, `canRetry`. The owner-only
+`GET /tracks/{id}/status` adds `id` to that model. Result availability is determined
+by `revision` and file URLs. A failed replacement can coexist with an available
+previous revision. Analysis returns 409 while no result is available; an unknown
+track returns 404.
 
-Public GET requests do not require a cookie. Protected operations use the existing
-HttpOnly `getgpx_session` cookie. Browser users sign in on GetGPX first; documentation
-requests on that origin use the browser cookie automatically. Never ask users to
-paste session secrets into documentation or store them in browser localStorage.
-External scripts may send an existing session cookie, but automated token issuance
-is explicitly unavailable in phase 1.
+`GET` and `PUT /tracks/{id}/gpx` read and replace the source resource. Uploads use
+raw GPX request bodies and return 202 with processing status. An initial upload
+also returns a status URL in `Location`.
 
-No cross-origin CORS grants. Reject browser cross-origin API access using Origin and
-Fetch Metadata, with an origin derived from configured Google redirect URI in normal
-runtimes (same origin as the website), not untrusted forwarded headers. Direct clients
-without browser-origin headers remain allowed. Top-level safe GET/HEAD navigation
-and download links may work; cross-origin script requests must not. Apply the policy
-before JSON parsing and protected operation execution. It is not a barrier to server
-proxies, and does not replace authorization. Do not alter Google callback behavior.
+`PATCH /tracks/{id}` accepts any nonempty subset of `title`, `routeType`, `speedKmh`
+and `externalLinks`. Omitted fields are preserved. An empty links object clears
+links. Unknown fields and invalid values return 422. Speed changes recalculate
+estimated duration without changing the source analysis.
 
-Unknown API paths and unsupported versions return JSON 404 rather than the HTML
-application shell; unsupported methods on known paths return 405 with Allow.
-Malformed JSON returns 400, oversized JSON 413, and unexpected errors 500 without
-provider messages or stacks. Existing domain error statuses remain compatible.
+Bulk operations use `POST /tracks/deletions` and
+`POST /tracks/saved/deletions`, accepting `{ ids: [...] }` and returning the affected
+IDs as `{ data: { ids: [...] } }`. Single-resource deletion uses DELETE.
+
+List previews are geographic coordinate arrays. Terrain classifications and
+surface/road categories use stable identifiers; the website supplies localized
+labels, colors and drawing indexes.
+
+## Access and errors
+
+Same-origin browser requests are supported. Cross-origin script requests are
+rejected, and the service grants no cross-origin CORS access. Direct clients
+without browser-origin headers can access public reads.
+
+Unknown routes and unsupported versions return JSON 404. Unsupported methods on
+known paths return 405 with `Allow`. Malformed JSON returns 400; oversized JSON
+returns 413; unexpected failures return 500 without stacks or provider details.
+Operation-specific statuses and response schemas are defined in OpenAPI.
+
+## Code boundaries and delivery
+
+`src/backend/api/v1/` owns version-specific routes, validation, response shaping
+and OpenAPI. `src/backend/api/` owns composition, access policy, error handling and
+API documentation. `src/backend/site/` owns website routes. Services and persistence
+are shared. Production and Vite compose the same API.
+
+Metadata reads MongoDB. Analysis is projected into the public format when written
+to S3 and delivered directly through the configured stream or Nginx adapter. The
+HTTP GET handler does not parse or transform the document. The website loads
+metadata first and analysis separately through `src/client/track-api.js`.
 
 ## Documentation
 
-- `/api/docs`: Scalar API Reference.
-- `/api/swagger`: Swagger UI, reading the same OpenAPI document.
-- Locally installed, lockfile-pinned JS/CSS assets; no external documentation proxy,
-  validator, fonts, telemetry, or CDN requirement.
-- English technical reference with curl examples, units, async upload/polling,
-  session caveats, errors, same-origin policy, and links between the two views.
-- New site UI labels use every existing language catalog. Standard third-party UI
-  and English API reference prose are vendor/technical documentation, not new site
-  translation keys.
-- Preserve CSP: local external scripts, scoped documentation styles and no unsafe-eval.
+`/api/docs` serves Scalar API Reference; `/api/swagger` serves Swagger UI. Both
+read the same OpenAPI document and run on the application's domain and port.
+JavaScript and CSS assets are installed locally and pinned in the lockfile.
+Documentation requests use the browser's same-origin session cookie.
 
-## Versioning and agent rules
+## Compatibility and verification
 
-Published v1 is a compatibility commitment. Any intentional change to its public
-contract requires explicit user approval (this implementation is authorized).
-Breaking changes require a new API major version and an approved migration plan;
-never silently change v1. Additive optional fields are compatible but still require
-contract review. Errors, auth, units, enums, nullability and semantic behavior count
-as contract, not just paths. App releases do not bump API major automatically.
-Keep a reviewed contract baseline in tests; an intentional contract change updates
-OpenAPI, baseline, docs and tests together after approval. Agents must not regenerate
-the baseline simply to make a failing test pass.
+Published v1 is a compatibility commitment. Intentional contract changes require
+explicit user approval. Breaking changes require a new major API version and an
+approved migration plan. Application release versions do not change API versions.
+OpenAPI, documentation, contract tests and the reviewed SHA baseline are updated
+together. Do not regenerate the baseline merely to silence a test failure.
 
-## Plan and boundaries
+The current unpublished redesign is approved without data migration; tracks are
+reuploaded using the new storage representation. Client identification and limits
+belong to phase 2; personal access tokens belong to phase 3.
 
-1. Commit this specification; inspect and preserve all existing behavior.
-2. Extract v1 routes and site routes, compose shared middleware, add typed OpenAPI
-   schemas and stable response projection. Keep services and persistence shared.
-3. Serve local Scalar/Swagger docs from the same application in dev and production.
-4. Add schema, route coverage, access-policy, error and browser checks; update agent
-   instructions and living architecture docs.
-
-Use ES modules and dependency injection, e.g. `createApiRouter(trackService,
-authService, options)`. Tests mirror boundaries under `tests/`; no colocated tests.
-No database migration, new authentication flow, provider change, geometry expansion,
-or production deployment. Do not edit historical `docs/changes/` or commit secrets.
-
-## Verification and acceptance
-
-- `npm ci` on Node 22.13+; `npm run check` runs catalog validation, lint, fast tests,
-  API contract checks and build.
-- OpenAPI validates; every operation matches an actual route and appropriate security.
-- Real handler/service response samples conform to schemas, including processing,
-  diagnostics, metadata, owner lists, favorites, streams and errors.
-- Baseline detects unapproved contract changes. Public reads do not resolve sessions
-  unnecessarily or read S3 for metadata; protected routes still reject guests.
-- Cross-origin script requests fail; same-origin docs and direct clients work.
-- Unknown routes/methods and JSON parser errors return stable JSON.
-- Browser checks both docs views, operation rendering and an anonymous GET; inspect
-  network/CSP, session limitations, desktop and narrow layout.
-- Run `npm run test:integration` if persistence wiring changes. No production data or
-  real provider calls; temporary test databases must be cleaned up.
+Run `npm run check` for every change and `npm run test:integration` for persistence
+changes. Verify actual response shapes, route coverage, permissions, direct file
+delivery and the website's metadata, map, profile, editing and list interactions.
+Temporary test databases must have unique test-only names and be removed after use.

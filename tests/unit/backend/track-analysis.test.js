@@ -21,7 +21,7 @@ describe('server track analysis', () => {
     expect(analysis.effectiveSpeedKmh).toBe(20);
     expect(analysis.estimatedDurationMs).toBeCloseTo((analysis.distanceKm / 20) * 3_600_000);
     expect(analysis.points).toHaveLength(2);
-    expect(analysis.preview.points).toHaveLength(2);
+    expect(analysis.preview).toHaveLength(2);
   });
 
   it('keeps the calculated moving speed and duration when timestamps are available', () => {
@@ -151,7 +151,7 @@ describe('server track analysis', () => {
     expect(first.points[1].surface.id).toBe('gravel');
     expect(first.surfaces.find(({ id }) => id === 'gravel').distanceKm).toBeGreaterThan(0);
     expect(first.enrichmentSource).toBe('VALHALLA_OSM');
-    expect(first.preview.points).toHaveLength(2);
+    expect(first.preview).toHaveLength(2);
     expect(second).toEqual(first);
     expect(matchTrack).toHaveBeenCalledTimes(1);
     expect(fetchWayTags).toHaveBeenCalledTimes(1);

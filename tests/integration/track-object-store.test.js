@@ -45,7 +45,7 @@ describe('S3 SDK track object contract', () => {
     const sourceKey = await store.writeSource({ trackId, revision: 'first', source: Readable.from('<gpx>exact bytes</gpx>') });
     expect(await store.readSource(sourceKey)).toBe('<gpx>exact bytes</gpx>');
     const analysisKey = await store.writeAnalysis({ trackId, revision: 'first', analysis: { distanceKm: 3, points: [{ lat: 1 }] } });
-    expect(await store.readAnalysis(analysisKey)).toMatchObject({ revision: 'first', analysis: { distanceKm: 3 } });
+    expect(await store.readAnalysis(analysisKey)).toMatchObject({ revision: 'first', metrics: { distanceKm: 3 } });
     const copied = await store.copySource({ fromKey: sourceKey, trackId, revision: 'second' });
     expect(await store.readSource(copied)).toBe('<gpx>exact bytes</gpx>');
     await store.delete(sourceKey);

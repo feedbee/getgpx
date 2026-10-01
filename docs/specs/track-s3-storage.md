@@ -146,68 +146,44 @@ All storage reads, writes, copies, deletes, and signing validate that their keys
 within the configured prefix. Published objects are immutable.
 
 A failed attempt with usable partial analysis writes a **completed diagnostic**
-analysis.json, explicitly marked FAILED and partial. It is not a READY revision.
+analysis.json with partial completeness. The current processing outcome is exposed by metadata. It is not a READY revision.
 A parsing failure or failed JSON write may leave only source.gpx. A successful
 PUT/completed multipart upload is sufficient; no subsequent HEAD verification is
 required. Abort incomplete multipart uploads on failure when possible.
 
-The JSON envelope is versioned and includes:
+The analysis object follows the `AnalysisDocument` schema in API v1 OpenAPI:
+`revision`, `sourceName`, `completeness`, `sources`, `metrics`, `distributions`,
+`climbs`, `descents`, `pointsOfInterest` and `points`. The public representation is
+formed before writing S3. GET delivery reads it unchanged. Shared route data uses
+exactly the same types in MongoDB and S3, without UI labels, colors or point indexes.
+Points use `elevationM` and `gradePercent`, and surface quality uses a category ID.
 
-```json
-{
-  "schemaVersion": 1,
-  "revision": "opaque-server-token",
-  "status": "READY",
-  "completeness": "FULL",
-  "analysisSources": {
-    "gpx": "SUCCESS",
-    "valhalla": "SUCCESS",
-    "openStreetMap": "SUCCESS"
-  },
-  "analysis": {
-    "points": [],
-    "pointsOfInterest": [],
-    "climbs": [],
-    "descents": [],
-    "surfaces": [],
-    "roadQualities": [],
-    "wayTypes": []
-  }
-}
-```
-
-This shows the envelope and main field groups, not a replacement schema for existing
-nested analysis values. Preserve the current detailed field shapes and fix the full
-contract with representative fixtures during implementation. Include all detailed
-fields the current page needs, including per-point extensions and any other existing
-segment/profile data. Do not include owner credentials, internal storage locations,
-provider error bodies, or secrets.
-
-Use `completeness: PARTIAL` for a diagnostic FAILED result and for a usable READY
-result missing optional provider data. READY is a publication/processing outcome;
-FULL/PARTIAL describes coverage. Metadata has matching source/provenance information.
-Header metrics are authoritative in the basic-information API. If the JSON retains
-calculated baseline metrics for analysis compatibility, they are a snapshot, not
-an alternate authoritative source for editable speed or estimated duration.
+Use partial completeness for diagnostic results or missing optional enrichment.
+Processing outcome belongs to metadata, while completeness describes coverage of
+the stored revision. Header metrics come from metadata; analysis metrics describe
+the source revision and do not change when editable speed or duration changes.
+`sourceName` is the GPX track, route or metadata name, with the original filename
+as fallback. The editable title is separate. Never store owner credentials,
+internal storage locations, provider error bodies or secrets in analysis.
 
 ## MongoDB model
 
 Keep schemaVersion, ownerId, publicId, title, normalizedName, routeType, externalLinks,
 timestamps, basic metrics, preview, sourcePointCount, pointsOfInterestCount,
-source/provenance statuses, and current object references. The active summary also
+source/provenance statuses, and current object references. The active route data also
 stores point-free POI names, types, and distances. Do not persist route points,
 POI coordinates, segment arrays, or full/partial analysis in the track document.
 
 Logical state groups:
 
 - `active`: the last successfully published revision, sourceKey, analysisKey,
-  originalFilename, basic metrics, compact summary, preview, and provenance. Absent before first success.
+  originalFilename, basic metrics, canonical route data, preview, and provenance. Absent before first success.
 - `attempt`: unique revision token, sourceKey, originalFilename, kind
   (`INITIAL`, `REPLACE`, `RETRY`), status, step, safe error code, start/update times,
   and worker lease information. Optional analysisKey only after a complete JSON write.
 - `diagnostic`: the last completely written partial FAILED snapshot needed to display
   a first-upload failure or preserve that display while retrying. Holds references
-  and compact metrics/summary/provenance only. It never replaces an existing active result.
+  and canonical route data/provenance only. It never replaces an existing active result.
 
 A READY active version remains READY while a replacement/retry is PROCESSING or
 FAILED. Publish attempt state separately so the owner can see pending work or errors.
@@ -244,7 +220,7 @@ preserving track identity, owner, route type, and external links.
    the separate compact preview. Large intermediate values stay in the job, never
    in the track document.
 5. Completely write analysis.json and conditionally commit the active references,
-   compact metrics and summary, preview, provenance, and READY in one Mongo update.
+   canonical route data, preview, provenance, and READY in one Mongo update.
 
 Source upload failure creates no record. Mongo insert failure triggers best-effort
 cleanup of the just-uploaded source. Orphans are acceptable.
@@ -298,7 +274,7 @@ while processing, including storage operations. Make timing injectable in tests.
 
 A live lease prevents concurrent retry/replacement. A FAILED attempt or an expired
 PROCESSING lease is retryable by its owner through the existing retry endpoint.
-Expose `canRetry` and `interrupted` through owner status/management responses; the UI
+Expose `canRetry` and an error code through owner status responses; the UI
 shows a localized retry action for an interrupted attempt. A successful retry claims
 a new token atomically; only one concurrent caller wins. A stale worker must stop
 when it cannot renew/confirm ownership, and all its later writes are fenced by token.
@@ -341,78 +317,26 @@ Handle duplicates, a straight line, a closed loop, zero-area bounds, and one/two
 without NaN or Infinity. Test distinctive turns and unequal aspect ratios. Store only
 the resulting compact preview in MongoDB; cards do not request analysis or S3.
 
-## Public API: current basic information and detailed analysis
+## Public API and revision selection
 
-Clients must not discover or supply a revision to access the current track.
-`GET /api/v1/tracks/:id` is the complete basic-information endpoint, including all header
-metrics and the compact analysis summary, suitable for other services without downloading detailed geometry. There
-is no additional metadata/metrics request.
+The authoritative HTTP contract is [Public API v1](public-api-v1.md) and OpenAPI.
+Metadata contains canonical `metrics`, `distributions`, `climbs`, `descents` and
+`pointsOfInterest` directly, with `processing`, `sources`, `completeness`, and
+`revision`. Analysis uses the same data types plus route points and `sourceName`.
+Metadata reads MongoDB; analysis is projected when written and streamed unchanged
+from S3. Editable speed/duration can differ from the original revision analysis.
 
-```json
-{
-  "data": {
-    "id": "public-track-id",
-    "title": "Example route",
-    "routeType": "cycling",
-    "status": "READY",
-    "resultKind": "ACTIVE",
-    "revision": "opaque-server-token",
-    "metrics": {
-      "distanceKm": 82.4,
-      "ascentM": 930,
-      "descentM": 915,
-      "effectiveSpeedKmh": 20,
-      "estimatedDurationMs": 14832000
-    },
-    "originalFilename": "example.gpx",
-    "sourcePointCount": 24500,
-    "pointsOfInterestCount": 1,
-    "summary": {
-      "metrics": { "distanceKm": 82.4, "ascentM": 930, "descentM": 915 },
-      "distributions": { "surfaces": [], "roadQualities": [], "wayTypes": [] },
-      "climbs": [], "descents": [],
-      "pointsOfInterest": [{ "name": "Water", "type": "WATER", "distanceKm": 12.6 }],
-      "pointsOfInterestCount": 1
-    },
-    "analysisUrl": "/api/v1/tracks/public-track-id/analysis",
-    "downloadUrl": "/api/v1/tracks/public-track-id/gpx"
-  }
-}
-```
+Selection rules are shared by stream and Nginx delivery:
 
-Also retain existing basic identity/context fields: timestamps, public uploader profile,
-external links, analysisSources/provenance, completeness, and safe warning codes.
-The example omits those for readability. Use canonical units in field names and values;
-unavailable metrics are null, not false zeros. Localize formatting in the UI.
-Do not expose internal IDs/keys, owner secrets, or CloudFront URLs/signatures.
-
-| Endpoint | Behavior |
-| --- | --- |
-| GET /api/v1/tracks/:id | Basic information and compact summary directly from MongoDB |
-| GET /api/v1/tracks/:id/analysis | Detailed JSON for the currently active revision, with diagnostic fallback as specified below |
-| GET /api/v1/tracks/:id/gpx | Original GPX for the current active revision, with initial-source fallback |
-| GET /api/v1/tracks/:id/status | Owner-only attempt status, active availability, canRetry/interrupted |
-| GET /api/v1/tracks/:id/manage | Existing owner management fields and current attempt outcome |
-| POST /api/v1/tracks | 202 after source upload and Mongo insertion; Location points to status |
-| PUT /api/v1/tracks/:id/gpx | 202 when accepted; 409 for a live competing attempt |
-| POST /api/v1/tracks/:id/retry-analysis | 202 for a newly claimed retry; 409 when ineligible/live |
-| PATCH /api/v1/tracks/:id | Updated basic information including metrics; no S3 access |
-| DELETE /api/v1/tracks/:id | 200 with `{ data: { deleted: true } }`, including repeats |
-
-Selection rules are shared by stream and nginx delivery:
-
-1. If active exists, basic metrics, analysis, and GPX resolve to active regardless of
-   pending replacement/retry. A newer attempt is not active until processing and
-   object writes finish and the Mongo publication succeeds.
-2. With no active, a fully persisted diagnostic result may be displayed as
-   `resultKind: DIAGNOSTIC`, explicitly FAILED/PARTIAL. During retry, retain that
-   diagnostic map with a separate PROCESSING attempt indicator. It is never READY.
-3. With neither result, basic information still exists with `resultKind: NONE`,
-   null unavailable metrics, and analysisUrl=null. Source GPX remains downloadable
-   after successful source storage, including initial parsing failure.
-4. When a diagnostic is selected, its source is also selected for download; otherwise,
-   without active/diagnostic, download the initial/current attempt's stored source.
-   Do not expose a pending replacement source in place of active.
+1. An active revision supplies metadata, analysis and GPX during replacement or
+   retry. A new revision becomes active only after object writes and atomic MongoDB
+   publication succeed.
+2. Without active data, a persisted diagnostic supplies partial route data and
+   analysis. The processing state describes the current attempt, including retry.
+3. Without either result, revision and analysis URL are null; unknown metrics are
+   null. The successfully stored source GPX remains downloadable.
+4. Diagnostic GPX uses the diagnostic source; without any result, GPX uses the
+   current attempt's source. A pending replacement never displaces the active GPX.
 
 Expose an opaque revision in responses only for consistency detection, not routing.
 Each request resolves the current selection atomically from its document snapshot.
@@ -635,7 +559,7 @@ Run a joint end-to-end acceptance check when that environment is supplied; do no
 claim application contract tests prove the full production path.
 
 Large synthetic analyses must demonstrate that the track BSON document does not grow
-with source-point count except bounded preview and compact summary lists. The summary
+with source-point count except bounded preview and canonical metadata lists. The route data
 contains no points, geometry, or per-segment data. Adapt existing
 50,000/490,000-point performance fixtures to the new acceptance boundary: exercise
 50,000 and 100,000 accepted points and rejection above the limit. Measure memory/time

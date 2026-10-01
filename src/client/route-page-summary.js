@@ -27,10 +27,10 @@ export function createRouteSummaryView({ documentRef = document, updatePageLangu
     documentRef.querySelector('#track-name').classList.remove('inline-loading', 'is-loading');
     bindText(documentRef.querySelector('#track-name'), () => track.title || t('common.unnamed'));
     bindText(documentRef.querySelector('#compact-track-name'), () => track.title || t('common.unnamed'));
-    bindText(documentRef.querySelector('#route-state-note'), () => track.analysisNote || t(track.status === 'PROCESSING' ? 'sources.waiting' : 'sources.failed'));
+    bindText(documentRef.querySelector('#route-state-note'), () => track.analysisNote || t(track.processing?.status === 'PROCESSING' ? 'sources.waiting' : 'sources.failed'));
     documentRef.querySelector('#route-state-note').hidden = false;
-    documentRef.querySelector('#route-state-note').classList.toggle('is-processing', track.status === 'PROCESSING');
-    const metrics = track.summary?.metrics || track.metrics;
+    documentRef.querySelector('#route-state-note').classList.toggle('is-processing', track.processing?.status === 'PROCESSING');
+    const metrics = track.metrics;
     documentRef.querySelector('.route-metrics').hidden = !metrics;
     if (metrics) {
       const type = routeTypeDefinition(track.routeType);
@@ -41,13 +41,13 @@ export function createRouteSummaryView({ documentRef = document, updatePageLangu
         : number(elevationValue(metrics.ascentM, preferences.value), { ...preferences.value, digits: 0 }));
       bindText(documentRef.querySelector('#descent'), () => metrics.descentM == null ? '—'
         : number(elevationValue(metrics.descentM, preferences.value), { ...preferences.value, digits: 0 }));
-      bindText(documentRef.querySelector('#duration'), () => formatDuration(metrics.estimatedDurationMs)[0]);
+      bindText(documentRef.querySelector('#duration'), () => metrics.estimatedDurationMs == null ? '—' : formatDuration(metrics.estimatedDurationMs)[0]);
       bindText(documentRef.querySelector('#duration-unit'), () => t('common.hour'));
-      bindText(documentRef.querySelector('#average-speed-badge'), () => metrics.effectiveSpeedKmh == null ? '—'
-        : formatMeasurement('speed', metrics.effectiveSpeedKmh));
+      bindText(documentRef.querySelector('#average-speed-badge'), () => metrics.speedKmh == null ? '—'
+        : formatMeasurement('speed', metrics.speedKmh));
     }
-    documentRef.querySelector('.route-workspace').hidden = !track.summary;
-    if (track.summary) setDetailedView(track.status === 'PROCESSING' ? 'loading' : 'failed');
+    documentRef.querySelector('.route-workspace').hidden = !track.revision;
+    if (track.revision) setDetailedView(track.processing?.status === 'PROCESSING' ? 'loading' : 'failed');
   }
 
   function renderBasicTrackHeader(track) {
@@ -60,7 +60,7 @@ export function createRouteSummaryView({ documentRef = document, updatePageLangu
       element.innerHTML = `${routeTypeIcon(type.id)}<b>${htmlMessage(`activity.${type.id}`)}</b>`;
       bindAttribute(element, 'aria-label', () => t('route.typeValue', { type: routeTypeDefinition(type.id).label }));
     }
-    const metrics = track.summary?.metrics || track.metrics;
+    const metrics = track.metrics;
     documentRef.querySelector('.route-metrics').hidden = !metrics;
     if (metrics) {
       const distance = () => metrics.distanceKm == null ? '—'
@@ -73,26 +73,26 @@ export function createRouteSummaryView({ documentRef = document, updatePageLangu
       const duration = () => metrics.estimatedDurationMs == null ? '—' : formatDuration(metrics.estimatedDurationMs)[0];
       for (const selector of ['#duration', '#compact-duration']) bindText(documentRef.querySelector(selector), duration);
       for (const selector of ['#duration-unit', '#compact-duration-unit']) bindText(documentRef.querySelector(selector), () => t('common.hour'));
-      const speed = () => metrics.effectiveSpeedKmh == null ? '—' : formatMeasurement('speed', metrics.effectiveSpeedKmh);
+      const speed = () => metrics.speedKmh == null ? '—' : formatMeasurement('speed', metrics.speedKmh);
       for (const selector of ['#average-speed-badge', '#compact-speed']) bindText(documentRef.querySelector(selector), speed);
-      bindAttribute(documentRef.querySelector('#average-speed-badge'), 'title', () => metrics.effectiveSpeedKmh == null
+      bindAttribute(documentRef.querySelector('#average-speed-badge'), 'title', () => metrics.speedKmh == null
         ? t('route.noSpeed') : t('route.estimatedSpeed', { speed: speed() }));
     }
     updatePageLanguage();
-    documentRef.querySelector('.route-workspace').hidden = !track.summary;
+    documentRef.querySelector('.route-workspace').hidden = !track.revision;
     documentRef.querySelector('#route-state-note').hidden = true;
-    if (track.summary) {
-      const hasRoadSummary = Object.values(track.summary.distributions).some((items) => items.length);
+    if (track.revision) {
+      const hasRoadSummary = Object.values(track.distributions).some((items) => items.length);
       documentRef.querySelector('.surface-section').hidden = !hasRoadSummary;
       documentRef.querySelector('.route-tabs a[href="#way-types"]').hidden = !hasRoadSummary;
-      const hasTerrainSummary = track.resultKind !== 'DIAGNOSTIC'
-        || track.summary.climbs.length || track.summary.descents.length;
+      const hasTerrainSummary = track.sources?.valhalla === 'SUCCESS'
+        || track.climbs.length || track.descents.length;
       documentRef.querySelector('.climbs-section').hidden = !hasTerrainSummary;
       documentRef.querySelector('.route-tabs a[href="#climbs"]').hidden = !hasTerrainSummary;
-      renderClimbs(track.summary, documentRef);
-      renderPointsOfInterest(track.summary.pointsOfInterest);
-      renderSurfaces(track.summary, { documentRef, onFiltersRendered });
-      renderSourceInfo(track.summary.analysisSources);
+      renderClimbs(track, documentRef);
+      renderPointsOfInterest(track.pointsOfInterest);
+      renderSurfaces(track, { documentRef, onFiltersRendered });
+      renderSourceInfo(track.sources);
       bindText(documentRef.querySelector('#profile-ascent'), () => metrics.ascentM == null ? '—' : formatMeasurement('elevation', metrics.ascentM, { digits: 0 }));
       bindText(documentRef.querySelector('#profile-descent'), () => metrics.descentM == null ? '—' : formatMeasurement('elevation', metrics.descentM, { digits: 0 }));
       bindText(documentRef.querySelector('#min-label'), () => metrics.minElevationM == null ? '—' : formatMeasurement('elevation', metrics.minElevationM));
