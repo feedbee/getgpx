@@ -1092,5 +1092,3 @@ body button:focus-visible,
   .preferences-popover { position: fixed; top: 66px; right: 12px; }
 }
 
-.api-footer { padding: 24px; text-align: center; font-size: 14px; }
-.api-footer a { color: inherit; text-underline-offset: 3px; }
