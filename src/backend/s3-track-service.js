@@ -6,10 +6,11 @@ import { hasExpiredProcessing, trackObjectKeys } from './s3-track-repository.js'
 import { PAGE_SIZE, cursorOf, decodeCursor, titleFromFilename, statusOf, publicTrack, card, homepage } from './s3-track-presenters.js';
 import { logger } from './logger.js';
 import { safeErrorDetails } from './safe-error-details.js';
+import { createTrackPreviewService } from './track-previews/service.js';
 import { createS3TrackProcessor } from './s3-track-processor.js';
 
 export function createS3TrackService({ trackRepository, objectStore, enrichmentCacheRepository,
-  savedTrackRepository, userRepository, analyzeSource, enrichAnalysis,
+  savedTrackRepository, userRepository, analyzeSource, enrichAnalysis, previewProvider = null,
   configuration = { userTiers: DEFAULT_USER_TIERS },
   schedule = (job) => setImmediate(job), warn = (details) => logger.warn(details, 'Track analysis warning'),
   enrichmentTimeoutMs = EXTERNAL_ANALYSIS_TIMEOUT_MS, now = () => new Date() }) {
@@ -21,19 +22,22 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
       warn({ event: 'track_object_cleanup_failed', ...safeErrorDetails(result.reason) });
     }
   };
+  const previews = createTrackPreviewService({ trackRepository, objectStore, provider: previewProvider, warn, now });
   const scheduleProcessing = createS3TrackProcessor({ trackRepository, objectStore, enrichmentCacheRepository,
-    analyzeSource, enrichAnalysis, cleanup, schedule, warn, enrichmentTimeoutMs, now });
+    analyzeSource, enrichAnalysis, cleanup, schedule, warn, enrichmentTimeoutMs, now,
+    preparePreview: previewProvider ? previews.createForRevision : null });
 
   async function findReadable(publicId, identity = null) {
     const track = await trackRepository.findByPublicId(publicId);
     return authorizeTrackRead(identity, track) ? track : null;
   }
   async function fileDescriptor(publicId, kind, identity = null) {
-    if (!['analysis', 'gpx'].includes(kind)) throw new Error('Unsupported track file kind.');
+    if (!['analysis', 'gpx', 'preview'].includes(kind)) throw new Error('Unsupported track file kind.');
     const track = await findReadable(publicId, identity);
     if (!track) return null;
     const result = track.result;
-    const key = kind === 'analysis' ? result?.analysisKey : result?.sourceKey || track.processing?.sourceKey;
+    const key = kind === 'preview' ? result?.previewImage?.key
+      : kind === 'analysis' ? result?.analysisKey : result?.sourceKey || track.processing?.sourceKey;
     if (key) objectStore.assertKey(key);
     return { key: key || null, revision: result?.revision || track.processing?.revision,
       filename: result?.originalFilename || track.processing?.originalFilename };
@@ -51,6 +55,11 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
 
   return {
     authorizeTrackRead,
+    previewConfiguration: previews.configuration,
+    async getPreview(publicId, identity = null) {
+      const descriptor = await fileDescriptor(publicId, 'preview', identity);
+      return descriptor?.key ? objectStore.openRead(descriptor.key) : null;
+    },
     async getHomepageTracks(homepageTrackIds = configuration.homepageTrackIds) {
       const ids = homepageTrackIds?.map((id) => ObjectId.createFromHexString(id));
       return (await trackRepository.listHomepage(ids)).map(homepage);

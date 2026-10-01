@@ -1092,3 +1092,10 @@ body button:focus-visible,
   .preferences-popover { position: fixed; top: 66px; right: 12px; }
 }
 
+.track-preview { position:relative; }
+.track-preview > img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; }
+.track-preview.has-map-preview > img { opacity:1; }
+.track-preview.has-map-preview > svg { visibility:hidden; }
+.track-preview-attribution { display:flex; justify-content:flex-end; gap:12px; margin-top:12px; font-size:10px; color:var(--muted); }
+.track-preview-attribution[hidden] { display:none; }
+.track-preview-attribution a { color:inherit; }

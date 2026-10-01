@@ -62,7 +62,7 @@ export function formatTrackMetrics(track) {
   ].join(' · ');
 }
 
-export function createTrackCard(track, documentRef = document, { ownerActions = true } = {}) {
+export function createTrackCard(track, documentRef = document, { ownerActions = true, mapPreview = false } = {}) {
   const article = documentRef.createElement('article');
   article.className = 'track-card';
   article.dataset.trackId = track.id;
@@ -79,6 +79,18 @@ export function createTrackCard(track, documentRef = document, { ownerActions = 
     ? `<svg viewBox="-7 -7 114 114" role="img" ${messageAttribute('aria-label', 'tracks.preview')}><polyline points="${points}" /></svg>`
     : '<span aria-hidden="true">GPX</span>';
 
+  if (mapPreview && points) {
+    const image = documentRef.createElement('img');
+    image.width = 512;
+    image.height = 512;
+    image.loading = 'lazy';
+    image.decoding = 'async';
+    bindAttribute(image, 'alt', () => t('tracks.preview'));
+    image.addEventListener('load', () => { previewLink.classList.add('has-map-preview'); image.hidden = false; });
+    image.addEventListener('error', () => { previewLink.classList.remove('has-map-preview'); image.hidden = true; });
+    image.src = `/track-previews/${encodeURIComponent(track.id)}.png`;
+    previewLink.append(image);
+  }
   const body = documentRef.createElement('div');
   body.className = 'track-card-body';
   const badge = documentRef.createElement('span');

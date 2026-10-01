@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import { createS3TrackService } from '../../../src/backend/s3-track-service.js';
 
-function fixture({ parsedName = 'Ride', enrichAnalysis = async (analysis) => ({ ...analysis, enrichmentSource: 'VALHALLA_OSM' }) } = {}) {
+function fixture({ previewProvider = null, parsedName = 'Ride', enrichAnalysis = async (analysis) => ({ ...analysis, enrichmentSource: 'VALHALLA_OSM' }) } = {}) {
   const calls = [];
   const jobs = [];
   const track = { _id: '0123456789abcdef01234567', publicId: 'publicTrackId00000001', ownerId: 'owner',
@@ -22,14 +22,15 @@ function fixture({ parsedName = 'Ride', enrichAnalysis = async (analysis) => ({ 
     assertKey: vi.fn((key) => key),
     writeSource: vi.fn(async () => { calls.push('s3-source'); return track.processing.sourceKey; }),
     readSource: vi.fn(async () => '<gpx/>'),
+    writePreview: vi.fn(async () => 'dev/tracks/0123456789abcdef01234567/revision/preview-aaaaaaaaaaaaaaaa.png'),
     writeAnalysis: vi.fn(async () => { calls.push('s3-analysis'); return 'analysis-key'; }),
     openRead: vi.fn(async () => Readable.from('{}')),
     delete: vi.fn(async () => undefined), copySource: vi.fn(),
   };
   const service = createS3TrackService({ trackRepository: repository, objectStore: store,
     savedTrackRepository: { savedTrackIds: vi.fn(async () => []) },
-    analyzeSource: () => ({ name: parsedName, points: [{ lat: 1, lon: 2 }, { lat: 2, lon: 3 }], distanceKm: 3 }),
-    enrichAnalysis,
+    analyzeSource: () => ({ name: parsedName, points: [{ lat: 1, lon: 2 }, { lat: 2, lon: 3 }], distanceKm: 3, preview: [{ lat: 1, lon: 2 }, { lat: 2, lon: 3 }] }),
+    enrichAnalysis, previewProvider,
     configuration: { userTiers: { BASIC: { limits: { tracks: 100 } } } },
     schedule: (job) => jobs.push(job), warn: vi.fn(),
   });
@@ -83,6 +84,33 @@ describe('S3 track service', () => {
     await running;
     expect(repository.publish).toHaveBeenCalledWith(expect.anything(),
       expect.objectContaining({ analysisKey: 'analysis-key' }), expect.any(Date));
+  });
+
+  it('writes PNG before atomically publishing its provenance with the revision', async () => {
+    const provider = { provider: 'mapbox', style: 'mapbox/streets-v12', rendererVersion: 3,
+      version: 'aaaaaaaaaaaaaaaa', attribution: [], render: vi.fn(async () => Buffer.from('png')) };
+    const { service, store, repository, jobs } = fixture({ previewProvider: provider });
+    let finish;
+    store.writePreview.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    await service.upload({ ownerId: 'owner', filename: 'ride.gpx', routeType: 'cycling', source: Readable.from('GPX') });
+    const running = jobs[0]();
+    while (!finish) await Promise.resolve();
+    expect(repository.publish).not.toHaveBeenCalled();
+    finish('dev/tracks/0123456789abcdef01234567/revision/preview-aaaaaaaaaaaaaaaa.png');
+    await running;
+    expect(repository.publish.mock.calls[0][1].previewImage).toMatchObject({ provider: 'mapbox',
+      style: 'mapbox/streets-v12', sourceRevision: expect.any(String), rendererVersion: 3 });
+    expect(store.writeAnalysis).toHaveBeenCalledTimes(1);
+  });
+
+  it('serves stored previews without rendering, including after a provider change', async () => {
+    const provider = { render: vi.fn(), version: 'new' };
+    const { service, track, store } = fixture({ previewProvider: provider });
+    expect(await service.getPreview(track.publicId)).toBeNull();
+    track.result = { revision: 'old', previewImage: { key: 'old-preview', version: 'old' } };
+    expect(await service.getPreview(track.publicId)).toBeInstanceOf(Readable);
+    expect(store.openRead).toHaveBeenCalledWith('old-preview');
+    expect(provider.render).not.toHaveBeenCalled();
   });
 
   it('shows the parsed GPX title while enrichment is still running', async () => {

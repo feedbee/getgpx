@@ -12,7 +12,7 @@ function sourcesOf(analysis, status) {
 }
 
 export function createS3TrackProcessor({ trackRepository, objectStore, enrichmentCacheRepository,
-  analyzeSource, enrichAnalysis, cleanup, schedule, warn, enrichmentTimeoutMs, now }) {
+  analyzeSource, enrichAnalysis, cleanup, schedule, warn, enrichmentTimeoutMs, now, preparePreview }) {
   const scheduleProcessing = (track) => schedule(() => process(track).catch((error) => {
     warn({ event: 'track_analysis_job_failed', trackId: String(track._id),
       revision: track.processing?.revision, ...safeErrorDetails(error) });
@@ -55,12 +55,16 @@ export function createS3TrackProcessor({ trackRepository, objectStore, enrichmen
       step = 'WRITING';
       const analysisKey = await objectStore.writeAnalysis({ trackId: String(track._id), revision: identity.revision,
         analysis, analysisSources, completeness });
+      const previewImage = await preparePreview?.({ trackId: track._id, revision: identity.revision, points: base.preview }) || null;
+      if (lost) { await cleanup([previewImage?.key]); return; }
       step = 'PUBLISHING';
       const previous = await trackRepository.publish(identity, { analysis, analysisKey,
-        title: base.name, analysisSources, completeness }, now());
+        title: base.name, analysisSources, completeness, previewImage }, now());
       if (previous) {
         const retained = new Set(trackObjectKeys(await trackRepository.findById(track._id) || {}));
         await cleanup(trackObjectKeys(previous).filter((key) => !retained.has(key)));
+      } else {
+        await cleanup([previewImage?.key]);
       }
     } catch (error) {
       warn({ event: 'track_analysis_failed', trackId: String(track._id), revision: identity.revision,
@@ -76,7 +80,8 @@ export function createS3TrackProcessor({ trackRepository, objectStore, enrichmen
           const analysisSources = sourcesOf(base, 'FAILED');
           const analysisKey = await objectStore.writeAnalysis({ trackId: String(track._id),
             revision: identity.revision, analysis: base, completeness: 'PARTIAL', analysisSources });
-          diagnostic = { analysis: base, analysisKey, analysisSources };
+          const previewImage = await preparePreview?.({ trackId: track._id, revision: identity.revision, points: base.preview }) || null;
+          diagnostic = { analysis: base, analysisKey, analysisSources, previewImage };
         } catch (writeError) {
           warn({ event: 'track_diagnostic_write_failed', trackId: String(track._id),
             revision: identity.revision, ...safeErrorDetails(writeError) });

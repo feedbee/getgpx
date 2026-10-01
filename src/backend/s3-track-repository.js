@@ -1,3 +1,4 @@
+import { ObjectId } from 'mongodb';
 import { createPublicId } from './public-id.js';
 import { normalizeTrackName } from './track-contracts.js';
 import { normalizeRouteType } from '../route-types.js';
@@ -6,11 +7,11 @@ import { trackData } from './track-data.js';
 const LEASE_MS = 120_000;
 const terminalProcessing = (status) => ({ status, step: null, error: null });
 
-function resultExpression(analysis, analysisKey, sources, completeness, kind) {
+function resultExpression(analysis, analysisKey, sources, completeness, kind, previewImage = null) {
   // User strings and nested GPX values must never become aggregation expressions.
   return { $mergeObjects: [{ $literal: { kind, analysisKey, ...trackData(analysis),
     sourcePointCount: analysis.sourcePointCount ?? null, preview: analysis.preview ?? null,
-    sources, completeness } }, { revision: '$processing.revision', sourceKey: '$processing.sourceKey',
+    sources, completeness, previewImage } }, { revision: '$processing.revision', sourceKey: '$processing.sourceKey',
     originalFilename: '$processing.originalFilename' }] };
 }
 
@@ -99,10 +100,10 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
       }
       return tracks.findOneAndUpdate(processingFilter(identity), { $set: fields }, { returnDocument: 'after' });
     },
-    publish(identity, { analysis, analysisKey, title, analysisSources, completeness = 'FULL' }, now = new Date()) {
+    publish(identity, { analysis, analysisKey, title, analysisSources, completeness = 'FULL', previewImage = null }, now = new Date()) {
       const retainTitle = { $or: ['$titleEdited', { $eq: ['$result.kind', 'PUBLISHED'] }] };
       return tracks.findOneAndUpdate(processingFilter(identity), [{ $set: {
-        result: resultExpression(analysis, analysisKey, analysisSources, completeness, 'PUBLISHED'),
+        result: resultExpression(analysis, analysisKey, analysisSources, completeness, 'PUBLISHED', previewImage),
         title: { $cond: [retainTitle, '$title', { $literal: title }] },
         normalizedName: { $cond: [retainTitle, '$normalizedName', { $literal: normalizeTrackName(title) }] },
         processing: { $literal: terminalProcessing('READY') }, updatedAt: now,
@@ -112,7 +113,7 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
       const fields = { 'processing.status': 'FAILED', 'processing.step': null,
         'processing.error': { code: errorCode, failedStep }, updatedAt: now };
       if (diagnostic) fields.result = { $cond: [{ $eq: ['$result.kind', 'PUBLISHED'] }, '$result',
-        resultExpression(diagnostic.analysis, diagnostic.analysisKey, diagnostic.analysisSources, 'PARTIAL', 'DIAGNOSTIC')] };
+        resultExpression(diagnostic.analysis, diagnostic.analysisKey, diagnostic.analysisSources, 'PARTIAL', 'DIAGNOSTIC', diagnostic.previewImage)] };
       return tracks.findOneAndUpdate(processingFilter(identity), [
         { $set: fields }, { $unset: ['processing.workerId', 'processing.leaseUntil'] },
       ], { returnDocument: 'after' });
@@ -127,6 +128,19 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
         { $ifNull: ['$speedKmh', '$result.metrics.speedKmh'] }, '$speedKmh'] }, updatedAt: now } }],
       { returnDocument: 'after' });
     },
+    iteratePreviewTracks({ publicId, after, limit } = {}) {
+      const filter = { 'result.revision': { $exists: true } };
+      if (publicId) filter.publicId = publicId;
+      if (after) filter._id = { $gt: ObjectId.createFromHexString(after) };
+      const cursor = tracks.find(filter, { projection: { _id: 1, publicId: 1,
+        'result.analysisKey': 1, 'result.revision': 1, 'result.preview': 1, 'result.previewImage': 1 } }).sort({ _id: 1 });
+      return limit ? cursor.limit(limit) : cursor;
+    },
+    attachPreview({ trackId, revision, expectedKey, previewImage }) {
+      return tracks.findOneAndUpdate({ _id: trackId, 'result.revision': revision,
+        'result.previewImage.key': expectedKey }, { $set: { 'result.previewImage': previewImage } },
+      { returnDocument: 'before' });
+    },
     updateDetails({ trackId, ownerId, title, speedKmh, routeType, externalLinks }, now = new Date()) {
       const fields = { updatedAt: now };
       if (title !== undefined) Object.assign(fields, { title, normalizedName: normalizeTrackName(title), titleEdited: true });
@@ -140,7 +154,7 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
 }
 
 export function trackObjectKeys(track) {
-  return [...new Set([track.result?.sourceKey, track.result?.analysisKey,
+  return [...new Set([track.result?.sourceKey, track.result?.analysisKey, track.result?.previewImage?.key,
     track.processing?.sourceKey].filter(Boolean))];
 }
 

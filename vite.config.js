@@ -1,3 +1,5 @@
+import { createTrackPreviewProvider } from './src/backend/track-previews/provider.js';
+import { createTrackPreviewRouter } from './src/backend/site/track-preview-routes.js';
 import { defineConfig, loadEnv } from 'vite';
 import { createAuthentication } from './src/backend/authentication.js';
 import { createDatabase } from './src/backend/database.js';
@@ -14,6 +16,7 @@ import { createRequestLogger, logger } from './src/backend/logger.js';
 export default defineConfig(({ command, mode }) => {
   const environment = loadEnv(mode, process.cwd(), '');
   const trackConfig = command === 'serve' && mode !== 'test' ? loadTrackStorageConfig(environment) : null;
+  const previewProvider = trackConfig ? createTrackPreviewProvider(environment) : null;
   const authenticationPlugin = {
     name: 'authentication-api',
     async configureServer(server) {
@@ -37,6 +40,7 @@ export default defineConfig(({ command, mode }) => {
         ...trackPersistence,
         analyzeSource: (source, options) => analyzeGpxSource(source, { ...options, previewMaxPoints: trackConfig.previewMaxPoints }),
         enrichAnalysis: enrichTrackAnalysis,
+        previewProvider,
       });
       const http = express();
       http.disable('x-powered-by');
@@ -47,6 +51,9 @@ export default defineConfig(({ command, mode }) => {
       }));
       http.use(authentication.middleware);
       http.use(createHomepageRouter(trackService));
+      http.use(createTrackPreviewRouter(trackService, { sessionMiddleware: authentication.sessionMiddleware,
+        delivery: trackConfig.delivery,
+        fileDelivery: trackConfig.delivery === 'nginx' ? createTrackFileDelivery(trackConfig) : null }));
       server.middlewares.use(http);
       server.httpServer?.once('close', () => database.close());
     },

@@ -1,3 +1,6 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import process from 'node:process';
 import { ObjectId } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../../src/backend/database.js';
@@ -6,7 +9,7 @@ import { createS3TrackService } from '../../src/backend/s3-track-service.js';
 import { analyzeGpxSource } from '../../src/backend/track-analysis.js';
 import { analysisDocument } from '../../src/backend/track-data.js';
 import { publicTrack } from '../../src/backend/s3-track-presenters.js';
-import { createS3TrackRepository } from '../../src/backend/s3-track-repository.js';
+import { createS3TrackRepository, trackObjectKeys } from '../../src/backend/s3-track-repository.js';
 
 const uri = process.env.MONGODB_URI;
 const describeWithMongo = uri ? describe : describe.skip;
@@ -22,6 +25,45 @@ describeWithMongo('MongoDB S3 track contract', () => {
     await repository.ensureIndexes();
   });
   afterAll(() => database?.close());
+
+  it('runs the actual maintenance command in dry-run mode without mutating records', async () => {
+    const collection = await database.collection('tracks');
+    const trackId = new ObjectId();
+    const record = { _id: trackId, publicId: 'dryRunPreview', result: { revision: 'one',
+      analysisKey: `dev/tracks/${trackId}/one/analysis.json`, preview: [{ lat: 50, lon: 20 }, { lat: 51, lon: 21 }] } };
+    await collection.insertOne(record);
+    try {
+      const { stdout } = await promisify(execFile)(process.execPath, ['scripts/regenerate-track-previews.js'], {
+        cwd: process.cwd(), env: { ...process.env, MONGODB_URI: uri, TRACK_S3_BUCKET: 'test-previews',
+          AWS_REGION: 'eu-central-1', TRACK_S3_PREFIX: 'dev', TRACK_PREVIEW_PROVIDER: 'mapbox',
+          MAPBOX_ACCESS_TOKEN: 'dry-run-never-sends-this-token', TRACK_FILE_DELIVERY: 'nginx' }, timeout: 10_000 });
+      const output = stdout.trim().split('\n').map((line) => JSON.parse(line));
+      expect(output[0]).toMatchObject({ mode: 'dry-run', provider: 'mapbox', prefix: 'dev' });
+      expect(output.at(-1).summary).toMatchObject({ planned: 1, generated: 0, failed: 0 });
+      expect(await collection.findOne({ _id: trackId })).toEqual(record);
+    } finally { await collection.deleteOne({ _id: trackId }); }
+  });
+
+  it('attaches previews only to the current revision and retains their object for deletion', async () => {
+    const trackId = new ObjectId();
+    const ownerId = new ObjectId();
+    const identity = { trackId, ownerId, revision: 'preview-test', workerId: 'worker' };
+    try {
+      await repository.createProcessing({ trackId, ownerId, revision: identity.revision,
+        sourceKey: `dev/tracks/${trackId}/preview-test/source.gpx`, originalFilename: 'test.gpx', title: 'Test' });
+      await repository.claim(identity);
+      await repository.publish(identity, { analysis: { preview: [{ lat: 50, lon: 20 }, { lat: 51, lon: 21 }] },
+        title: 'Test', analysisKey: `dev/tracks/${trackId}/preview-test/analysis.json`, analysisSources: {} });
+      const previewImage = { key: `dev/tracks/${trackId}/preview-test/preview-aaaaaaaaaaaaaaaa.png`, version: 'aaaaaaaaaaaaaaaa' };
+      expect(await repository.attachPreview({ trackId, revision: 'stale', expectedKey: null, previewImage })).toBeNull();
+      expect(await repository.attachPreview({ trackId, revision: identity.revision, expectedKey: null, previewImage })).toBeTruthy();
+      expect(await repository.attachPreview({ trackId, revision: identity.revision, expectedKey: null, previewImage })).toBeNull();
+      const stored = await repository.findById(trackId);
+      expect(stored.result.previewImage).toEqual(previewImage);
+      expect(trackObjectKeys(stored)).toContain(previewImage.key);
+      expect(publicTrack(stored)).not.toHaveProperty('previewImage');
+    } finally { await tracks.deleteOne({ _id: trackId }); }
+  });
 
   it('exposes the GPX title during initial enrichment without changing an active replacement', async () => {
     const trackId = new ObjectId();
@@ -262,10 +304,17 @@ describeWithMongo('MongoDB S3 track contract', () => {
         objects.set(analysisKey, JSON.stringify(analysisDocument({ revision, ...data })));
         return analysisKey;
       },
+      writePreview: async ({ trackId, revision, imageId, image }) => {
+        const imageKey = key(trackId, revision, `preview-${imageId}.png`);
+        objects.set(imageKey, image);
+        return imageKey;
+      },
       delete: async (objectKey) => objects.delete(objectKey),
     };
     const service = createS3TrackService({ trackRepository: repository, objectStore,
       savedTrackRepository: { removeForTrack: async () => {}, savedTrackIds: async () => [] },
+      previewProvider: { provider: 'mapbox', style: 'mapbox/streets-v12', rendererVersion: 3,
+        version: 'aaaaaaaaaaaaaaaa', attribution: [], render: async () => Buffer.from('png') },
       analyzeSource: analyzeGpxSource, schedule: (job) => jobs.push(job), warn: () => {},
       enrichAnalysis: async (analysis) => {
         if (failEnrichment) throw new Error('Synthetic unavailable provider');
@@ -282,6 +331,13 @@ describeWithMongo('MongoDB S3 track contract', () => {
       expect(initial.processing).toMatchObject({ status: 'READY', canRetry: true });
       expect(initial.completeness).toBe('PARTIAL');
       const storedInitial = await repository.findByPublicId(publicId);
+      expect(storedInitial.result.previewImage).toMatchObject({ provider: 'mapbox', style: 'mapbox/streets-v12',
+        rendererVersion: 3, sourceRevision: initial.revision });
+      const imageKey = storedInitial.result.previewImage.key;
+      expect(objects.has(imageKey)).toBe(true);
+      const batch = await repository.iteratePreviewTracks({ publicId }).toArray();
+      expect(batch).toHaveLength(1);
+      expect(batch[0].result.previewImage.key).toBe(imageKey);
       const analysis = JSON.parse(objects.get(storedInitial.result.analysisKey));
       expect(analysis.sourceName).toBe('$Source name');
       expect(initial.title).toBe('$Source name');
@@ -300,6 +356,8 @@ describeWithMongo('MongoDB S3 track contract', () => {
       const failed = await service.getPublicTrack(publicId);
       expect(failed.processing).toMatchObject({ status: 'FAILED', canRetry: true });
       expect(failed.revision).toBe(initial.revision);
+      expect((await service.fileDescriptor(publicId, 'preview')).key).toBe(imageKey);
+      expect(objects.has(imageKey)).toBe(true);
       expect((await service.fileDescriptor(publicId, 'gpx')).key).toBe(storedInitial.result.sourceKey);
       failEnrichment = false;
       await service.retryAnalysis({ publicId, ownerId });
@@ -309,7 +367,8 @@ describeWithMongo('MongoDB S3 track contract', () => {
         externalLinks: { strava: 'https://www.strava.com/routes/123' }, metrics: { speedKmh: 25 }, processing: { status: 'READY' } });
       expect(retried.metrics.distanceKm).toBeGreaterThan(initial.metrics.distanceKm);
       expect(retried.revision).not.toBe(initial.revision);
-      expect(objects.size).toBe(2);
+      expect(objects.size).toBe(3);
+      expect(objects.has(imageKey)).toBe(false);
       const stored = await repository.findByPublicId(publicId);
       const cards = await service.listMyTracks({ ownerId });
       expect(cards.items[0]).toMatchObject({ id: publicId, metrics: { speedKmh: 25 } });

@@ -4,7 +4,9 @@ import { getSignedUrl } from '@aws-sdk/cloudfront-signer';
 export function createTrackFileDelivery(config, { sign = getSignedUrl } = {}) {
   return {
     redirectFor(descriptor, kind) {
-      const filename = { gpx: 'source.gpx', analysis: 'analysis.json' }[kind];
+      const filename = kind === 'preview' ? descriptor.key?.split('/').at(-1)
+        : { gpx: 'source.gpx', analysis: 'analysis.json' }[kind];
+      if (kind === 'preview' && !/^preview-[a-f\d]{16}\.png$/.test(filename)) throw new Error('Invalid preview delivery object.');
       const prefix = `${config.prefix}/`;
       if (!filename || !descriptor.key.startsWith(prefix)) throw new Error('Invalid track delivery object.');
       const viewerKey = descriptor.key.slice(prefix.length);

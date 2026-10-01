@@ -1,3 +1,5 @@
+import { createTrackPreviewProvider } from './track-previews/provider.js';
+import { createTrackPreviewRouter } from './site/track-preview-routes.js';
 import { existsSync } from 'node:fs';
 import process from 'node:process';
 import { createApp } from './app.js';
@@ -25,6 +27,7 @@ const database = createDatabase();
 
 async function start() {
   const trackConfig = loadTrackStorageConfig();
+  const previewProvider = createTrackPreviewProvider();
   await database.connect();
   const [authentication, trackPersistence, configuration] = await Promise.all([
     createAuthentication(database),
@@ -36,6 +39,7 @@ async function start() {
     userRepository: authentication.userRepository,
     analyzeSource: (source, options) => analyzeGpxSource(source, { ...options, previewMaxPoints: trackConfig.previewMaxPoints }),
     enrichAnalysis: enrichTrackAnalysis,
+    previewProvider,
     configuration,
   });
   const homepageCache = homepageCacheEnabled
@@ -53,7 +57,10 @@ async function start() {
   });
   const homepageRouter = createHomepageRouter(homepageCache
     ? { getHomepageTracks: homepageCache.getHomepageTracks } : trackService);
-  const server = createApp({ database, authRouter: authentication.middleware, apiRouter, homepageRouter }).listen(port, host, () => {
+  const server = createApp({ database, authRouter: authentication.middleware, apiRouter, homepageRouter,
+    trackPreviewRouter: createTrackPreviewRouter(trackService, { sessionMiddleware: authentication.sessionMiddleware,
+      delivery: trackConfig.delivery,
+      fileDelivery: trackConfig.delivery === 'nginx' ? createTrackFileDelivery(trackConfig) : null }) }).listen(port, host, () => {
     logger.info({ host, port }, 'Server listening');
   });
 

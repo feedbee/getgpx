@@ -82,8 +82,46 @@ client derives display categories and indexes into detailed geometry.
 
 Owner controls use the owner-only `/status` resource alongside public metadata.
 Editing uses a partial PATCH; omitted fields stay unchanged. List cards use the
-same metrics and processing models, drawing geographic previews locally. Source
-GPX uses GET and PUT on `/gpx`. Bulk deletion uses POST `/tracks/deletions` and
+same metrics and processing models. With `TRACK_PREVIEW_PROVIDER=none` (default),
+they draw geographic previews locally. Mapbox mode uses a server-only preview adapter
+(`src/backend/track-previews/`) to create 512×512 PNGs with the softly colored Streets basemap and a blue
+route with a white outline. The route uses a 6 px stroke (#1769d2, matching the SVG preview) over a 15 px white
+outline at the 256 px logical rendering size, rendered at double resolution
+for smooth edges in small list cards. The provider contract is `render(previewCoordinates)`
+returning a PNG buffer, plus a credential-free version and attribution links.
+Adding another provider requires an adapter and registration in the factory; the
+client and storage flow stay shared.
+
+Preview images are stored alongside the current result under
+`<TRACK_S3_PREFIX>/tracks/<internal-track-id>/<revision>/preview-<random-image-id>.png`.
+MongoDB retains internal `result.previewImage` metadata: object key, provider, style,
+renderer version, configuration fingerprint (`version`), source revision, dimensions,
+format, attribution and creation time. Credentials are never persisted there.
+Processing writes the PNG before atomically publishing the result. GPX replacement
+and retry prepare a new image; title/speed edits do not require regeneration.
+Provider failures do not block publication and leave SVG fallback previews usable.
+Rendering is limited to four concurrent jobs.
+
+HTTP reads never generate images. Changing provider/style affects subsequent
+processing; existing images remain available until explicitly regenerated.
+`npm run previews:regenerate` defaults to a dry run. Add `--apply` to generate
+missing/outdated images, or `--apply --force` to rebuild all eligible images.
+The command streams records sequentially, skips other S3 environments, and swaps
+image references conditionally on the unchanged revision and previous image key.
+It deletes the previous object only after a successful swap, and removes unpublished
+candidates on a known conflict. Uncertain MongoDB acknowledgements may leave orphans.
+See [operations](operations.md) for Docker execution and resumable batches.
+
+`/track-previews/config` and `/track-previews/:publicId.png` are authenticated website
+routes shared by production and Vite. `TRACK_FILE_DELIVERY=stream` streams stored
+PNG objects through Node; `nginx` uses the existing signed CloudFront handoff and
+internal Nginx proxy. No separate distribution is needed. Responses are private,
+no-store; absent images return 204 and the client keeps the SVG fallback.
+These routes and internal image references are outside the stable `/api/v1` contract.
+Mapbox/OSM attribution appears once below the list, outside the images; these assets
+are currently for list thumbnails, not social sharing.
+
+Source GPX uses GET and PUT on `/gpx`. Bulk deletion uses POST `/tracks/deletions` and
 `/tracks/saved/deletions`. Single deletion uses DELETE and succeeds on repeats.
 The homepage is served by `/homepage`.
 

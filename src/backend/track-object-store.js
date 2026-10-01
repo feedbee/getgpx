@@ -19,7 +19,7 @@ export function createTrackObjectStore({ s3, send = (command) => s3.send(command
     return `${base}${trackId}/${revision}/${filename}`;
   };
   const assertKey = (key) => {
-    if (typeof key !== 'string' || !new RegExp(`^${base}[a-f\\d]{24}/[A-Za-z0-9_-]+/(?:source\\.gpx|analysis\\.json)$`, 'i').test(key)) {
+    if (typeof key !== 'string' || !new RegExp(`^${base}[a-f\\d]{24}/[A-Za-z0-9_-]+/(?:source\\.gpx|analysis\\.json|preview-[a-f\\d]{16}\\.png)$`, 'i').test(key)) {
       throw new Error('Track object key is outside the configured prefix.');
     }
     return key;
@@ -62,6 +62,12 @@ export function createTrackObjectStore({ s3, send = (command) => s3.send(command
       const key = keyFor(trackId, revision, 'analysis.json');
       const body = JSON.stringify(analysisDocument({ revision, analysis, completeness, analysisSources }));
       await send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: 'application/json' }));
+      return key;
+    },
+    async writePreview({ trackId, revision, imageId, image }) {
+      if (!/^[a-f\d]{16}$/.test(imageId) || !Buffer.isBuffer(image) || image.length > 2 * 1024 * 1024) throw new Error('Invalid track preview.');
+      const key = assertKey(keyFor(trackId, revision, `preview-${imageId}.png`));
+      await send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: image, ContentType: 'image/png' }));
       return key;
     },
     async openRead(key) {

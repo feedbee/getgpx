@@ -22,6 +22,17 @@ describe('S3 track object store', () => {
     expect(await store.readSource(sourceKey)).toBe(source.toString());
   });
 
+  it('writes revisioned PNGs and rejects preview keys outside the configured namespace', async () => {
+    const send = vi.fn(async () => ({}));
+    const store = createTrackObjectStore({ bucket: 'track-files', prefix: 'dev', send });
+    const image = Buffer.from('png');
+    const key = await store.writePreview({ trackId: '0123456789abcdef01234567', revision: 'one', imageId: 'aaaaaaaaaaaaaaaa', image });
+    expect(key).toBe('dev/tracks/0123456789abcdef01234567/one/preview-aaaaaaaaaaaaaaaa.png');
+    expect(send.mock.calls[0][0].input).toMatchObject({ Key: key, Body: image, ContentType: 'image/png' });
+    expect(() => store.assertKey(key.replace('dev/', 'prod/'))).toThrow();
+    await expect(store.writePreview({ trackId: '0123456789abcdef01234567', revision: 'one', imageId: '../escape', image })).rejects.toThrow();
+  });
+
   it('rejects reads outside its prefix', async () => {
     const store = createTrackObjectStore({ bucket: 'track-files', prefix: 'dev', send: vi.fn() });
     await expect(store.openRead('prod/tracks/x/one/source.gpx')).rejects.toThrow();

@@ -40,6 +40,16 @@ describe('S3 SDK track object contract', () => {
   });
   afterAll(async () => { s3?.destroy(); if (server) await new Promise((resolve) => server.close(resolve)); });
 
+  it('stores and removes a static PNG using the real S3 SDK', async () => {
+    const image = Buffer.from('static-preview');
+    const key = await store.writePreview({ trackId: '0123456789abcdef01234567', revision: 'preview', imageId: 'aaaaaaaaaaaaaaaa', image });
+    const chunks = [];
+    for await (const chunk of await store.openRead(key)) chunks.push(Buffer.from(chunk));
+    expect(Buffer.concat(chunks)).toEqual(image);
+    await store.delete(key);
+    expect(objects.has(key)).toBe(false);
+  });
+
   it('uploads, reads, copies and deletes revisioned source and analysis objects', async () => {
     const trackId = '0123456789abcdef01234567';
     const sourceKey = await store.writeSource({ trackId, revision: 'first', source: Readable.from('<gpx>exact bytes</gpx>') });

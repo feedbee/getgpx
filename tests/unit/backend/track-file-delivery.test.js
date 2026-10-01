@@ -7,7 +7,7 @@ const config = { prefix: 'prod', cloudFrontDomain: 'example.cloudfront.net',
 const query = '?Expires=123&Signature=abc~_-&Key-Pair-Id=K123';
 
 describe('nginx track file delivery', () => {
-  it.each([['gpx', 'source.gpx'], ['analysis', 'analysis.json']])('signs %s without the S3 prefix and returns only a local redirect', (kind, filename) => {
+  it.each([['gpx', 'source.gpx'], ['analysis', 'analysis.json'], ['preview', 'preview-aaaaaaaaaaaaaaaa.png']])('signs %s without the S3 prefix and returns only a local redirect', (kind, filename) => {
     const sign = vi.fn(({ url }) => url + query);
     const key = `prod/tracks/object/revision/${filename}`;
     const redirect = createTrackFileDelivery(config, { sign }).redirectFor({ key }, kind);
@@ -15,6 +15,12 @@ describe('nginx track file delivery', () => {
     expect(sign).toHaveBeenCalledWith({ url: `https://example.cloudfront.net/tracks/object/revision/${filename}`,
       keyPairId: 'K123', privateKey: 'private', dateLessThan: expect.any(String) });
     expect(Date.parse(sign.mock.calls[0][0].dateLessThan) - Date.now()).toBeGreaterThan(55_000);
+  });
+
+  it.each(['source.gpx', 'preview-other.png', 'preview-aaaaaaaaaaaaaaaa.png?query=1'])('rejects an invalid preview filename %s', (filename) => {
+    const sign = vi.fn();
+    expect(() => createTrackFileDelivery(config, { sign }).redirectFor({ key: `prod/tracks/object/revision/${filename}` }, 'preview')).toThrow();
+    expect(sign).not.toHaveBeenCalled();
   });
 
   it('accepts the real AWS signer output without exposing its host', () => {

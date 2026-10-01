@@ -4,6 +4,16 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+### Added
+
+- Optional Mapbox static map previews for track lists, generated during GPX processing and stored permanently in S3, with SVG fallback.
+- Provider/style/render provenance and a Docker-compatible `previews:regenerate` command for dry runs, selective updates, forced regeneration and resumable batches.
+
+### Upgrade notes
+
+- Enable `TRACK_PREVIEW_PROVIDER=mapbox` and provide a server-side `MAPBOX_ACCESS_TOKEN`. Backfill existing previews with `npm run previews:regenerate -- --apply` after inspecting the dry run.
+- In nginx delivery mode, allow signed `preview-<16-hex>.png` objects through the existing internal CloudFront proxy; see the infrastructure handoff. No separate distribution is required.
+
 ## [0.4.2] - 2026-10-01
 
 ### Fixed

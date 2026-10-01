@@ -301,7 +301,29 @@ the accepted source limit. Avoid recursive stack overflow and spread over large 
 
 Handle duplicates, a straight line, a closed loop, zero-area bounds, and one/two points
 without NaN or Infinity. Test distinctive turns and unequal aspect ratios. Store only
-the resulting compact preview in MongoDB; cards do not request analysis or S3.
+the resulting compact preview in MongoDB; card metadata and SVG fallback never
+request analysis or S3. Optional static map images use the compact coordinates in
+an explicit backend provider adapter, selected by `TRACK_PREVIEW_PROVIDER`.
+
+Processing stores the PNG before publishing the same result revision. Internal
+`result.previewImage` records the S3 key, provider, style, renderer version,
+configuration fingerprint, source revision, dimensions, format, attribution and
+creation time. Object names use a unique 16-hex image ID, so forced regeneration
+never overwrites a published object. Failed rendering does not fail track processing.
+
+Image reads never render. The maintenance command defaults to a read-only dry run;
+apply mode streams eligible records and conditionally replaces their image metadata
+only if the result revision and previous image key still match. Only records whose
+analysis key belongs to the configured S3 prefix are eligible. Normal runs skip
+current provenance; force mode handles upstream style updates with unchanged IDs.
+Delete superseded objects after publication, known conflicting candidates immediately,
+and preserve candidates after ambiguous Mongo acknowledgements.
+
+Authenticated website `/track-previews/:publicId.png` delivers stored objects through
+Node in stream mode or the existing signed internal Nginx/CloudFront proxy in nginx
+mode. Missing references return 204; the SVG remains visible. Responses are private,
+no-store. No static-preview fields or routes are added to the stable API v1 contract.
+See [operations](../operations.md) for selection, resume and Docker commands.
 
 ## Public API and revision selection
 

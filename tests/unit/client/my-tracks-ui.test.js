@@ -5,6 +5,33 @@ import { describe, expect, it, vi } from 'vitest';
 import { bulkDeleteSummary, bulkSelectionState, cancelTrackSearch, createTrackCard, formatTrackDuration, formatTrackMetrics, previewPolyline, trackStatusLabel } from '../../../src/client/my-tracks-ui.js';
 
 describe('my tracks UI', () => {
+  it('shows the map only after load and restores SVG when an image fails', () => {
+    const documentRef = { createElement: (tagName) => {
+      const classes = new Set();
+      return { tagName, dataset: {}, attributes: {}, children: [], events: {},
+        classList: { add: (name) => classes.add(name), remove: (name) => classes.delete(name), contains: (name) => classes.has(name) },
+        setAttribute(name, value) { this.attributes[name] = value; },
+        addEventListener(name, listener) { this.events[name] = listener; },
+        append(...children) { this.children.push(...children); },
+        replaceChildren(...children) { this.children = children; },
+      };
+    } };
+    const track = { id: 'route', title: 'Ride', url: '/tracks/route', createdAt: '2026-10-01T12:00:00Z',
+      downloadURL: {}, externalLinks: {}, processing: { status: 'READY' }, preview: [{ lat: 50, lon: 20 }, { lat: 51, lon: 21 }] };
+    const preview = createTrackCard(track, documentRef, { mapPreview: true }).children[0];
+    const image = preview.children[0];
+    expect(preview.innerHTML).toContain('<polyline');
+    expect(image).toMatchObject({ src: '/track-previews/route.png', loading: 'lazy' });
+    expect(image.hidden).not.toBe(true); // Lazy images must have a layout box before loading.
+    image.events.load();
+    expect(preview.classList.contains('has-map-preview')).toBe(true);
+    expect(image.hidden).toBe(false);
+    image.events.error();
+    expect(preview.classList.contains('has-map-preview')).toBe(false);
+    expect(image.hidden).toBe(true);
+    expect(createTrackCard(track, documentRef).children[0].children).toHaveLength(0);
+  });
+
   it('formats processing and terminal statuses in friendly Russian', () => {
     expect(trackStatusLabel({ processing: { status: 'PROCESSING', step: 'ENRICHING' } })).toBe('Анализируем покрытия');
     expect(trackStatusLabel({ processing: { status: 'FAILED' } })).toBe('Нужен повторный анализ');

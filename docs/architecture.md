@@ -18,7 +18,7 @@ Node.js / Express
   └─ initializes saved-track, S3, enrichment-cache, and application configuration adapters
               │
 MongoDB (users, sessions, compact track metadata, and enrichment cache)
-S3 (original GPX files and detailed analysis JSON)
+S3 (original GPX files, detailed analysis JSON, and optional static list previews)
 ```
 
 At startup the backend creates the `configuration` collection entry keyed by
@@ -72,3 +72,9 @@ site and is passed into the API as middleware; no token flow exists yet.
 Neither requires login to read. Protected operations still need the website's
 HttpOnly cookie. Documentation has a scoped CSP and no external proxy or validator.
 See [public API v1](specs/public-api-v1.md) for the compatibility and phase policy.
+
+Static list previews use a pluggable backend adapter in `track-previews/`, selected
+at startup by `TRACK_PREVIEW_PROVIDER`. Provider credentials remain server-side.
+`site/track-preview-routes.js` exposes authenticated website configuration and image
+delivery, independently of API v1 and the analysis/metadata read boundary. PNGs and
+their internal S3 references follow the result revision lifecycle; see [tracks](tracks.md).

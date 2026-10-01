@@ -4,8 +4,9 @@ import { bulkSelectionState, cancelTrackSearch, createTrackCard } from './my-tra
 import { setButtonLoading, withButtonLoading } from './button-loading-ui.js';
 
 export function createTrackCollection({ trackApi, isMyTracksPage, isFavoriteTracksPage,
-  getCurrentUser, onEdit, onDelete, onDeleteMany, documentRef = document, browserWindow = window }) {
+  getCurrentUser, loadPreviewConfiguration = async () => ({ enabled: false, attribution: [] }), onEdit, onDelete, onDeleteMany, documentRef = document, browserWindow = window }) {
   const isTrackCollectionPage = isMyTracksPage || isFavoriteTracksPage;
+  let previewConfiguration;
   let cursor = null;
   let loading = false;
   async function load({ reset = false } = {}) {
@@ -37,7 +38,23 @@ export function createTrackCollection({ trackApi, isMyTracksPage, isFavoriteTrac
       const response = await trackApi.list({ saved: isFavoriteTracksPage, parameters });
       const payload = await response.json();
       if (!response.ok) throw errorFromPayload(payload);
-      payload.data.items.forEach((track) => list.append(createTrackCard(track, documentRef, { ownerActions: !isFavoriteTracksPage })));
+      if (!previewConfiguration) {
+        previewConfiguration = await loadPreviewConfiguration().catch(() => ({ enabled: false, attribution: [] }));
+        const credits = documentRef.querySelector('#track-preview-attribution');
+        if (credits && previewConfiguration.enabled) {
+          credits.replaceChildren();
+          for (const { label, url } of previewConfiguration.attribution) {
+            const link = documentRef.createElement('a');
+            link.textContent = label;
+            link.href = url;
+            link.rel = 'noopener noreferrer';
+            link.target = '_blank';
+            credits.append(link);
+          }
+          credits.hidden = false;
+        }
+      }
+      payload.data.items.forEach((track) => list.append(createTrackCard(track, documentRef, { ownerActions: !isFavoriteTracksPage, mapPreview: previewConfiguration.enabled })));
       updateBulkDeleteButton();
       cursor = payload.data.nextCursor;
       bindText(message, () => list.children.length ? '' : (query ? t('tracks.noResults') : isFavoriteTracksPage ? t('tracks.noFavorites') : t('tracks.empty')));

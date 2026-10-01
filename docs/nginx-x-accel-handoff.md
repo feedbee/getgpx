@@ -16,12 +16,13 @@ Nginx must equal `TRACK_CLOUDFRONT_DOMAIN` (the template currently uses
 | --- | --- |
 | GET/HEAD `/api/v1/tracks/:id/gpx` | Node authorizes and hands the current source GPX to Nginx |
 | GET/HEAD `/api/v1/tracks/:id/analysis` | Node authorizes and hands current detailed JSON to Nginx |
+| GET/HEAD `/track-previews/:id.png` | Authenticated website route; Node hands the stored PNG to Nginx |
 | PUT `/api/v1/tracks/:id/gpx` | Node replaces GPX; preserve method, body and headers |
 | GET `/api/v1/tracks/:id` | Point-free MongoDB metadata; ordinary Node response |
 | Other API/site requests | Ordinary Node proxying; Node owns route/method validation |
 
 Public IDs are opaque. They are not S3 object IDs. Do not build object URLs from
-public IDs. Internal file kinds are now `gpx` and `analysis`. The public OpenAPI
+public IDs. Internal file kinds are `gpx`, `analysis` and `preview`. The public OpenAPI
 operation ID for GPX is `downloadGpx`. The JSON field `downloadURL` remains an object
 keyed by file format. Operation IDs do not affect Nginx routing or the handoff protocol.
 
@@ -31,7 +32,7 @@ requests go directly to Node through the ordinary proxy configuration.
 
 Forward the original Host, Cookie, Origin, Sec-Fetch-Site and Sec-Fetch-Mode to
 Node, plus the deployment's usual forwarding headers. Node resolves/renews sessions
-and applies its API origin policy before file selection and signing. A cross-origin
+and, for API routes, applies its API origin policy before file selection and signing. A cross-origin
 browser script receives 403 JSON with `error.code=CROSS_ORIGIN_FORBIDDEN`. Direct
 CLI requests without browser-origin headers are allowed. Preserve Set-Cookie when
 Node renews a session, including across successful internal file redirects.
@@ -46,6 +47,15 @@ Content-Type: application/gpx+xml
 Content-Disposition: attachment; filename="<ASCII fallback>"; filename*=UTF-8''<percent-encoded original filename>
 Cache-Control: private, no-store
 ```
+
+For previews the path ends in `preview-<16-lowercase-hex-characters>.png`,
+Content-Type is `image/png`, and Content-Disposition is absent. The PNG uses the
+same distribution, signing settings and internal proxy. Include this filename in
+any internal path allowlist. `/track-previews/` uses website session authentication:
+guests receive 401, invalid IDs receive 404, and a missing image reference receives
+204. Delivery failures before handoff return 502 with only
+`{"error":{"code":"TRACK_FILE_UNAVAILABLE"}}`; proxy failures must use the same safe
+code. Preview delivery logs use `track_preview_delivery_failed`.
 
 For analysis the path ends in `analysis.json`, Content-Type is `application/json`,
 and Content-Disposition is absent. Query order is not a contractual requirement;
@@ -162,14 +172,15 @@ possible, but requires regular Node proxying and application restart.
 Check the rendered template with nginx -t, then exercise:
 
 1. GET analysis and GPX: real body, correct Content-Type, GPX UTF-8 filename, private/no-store, no internal/signing header disclosure.
-2. HEAD both files: real upstream verification, same file headers, no body.
-3. PUT GPX: authenticated mutation reaches Node with its original payload; guest gets 401. Unsupported methods retain Node 405/Allow.
-4. Metadata and other API/site requests remain ordinary Node operations.
-5. Node 404/409/403/502 pass through as JSON unchanged; HEAD errors have no body.
-6. Direct internal URLs and spoofed X-Accel headers cannot bypass Node authorization.
-7. CloudFront 403/404/redirects/5xx and unreachable upstreams give safe 502 JSON; a midstream failure is logged and closes the transfer.
-8. Session renewal cookies survive the redirect, while no identity headers reach CloudFront.
-9. Expiry, private/no-store, and signature-free success/failure logs.
+2. GET/HEAD stored PNG previews: authenticated access, image/png, no disposition, private/no-store, safe 502 on proxy failures.
+3. HEAD GPX and analysis: real upstream verification, same file headers, no body.
+4. PUT GPX: authenticated mutation reaches Node with its original payload; guest gets 401. Unsupported methods retain Node 405/Allow.
+5. Metadata and other API/site requests remain ordinary Node operations.
+6. Node 404/409/403/502 pass through as JSON unchanged; HEAD errors have no body.
+7. Direct internal URLs and spoofed X-Accel headers cannot bypass Node authorization.
+8. CloudFront 403/404/redirects/5xx and unreachable upstreams give safe 502 JSON; a midstream failure is logged and closes the transfer.
+9. Session renewal cookies survive the redirect, while no identity headers reach CloudFront.
+10. Expiry, private/no-store, and signature-free success/failure logs.
 
 Local application verification exercised Nginx 1.30.4 in an isolated container with
 stub Node/CloudFront servers: the transfer body and original Content-Type,

@@ -50,6 +50,11 @@ let publicTrackOwnershipVerified = false;
 
 app.innerHTML = renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPage, isFavoriteTracksPage });
 const collection = createTrackCollection({ trackApi, isMyTracksPage, isFavoriteTracksPage,
+  loadPreviewConfiguration: async () => {
+    const response = await fetch('/track-previews/config');
+    if (!response.ok) throw new Error('Preview configuration unavailable');
+    return response.json();
+  },
   getCurrentUser: () => currentUser, onEdit: (track, button) => trackEditor.openFromList(track, button), onDelete: (track) => trackDeletion.openOne(track),
   onDeleteMany: (tracks) => trackDeletion.openMany(tracks) });
 const trackDeletion = createTrackDeletion({ trackApi, collection, isFavoriteTracksPage, isTrackCollectionPage,

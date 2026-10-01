@@ -37,6 +37,7 @@ export function renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPa
     <div class="track-list-toolbar"><button class="select-all-tracks" id="select-all-tracks" type="button" disabled>${htmlMessage('common.selectAll')}</button><button class="bulk-delete-tracks" id="bulk-delete-tracks" type="button" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg><span>${isFavoriteTracksPage ? t('common.remove') : t('common.delete')}</span></button></div>
     <p class="my-tracks-message" id="my-tracks-message" role="status">${htmlMessage(isFavoriteTracksPage ? 'tracks.loginFavorites' : 'tracks.loginOwn')}</p>
     <section class="track-list" id="track-list" aria-live="polite"></section>
+    <div id="track-preview-attribution" class="track-preview-attribution" hidden></div>
     <button class="load-more-tracks" id="load-more-tracks" type="button" hidden>${htmlMessage('tracks.more')}</button>
   </main>
   <main class="page" id="route" ${isTrackCollectionPage || isHomePage || isNotFoundPage ? 'hidden' : ''}>

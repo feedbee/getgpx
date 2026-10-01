@@ -40,6 +40,52 @@ requests, to respect its published per-user rate limit. A configured private
 `VALHALLA_URL` has no start delay; provision its capacity accordingly. All requests
 still share the 50-second analysis budget.
 
+## Permanent track previews
+
+Enable `TRACK_PREVIEW_PROVIDER=mapbox` with the server-side `MAPBOX_ACCESS_TOKEN`.
+Uploads and GPX replacements store PNGs in the same private S3 bucket. A provider
+outage leaves the SVG fallback; reads do not retry generation. Existing images retain
+their original provider/style until a maintenance run updates them.
+
+Inspect the planned changes first, then apply them using the same MongoDB, AWS,
+S3 prefix and preview-provider configuration as the application:
+
+```bash
+npm run previews:regenerate -- --dry-run
+npm run previews:regenerate -- --apply
+# Inside the running application container:
+docker compose exec app npm run previews:regenerate -- --dry-run
+docker compose exec app npm run previews:regenerate -- --apply
+```
+
+The runtime image includes the command; a standalone container can also run it with
+`docker run --rm --env-file /secure/getgpx.env IMAGE npm run previews:regenerate -- --apply`.
+The job needs no OAuth or CloudFront signing configuration. Keep the env file outside
+version control. It writes only under the configured S3 prefix; records from other
+prefixes are skipped. Dry runs read MongoDB but never call Mapbox or write S3/MongoDB.
+
+By default the job rebuilds only missing images or images whose provider, style,
+renderer version or source revision differs. Use `--force` to also rebuild current
+images (for example after an in-place Studio style update or a missing S3 object), `--track PUBLIC_ID` for
+one track, `--limit N` for a batch, and `--after MONGO_ID` to continue from the logged
+`lastId`. Records are processed sequentially in MongoDB ID order. Progress and the
+final summary are JSON; failed renders and concurrent publication conflicts produce
+exit code 1. Rerun normally to retry failures; successful images will be skipped.
+Do not resume past failed records if you intend to retry those records.
+
+The old image remains referenced until its replacement is written and conditionally
+published. A concurrent GPX replacement or another regeneration wins safely;
+conflicting candidates are deleted. Track deletion and successful GPX replacement
+also clean up referenced images. Unexpected storage/MongoDB failures may leave orphan
+objects, consistent with the existing track-storage cleanup policy.
+
+Production preview requests use the existing `/_track_files/` signed proxy when
+`TRACK_FILE_DELIVERY=nginx`. Ensure that its path allowlist accepts `preview-` followed
+by 16 lowercase hexadecimal characters and `.png`, and that ordinary website
+proxying forwards `/track-previews/` to Node with cookies. See the
+[Nginx handoff requirements](nginx-x-accel-handoff.md); no new CloudFront distribution
+is needed. Development uses Node streaming with the same URLs.
+
 ## CI and repository setup
 
 The quality workflow runs on pull requests, `main`, and manual dispatch. Configure branch protection to require both `check` and `mongodb-integration`, at least one approving review, and a current branch before merge.

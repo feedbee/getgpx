@@ -17,7 +17,7 @@ export function frontendPageStatus(pathname) {
     : 404;
 }
 
-export function createApp({ database, authRouter, apiRouter, homepageRouter, staticDirectory = defaultStaticDirectory, log = logger }) {
+export function createApp({ database, authRouter, apiRouter, homepageRouter, trackPreviewRouter, staticDirectory = defaultStaticDirectory, log = logger }) {
   if (!database) throw new Error('A database adapter is required.');
 
   const app = express();
@@ -43,6 +43,7 @@ export function createApp({ database, authRouter, apiRouter, homepageRouter, sta
   if (apiRouter) app.use('/api', apiRouter);
   if (authRouter) app.use(authRouter);
   if (homepageRouter) app.use(homepageRouter);
+  if (trackPreviewRouter) app.use(trackPreviewRouter);
   app.use(express.static(staticDirectory, { index: false, maxAge: '1h' }));
   app.get('*splat', (request, response) => response
     .status(frontendPageStatus(request.path))
