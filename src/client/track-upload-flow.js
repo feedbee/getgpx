@@ -8,6 +8,25 @@ import { withButtonLoading } from './button-loading-ui.js';
 export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, documentRef = document }) {
   let activeTrackId = null;
   let metadata = null;
+  let operation = 'create';
+
+  function prepareProcessing(action) {
+    operation = action;
+    metadata = null;
+    activeTrackId = null;
+    for (const selector of ['#processing-error', '#processing-details', '#retry-processing',
+      '#open-uploaded-track', '#finish-processing', '#close-processing', '#upload-metadata', '#upload-metadata-error']) {
+      documentRef.querySelector(selector).hidden = true;
+    }
+    setUploadMetadataEditing('#upload-title-row', false);
+    setUploadMetadataEditing('#upload-links-row', false);
+    documentRef.querySelector('#processing-status').classList.remove('is-complete', 'is-failed');
+    bindText(documentRef.querySelector('#processing-kicker'), () => t(action === 'create' ? 'upload.new' : 'upload.existing'));
+    bindText(documentRef.querySelector('#processing-title'), () => t(`upload.${operation}Processing`));
+    bindText(documentRef.querySelector('#processing-status').querySelector('strong'), () => t('upload.processing'));
+    bindText(documentRef.querySelector('#processing-status-copy'), () => t('upload.wait'));
+    documentRef.querySelector('#processing-overlay').hidden = false;
+  }
   const processingOrder = ['UPLOADING', 'QUEUED', 'PARSING', 'ENRICHING', 'COMPLETE'];
 
   function updateProcessing(step) {
@@ -85,6 +104,7 @@ export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, 
   function showTrackCreated(trackId) {
     const status = documentRef.querySelector('#processing-status');
     status.classList.add('is-complete');
+    bindText(documentRef.querySelector('#processing-title'), () => t(`upload.${operation}Complete`));
     bindText(status.querySelector('strong'), () => t('upload.complete'));
     bindText(documentRef.querySelector('#processing-status-copy'), () => t('upload.viewReady'));
     bindText(documentRef.querySelector('#upload-metadata-hint'), () => uploadMetadataHint(true));
@@ -103,7 +123,7 @@ export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, 
       const { data } = await response.json();
       if (activeTrackId !== trackId) return;
       updateProcessing(data.step);
-      if (data.step === 'ENRICHING' || data.status === 'READY') await loadUploadMetadata(trackId);
+      if (data.status === 'READY') await loadUploadMetadata(trackId);
       if (data.status === 'READY') {
         activeTrackId = null;
         updateProcessing('COMPLETE');
@@ -120,22 +140,7 @@ export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, 
 
   async function uploadFile(file) {
     if (!isAuthenticated()) return;
-    const processing = documentRef.querySelector('#processing-overlay');
-    const error = documentRef.querySelector('#processing-error');
-    const details = documentRef.querySelector('#processing-details');
-    error.hidden = true;
-    details.hidden = true;
-    documentRef.querySelector('#retry-processing').hidden = true;
-    documentRef.querySelector('#open-uploaded-track').hidden = true;
-    documentRef.querySelector('#finish-processing').hidden = true;
-    documentRef.querySelector('#close-processing').hidden = true;
-    documentRef.querySelector('#upload-metadata').hidden = true;
-    documentRef.querySelector('#processing-status').classList.remove('is-complete', 'is-failed');
-    bindText(documentRef.querySelector('#processing-status').querySelector('strong'), () => t('upload.processing'));
-    bindText(documentRef.querySelector('#processing-status-copy'), () => t('upload.wait'));
-    bindText(documentRef.querySelector('#upload-metadata-hint'), () => uploadMetadataHint(false));
-    metadata = null;
-    processing.hidden = false;
+    prepareProcessing('create');
     updateProcessing('UPLOADING');
     try {
       const response = await trackApi.upload({ file, routeType: 'cycling' });
@@ -151,10 +156,7 @@ export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, 
 
   async function replaceTrackFile(file, trackId = getPublicTrackId()) {
     if (!isAuthenticated() || !trackId) return;
-    const processing = documentRef.querySelector('#processing-overlay');
-    documentRef.querySelector('#processing-error').hidden = true;
-    documentRef.querySelector('#processing-details').hidden = true;
-    processing.hidden = false;
+    prepareProcessing('replace');
     updateProcessing('UPLOADING');
     try {
       const response = await trackApi.replace({ id: trackId, file });
@@ -169,7 +171,7 @@ export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, 
   }
 
   async function saveUploadMetadata({ title, routeType, links }, button = null) {
-    if (!metadata) return false;
+    if (!metadata || activeTrackId) return false;
     const payload = uploadMetadataPayload({
       title: title ?? metadata.title,
       speedKmh: metadata.speedKmh,
@@ -202,6 +204,9 @@ export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, 
 
   async function retryProcessing(button) {
     if (!activeTrackId) return;
+    const trackId = activeTrackId;
+    prepareProcessing('retry');
+    activeTrackId = trackId;
     try {
       await withButtonLoading(button, async () => {
         const response = await trackApi.retry(activeTrackId);
@@ -229,8 +234,8 @@ export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, 
     const response = await trackApi.retry(trackId);
     const payload = await response.json();
     if (!response.ok) return;
+    prepareProcessing('retry');
     activeTrackId = trackId;
-    documentRef.querySelector('#processing-overlay').hidden = false;
     updateProcessing(payload.data.step);
     await pollTrackStatus(trackId);
   }

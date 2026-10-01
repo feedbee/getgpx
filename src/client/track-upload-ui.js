@@ -34,7 +34,7 @@ export function renderTrackUploadDialogs() {
     <div class="processing-overlay" id="processing-overlay" hidden>
       <section class="processing-card" role="dialog" aria-modal="true" aria-labelledby="processing-title">
         <div class="processing-heading">
-          <div><p class="route-kicker">${htmlMessage('upload.new')}</p><h2 id="processing-title">${htmlMessage('upload.creating')}</h2></div>
+          <div><p class="route-kicker" id="processing-kicker">${htmlMessage('upload.new')}</p><h2 id="processing-title">${htmlMessage('upload.creating')}</h2></div>
           <button class="processing-close" id="close-processing" type="button" ${messageAttribute('aria-label', 'common.close')} hidden>×</button>
         </div>
         <section class="upload-metadata" id="upload-metadata" aria-labelledby="upload-metadata-title" hidden>

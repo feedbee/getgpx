@@ -103,3 +103,8 @@ Use `npm run check` for every change. Use `npm run test:integration` with an iso
 changes. Unit and integration tests live under `tests/`, mirroring source boundaries.
 The [S3 track specification](specs/track-s3-storage.md) contains the full contracts,
 failure cases, and acceptance matrix.
+
+The processing dialog distinguishes track creation, GPX replacement and reprocessing,
+including their completion titles. Metadata editors appear only after the owner status
+resource reports READY. Each operation resets previous editors, errors and completion
+actions; metadata cannot be submitted while the dialog is processing a track.
