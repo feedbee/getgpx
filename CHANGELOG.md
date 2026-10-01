@@ -4,6 +4,17 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-01
+
+### Changed
+
+- In nginx delivery mode, Node now authorizes GPX and analysis requests and hands ready files to Nginx with `X-Accel-Redirect`. API errors are returned directly by Node instead of being reconstructed from an internal authorization subrequest.
+- The OpenAPI operation ID for GPX downloads is `downloadGpx`.
+
+### Upgrade notes
+
+- Deploy the matching Nginx `/_track_files/` configuration together with this application version when `TRACK_FILE_DELIVERY=nginx`. Remove the old `/internal/track-files` authorization subrequest flow. See [the infrastructure handoff](docs/nginx-x-accel-handoff.md). `TRACK_FILE_DELIVERY=stream` does not require a proxy change.
+
 ## [0.4.0] - 2026-10-01
 
 ### Added
