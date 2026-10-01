@@ -59,3 +59,10 @@ upsert persistence. No test calls Google.
 - Guests retain the same route-analysis page and capabilities.
 - Missing auth configuration fails clearly at startup, and setup is documented.
 - `npm run check` and the MongoDB integration suite pass.
+
+Protected `/api/v1` operations currently use the same HttpOnly session cookie.
+Their OpenAPI security scheme is `sessionCookie`; there is no token issuance or
+API OAuth flow. The API access policy runs before its session middleware. Same-origin
+Scalar and Swagger requests use the browser's existing session; their UI cannot
+create an HttpOnly cookie through an authorization input. Site auth routes remain
+outside the public API under `/auth/*`.

@@ -1,5 +1,6 @@
+import { createAuthHandlers } from '../../../src/backend/site/auth-routes.js';
 import { describe, expect, it, vi } from 'vitest';
-import { createAuthHandlers, createAuthService, createSessionRefreshMiddleware, exchangeGoogleCode, publicUser } from '../../../src/backend/auth.js';
+import { createAuthService, createSessionRefreshMiddleware, exchangeGoogleCode, publicUser } from '../../../src/backend/auth.js';
 
 describe('Google OAuth requests', () => {
   it('aborts a stalled token exchange after ten seconds', async () => {

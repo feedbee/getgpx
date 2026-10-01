@@ -3,7 +3,9 @@ import { createAuthentication } from './src/backend/authentication.js';
 import { createDatabase } from './src/backend/database.js';
 import { analyzeGpxSource, enrichTrackAnalysis } from './src/backend/track-analysis.js';
 import { createS3TrackPersistence } from './src/backend/s3-track-persistence.js';
-import { createTrackRouter } from './src/backend/track-routes.js';
+import { createApiRouter } from './src/backend/api/router.js';
+import { createHomepageRouter } from './src/backend/site/homepage-routes.js';
+import express from 'express';
 import { createS3TrackService } from './src/backend/s3-track-service.js';
 import { loadTrackStorageConfig } from './src/backend/track-storage-config.js';
 import { createTrackInternalRouter } from './src/backend/track-internal-router.js';
@@ -35,10 +37,17 @@ export default defineConfig(({ command, mode }) => {
         analyzeSource: (source, options) => analyzeGpxSource(source, { ...options, previewMaxPoints: trackConfig.previewMaxPoints }),
         enrichAnalysis: enrichTrackAnalysis,
       });
-      server.middlewares.use(authentication.middleware);
-      server.middlewares.use(createTrackRouter(trackService, authentication.service, { delivery: trackConfig.delivery }));
+      const http = express();
+      http.disable('x-powered-by');
+      http.use('/api', createApiRouter(trackService, authentication.service, {
+        delivery: trackConfig.delivery, origin: environment.GOOGLE_REDIRECT_URI,
+        sessionMiddleware: authentication.sessionMiddleware,
+      }));
+      http.use(authentication.middleware);
+      http.use(createHomepageRouter(trackService));
+      server.middlewares.use(http);
       if (trackConfig.delivery === 'nginx') {
-        server.middlewares.use(createTrackInternalRouter(trackService, authentication.service, trackConfig));
+        server.middlewares.use(createTrackInternalRouter(trackService, authentication.service, trackConfig, { origin: environment.GOOGLE_REDIRECT_URI }));
       }
       server.httpServer?.once('close', () => database.close());
     },

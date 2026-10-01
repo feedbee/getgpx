@@ -139,6 +139,7 @@ export function renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPa
       <div class="confirm-delete-actions"><button type="button" id="cancel-track-delete">${htmlMessage('common.cancel')}</button><button class="confirm-delete-button" type="button" id="confirm-track-delete">${htmlMessage('common.delete')}</button></div>
     </form>
   </dialog>
+  <footer class="api-footer"><a href="/api/docs">${htmlMessage('api.documentation')}</a></footer>
   <div class="toast" id="toast" role="alert"></div>
 `;
 

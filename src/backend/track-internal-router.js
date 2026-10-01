@@ -1,4 +1,5 @@
 import express from 'express';
+import { createApiAccessPolicy } from './api/access-policy.js';
 import { getSignedUrl } from '@aws-sdk/cloudfront-signer';
 import { isPublicId } from './public-id.js';
 import { sessionTokenFromRequest } from './auth.js';
@@ -65,6 +66,6 @@ export function createTrackInternalHandler(trackService, authService, config, { 
 
 export function createTrackInternalRouter(trackService, authService, config, options) {
   const router = express.Router();
-  router.get('/internal/track-files/:id/:kind', createTrackInternalHandler(trackService, authService, config, options));
+  router.get('/internal/track-files/:id/:kind', createApiAccessPolicy({ origin: options?.origin }), createTrackInternalHandler(trackService, authService, config, options));
   return router;
 }

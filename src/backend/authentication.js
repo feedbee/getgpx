@@ -1,5 +1,6 @@
+import { createAuthRouter } from './site/auth-routes.js';
 import express from 'express';
-import { createAuthRouter, createAuthService, createSessionRefreshMiddleware } from './auth.js';
+import { createAuthService, createSessionRefreshMiddleware } from './auth.js';
 import { createSessionRepository } from './session-repository.js';
 import { createUserRepository } from './user-repository.js';
 
@@ -20,7 +21,8 @@ export async function createAuthentication(database, {
   const router = createAuthRouter(service, { secureCookies: useSecureCookies });
   const middleware = express();
   middleware.disable('x-powered-by');
-  middleware.use(createSessionRefreshMiddleware(service, { secureCookies: useSecureCookies }));
+  const sessionMiddleware = createSessionRefreshMiddleware(service, { secureCookies: useSecureCookies });
+  middleware.use(sessionMiddleware);
   middleware.use(router);
-  return { service, router, middleware, userRepository };
+  return { service, router, middleware, sessionMiddleware, userRepository };
 }

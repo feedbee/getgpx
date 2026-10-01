@@ -11,7 +11,7 @@ This is the complete application configuration reference. “Required” means t
 | `HOMEPAGE_TRACK_CACHE_ENABLED` | `false` | No | Only the literal `true` enables a per-process homepage track response cache. It refreshes hourly; failed refreshes retain the last successful value. Used by the production server. |
 | `GOOGLE_CLIENT_ID` | None | Yes | Google OAuth web client ID used to start sign-in and exchange authorization codes. |
 | `GOOGLE_CLIENT_SECRET` | None | Yes | Google OAuth client secret used during code exchange. Store as a secret. |
-| `GOOGLE_REDIRECT_URI` | None | Yes | Exact `/auth/google/callback` URL registered with Google, for example `http://localhost:5173/auth/google/callback` in Vite development. Its `https:` scheme makes production session cookies secure; Vite development explicitly uses non-secure cookies. |
+| `GOOGLE_REDIRECT_URI` | None | Yes | Exact `/auth/google/callback` URL registered with Google, for example `http://localhost:5173/auth/google/callback` in Vite development. Its `https:` scheme makes production session cookies secure; Vite development explicitly uses non-secure cookies. Its origin also defines the allowed browser origin for API and internal file-signing requests. |
 | `SESSION_SECRET` | None | Yes | Signs the short-lived OAuth attempt cookie. Must contain at least 32 characters; changing it invalidates outstanding sign-in attempts. |
 | `TRACK_S3_BUCKET` | None | Yes | Private S3 bucket for immutable GPX source and analysis objects. An invalid or missing name stops server startup. |
 | `AWS_REGION` | None | Yes | AWS region used to construct the S3 client. An invalid or missing region stops server startup. |

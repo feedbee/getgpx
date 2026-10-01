@@ -1,0 +1,20 @@
+// The versioned HTTP surface. Keep OpenAPI and the approved baseline in sync.
+export const trackRoutes = Object.freeze([
+  ['post', '/tracks', 'upload'],
+  ['get', '/tracks/mine', 'mine'],
+  ['get', '/tracks/saved', 'saved'],
+  ['delete', '/tracks/saved', 'unsaveMany'],
+  ['delete', '/tracks', 'removeMany'],
+  ['get', '/tracks/:id/status', 'status'],
+  ['get', '/tracks/:id/saved', 'savedState'],
+  ['put', '/tracks/:id/saved', 'save'],
+  ['delete', '/tracks/:id/saved', 'unsave'],
+  ['get', '/tracks/:id/manage', 'management'],
+  ['patch', '/tracks/:id', 'update'],
+  ['put', '/tracks/:id/gpx', 'replace'],
+  ['post', '/tracks/:id/retry-analysis', 'retry'],
+  ['delete', '/tracks/:id', 'remove'],
+  ['get', '/tracks/:id/gpx', 'download'],
+  ['get', '/tracks/:id/analysis', 'analysis'],
+  ['get', '/tracks/:id', 'publicTrack'],
+]);

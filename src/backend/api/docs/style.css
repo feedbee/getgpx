@@ -1,0 +1,8 @@
+:root { color-scheme: light; font-family: system-ui, sans-serif; }
+body { margin: 0; }
+body > nav { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; min-height: 54px; padding: 0 24px; border-bottom: 1px solid #e3e6e4; background: #fff; }
+body > nav a { color: #254b36; text-decoration: none; font-size: 14px; font-weight: 600; padding: 12px 0; }
+body > nav a:first-child { margin-right: auto; font-size: 18px; }
+body > nav a:hover { text-decoration: underline; }
+#getgpx-api-reference { min-height: calc(100vh - 55px); }
+@media (max-width: 480px) { body > nav { gap: 16px; padding: 0 16px; } }

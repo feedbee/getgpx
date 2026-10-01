@@ -1,15 +1,13 @@
 import { createHash, createHmac, timingSafeEqual, randomBytes as nodeRandomBytes } from 'node:crypto';
-import { Router } from 'express';
-import { safeErrorDetails } from './safe-error-details.js';
 import { SESSION_DURATION_MS } from './session-repository.js';
 
 const GOOGLE_AUTHORIZATION_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo';
-const ATTEMPT_DURATION_MS = 10 * 60 * 1_000;
+export const ATTEMPT_DURATION_MS = 10 * 60 * 1_000;
 const GOOGLE_REQUEST_TIMEOUT_MS = 10_000;
-const SESSION_COOKIE = 'getgpx_session';
-const ATTEMPT_COOKIE = 'getgpx_oauth_attempt';
+export const SESSION_COOKIE = 'getgpx_session';
+export const ATTEMPT_COOKIE = 'getgpx_oauth_attempt';
 
 function base64url(value) {
   return Buffer.from(value).toString('base64url');
@@ -142,7 +140,7 @@ export function createAuthService({
   };
 }
 
-function readCookie(request, name) {
+export function readCookie(request, name) {
   const cookies = String(request.headers.cookie || '').split(';');
   for (const cookie of cookies) {
     const separator = cookie.indexOf('=');
@@ -162,53 +160,10 @@ export function sessionTokenFromRequest(request) {
   return readCookie(request, SESSION_COOKIE);
 }
 
-function serializeCookie(name, value, { maxAge, secureCookies }) {
+export function serializeCookie(name, value, { maxAge, secureCookies }) {
   const parts = [`${name}=${encodeURIComponent(value)}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${maxAge}`];
   if (secureCookies) parts.push('Secure');
   return parts.join('; ');
-}
-
-export function createAuthHandlers(authService, { secureCookies = process.env.NODE_ENV === 'production' } = {}) {
-  if (!authService) throw new Error('An authentication service is required.');
-  return {
-    begin(_request, response) {
-      const login = authService.beginGoogleLogin();
-      response.setHeader('Set-Cookie', serializeCookie(ATTEMPT_COOKIE, login.attemptCookie, { maxAge: ATTEMPT_DURATION_MS / 1_000, secureCookies }));
-      response.redirect(login.authorizationUrl);
-    },
-
-    async callback(request, response) {
-      try {
-        const result = await authService.completeGoogleLogin({
-          code: typeof request.query.code === 'string' ? request.query.code : '',
-          state: typeof request.query.state === 'string' ? request.query.state : '',
-          attemptCookie: readCookie(request, ATTEMPT_COOKIE),
-        });
-        response.setHeader('Set-Cookie', [
-          serializeCookie(ATTEMPT_COOKIE, '', { maxAge: 0, secureCookies }),
-          serializeCookie(SESSION_COOKIE, result.sessionToken, { maxAge: SESSION_DURATION_MS / 1_000, secureCookies }),
-        ]);
-        response.redirect('/');
-      } catch (authError) {
-        request.log?.warn({ event: 'google_authentication_failed', ...safeErrorDetails(authError) }, 'Google authentication failed');
-        response.setHeader('Set-Cookie', serializeCookie(ATTEMPT_COOKIE, '', { maxAge: 0, secureCookies }));
-        response.redirect('/?auth=error');
-      }
-    },
-
-    async session(request, response) {
-      const user = request.authenticatedUser === undefined
-        ? await authService.getUser(sessionTokenFromRequest(request)) : request.authenticatedUser;
-      response.setHeader?.('Cache-Control', 'no-store');
-      response.json({ user });
-    },
-
-    async logout(request, response) {
-      await authService.logout(sessionTokenFromRequest(request));
-      response.setHeader('Set-Cookie', serializeCookie(SESSION_COOKIE, '', { maxAge: 0, secureCookies }));
-      response.status(204).end();
-    },
-  };
 }
 
 export function createSessionRefreshMiddleware(authService, { secureCookies = process.env.NODE_ENV === 'production' } = {}) {
@@ -225,14 +180,4 @@ export function createSessionRefreshMiddleware(authService, { secureCookies = pr
       next(error);
     }
   };
-}
-
-export function createAuthRouter(authService, options) {
-  const handlers = createAuthHandlers(authService, options);
-  const router = Router();
-  router.get('/auth/google', handlers.begin);
-  router.get('/auth/google/callback', handlers.callback);
-  router.get('/auth/session', handlers.session);
-  router.post('/auth/logout', handlers.logout);
-  return router;
 }

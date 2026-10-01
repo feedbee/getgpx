@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events';
 import pino from 'pino';
 import { createRequestProfiler, profileStep } from '../../../src/backend/request-profile.js';
 import { createRequestLogger } from '../../../src/backend/logger.js';
-import { createTrackHandlers } from '../../../src/backend/track-routes.js';
+import { createHomepageHandler } from '../../../src/backend/site/homepage-routes.js';
 
 describe('request profiling', () => {
   it('does not time or log work below debug level', async () => {
@@ -40,7 +40,7 @@ describe('request profiling', () => {
       getHomepageTracks: async (_ids, profile) => profile('homepage.listTracks', async () => []),
     };
 
-    await createTrackHandlers(service, {}).homepageTracks(request, response);
+    await createHomepageHandler(service)(request, response);
 
     expect(entries.map((entry) => entry.level)).toEqual([20, 20, 30]);
     expect(entries[0]).toMatchObject({ step: 'homepage.listTracks', durationMs: expect.any(Number) });

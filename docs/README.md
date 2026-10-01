@@ -14,6 +14,12 @@ Living documents describe the current system:
 10. [Google authentication](authentication.md) — current sign-in contract and security boundaries.
 11. [Saved tracks](tracks.md) — current UX, persistence, and API.
 
+Public API:
+
+- [API v1 specification](specs/public-api-v1.md) — supported operations, boundaries, compatibility and phases.
+- [OpenAPI source](../src/backend/api/v1/openapi.json) — machine-readable contract; served at `/api/v1/openapi.json`.
+- Running application: `/api/docs` (Scalar), `/api/swagger` (Swagger UI).
+
 Implementation specification:
 
 - [Track storage and delivery through S3](specs/track-s3-storage.md) — contracts, failure handling, and acceptance criteria.

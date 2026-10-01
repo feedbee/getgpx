@@ -17,3 +17,15 @@ Never use a broad cleanup command against the configured application database or
 databases owned by other runs.
 
 `npm run check` is the canonical local and CI quality gate: lint, fast tests, then build. Tests should assert observable results and persisted state, not private call order. External Valhalla/Overpass smoke tests are not part of PR CI because those services are rate-limited and non-deterministic.
+
+API contract tests are part of `npm run test:fast` and therefore `npm run check`.
+They validate OpenAPI, compare the complete document with its approved SHA-256
+baseline, compare documented routes with actual registrations, validate real service
+and GPX analysis outputs, and exercise Express with Node HTTP messages without
+opening ports. Fast tests do not use external schema resolvers or real credentials.
+Use `npm run test:api` for focused feedback. A contract baseline failure requires
+review and explicit user approval, not automatic regeneration.
+
+For documentation UI checks, serve the real app/API router with deterministic
+in-memory service fixtures, then inspect `/api/docs` and `/api/swagger` in a browser.
+Do not use production tracks or create persistent data just to test documentation.

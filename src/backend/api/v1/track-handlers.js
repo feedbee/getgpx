@@ -1,14 +1,13 @@
-import express, { Router } from 'express';
 import { ObjectId } from 'mongodb';
-import { sessionTokenFromRequest } from './auth.js';
-import { GpxFileTooLargeError } from './gpx-file-store.js';
-import { TRACK_UPLOAD_LIMITS } from './track-repository.js';
-import { InvalidTrackCursorError, TrackLimitReachedError } from './track-contracts.js';
-import { normalizeExternalTrackLinks } from './external-track-links.js';
-import { isRouteType } from '../route-types.js';
-import { isPublicId } from './public-id.js';
-import { createRequestProfiler, profileStep } from './request-profile.js';
-import { safeErrorDetails } from './safe-error-details.js';
+import { sessionTokenFromRequest } from '../../auth.js';
+import { GpxFileTooLargeError } from '../../gpx-file-store.js';
+import { TRACK_UPLOAD_LIMITS } from '../../track-repository.js';
+import { InvalidTrackCursorError, TrackLimitReachedError } from '../../track-contracts.js';
+import { normalizeExternalTrackLinks } from '../../external-track-links.js';
+import { isRouteType } from '../../../route-types.js';
+import { isPublicId } from '../../public-id.js';
+import { createRequestProfiler } from '../../request-profile.js';
+import { safeErrorDetails } from '../../safe-error-details.js';
 
 const GPX_CONTENT_TYPES = new Set(['application/gpx+xml', 'application/xml', 'text/xml']);
 
@@ -65,12 +64,6 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
   }
 
   return {
-    async homepageTracks(request, response) {
-      const profile = createRequestProfiler(request.log);
-      const tracks = await profileStep(profile, 'homepage.load', () => trackService.getHomepageTracks(undefined, profile));
-      return send(response, 200, { data: tracks });
-    },
-
     async mine(request, response) {
       const identity = await authenticatedOwner(request, response);
       if (!identity) return;
@@ -368,28 +361,4 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
         : error(response, 409, 'ANALYSIS_NOT_RETRYABLE', 'Для этого трека сейчас нельзя повторить анализ.');
     },
   };
-}
-
-export function createTrackRouter(trackService, authService, options) {
-  const handlers = createTrackHandlers(trackService, authService, options);
-  const router = Router();
-  router.post('/api/v1/tracks', handlers.upload);
-  router.get('/homepage', handlers.homepageTracks);
-  router.get('/api/v1/tracks/mine', handlers.mine);
-  router.get('/api/v1/tracks/saved', handlers.saved);
-  router.delete('/api/v1/tracks/saved', express.json({ limit: '16kb' }), handlers.unsaveMany);
-  router.delete('/api/v1/tracks', express.json({ limit: '16kb' }), handlers.removeMany);
-  router.get('/api/v1/tracks/:id/status', handlers.status);
-  router.get('/api/v1/tracks/:id/saved', handlers.savedState);
-  router.put('/api/v1/tracks/:id/saved', handlers.save);
-  router.delete('/api/v1/tracks/:id/saved', handlers.unsave);
-  router.get('/api/v1/tracks/:id/manage', handlers.management);
-  router.patch('/api/v1/tracks/:id', express.json({ limit: '16kb' }), handlers.update);
-  router.put('/api/v1/tracks/:id/gpx', handlers.replace);
-  router.post('/api/v1/tracks/:id/retry-analysis', handlers.retry);
-  router.delete('/api/v1/tracks/:id', handlers.remove);
-  router.get('/api/v1/tracks/:id/gpx', handlers.download);
-  router.get('/api/v1/tracks/:id/analysis', handlers.analysis);
-  router.get('/api/v1/tracks/:id', handlers.publicTrack);
-  return router;
 }

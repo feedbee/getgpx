@@ -1091,3 +1091,6 @@ body button:focus-visible,
   .topbar-actions .upload-button { max-width: 105px; white-space: normal; font-size: .75rem; }
   .preferences-popover { position: fixed; top: 66px; right: 12px; }
 }
+
+.api-footer { padding: 24px; text-align: center; font-size: 14px; }
+.api-footer a { color: inherit; text-underline-offset: 3px; }

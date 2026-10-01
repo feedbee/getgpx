@@ -50,3 +50,25 @@ Authenticated uploads are parsed and analysed by the backend. It stores owner-bo
 The production process fails startup when MongoDB configuration or connectivity is absent. Liveness deliberately avoids dependencies; readiness performs a MongoDB ping so an orchestrator can stop routing traffic to an unhealthy instance.
 
 External Valhalla/Overpass endpoints are availability dependencies and community services by default. Production should use explicitly provisioned endpoints with understood usage limits.
+
+## Public HTTP API
+
+The browser is a client of `/api/v1`, using `src/client/track-api.js`. The shared
+track service, processors and repositories are unversioned. The v1 HTTP adapter in
+`src/backend/api/v1/` owns relative routes, request validation, OpenAPI and response
+field selection. Explicit schema projection prevents internal fields from leaking
+when stored summaries or service result objects evolve. S3 analysis remains a
+streamed, versioned data representation; its schema is checked against real analysis
+outputs, without buffering streams to serialize them in the HTTP adapter.
+
+`src/backend/api/router.js` composes the same version router in production and Vite.
+It applies same-origin browser access policy before session refresh, then normalizes
+JSON errors, unknown API paths and unsupported versions. Supported API methods are
+independent of website routing. `/auth/*` and `/homepage` live in `src/backend/site/`;
+they are not part of public OpenAPI. Session lookup/renewal remains shared with the
+site and is passed into the API as middleware; no token flow exists yet.
+
+`/api/docs` (Scalar) and `/api/swagger` use `/api/v1/openapi.json` and local assets.
+Neither requires login to read. Protected operations still need the website's
+HttpOnly cookie. Documentation has a scoped CSP and no external proxy or validator.
+See [public API v1](specs/public-api-v1.md) for the compatibility and phase policy.

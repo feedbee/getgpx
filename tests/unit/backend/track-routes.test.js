@@ -1,7 +1,8 @@
+import { createHomepageHandler } from '../../../src/backend/site/homepage-routes.js';
 import { Readable } from 'node:stream';
 import { ObjectId } from 'mongodb';
 import { describe, expect, it, vi } from 'vitest';
-import { createTrackHandlers } from '../../../src/backend/track-routes.js';
+import { createTrackHandlers } from '../../../src/backend/api/v1/track-handlers.js';
 import { TrackLimitReachedError } from '../../../src/backend/track-contracts.js';
 
 function response() {
@@ -276,10 +277,9 @@ describe('track HTTP handlers', () => {
   it('returns homepage tracks publicly without checking a session', async () => {
     const trackService = { getHomepageTracks: vi.fn().mockResolvedValue([{ id: 'track-1', title: 'First' }]) };
     const authService = { getUser: vi.fn() };
-    const handlers = createTrackHandlers(trackService, authService);
     const result = response();
 
-    await handlers.homepageTracks(request(), result);
+    await createHomepageHandler(trackService)(request(), result);
 
     expect(result.body).toEqual({ data: [{ id: 'track-1', title: 'First' }] });
     expect(authService.getUser).not.toHaveBeenCalled();

@@ -63,3 +63,10 @@ Start at [docs/README.md](docs/README.md). It links architecture, coding, testin
 ## Delivery
 
 Pull requests and pushes to `main` run quality and MongoDB integration gates. Tags shaped as `vMAJOR.MINOR.PATCH` publish a `linux/amd64` and `linux/arm64` Docker image with full-version, major/minor, and `latest` tags after repository operators configure `DOCKERHUB_IMAGE`, `DOCKERHUB_USERNAME`, and `DOCKERHUB_TOKEN`. See [docs/operations.md](docs/operations.md).
+
+## API documentation
+
+Open `/api/docs` for the Scalar reference or `/api/swagger` for Swagger UI on your
+GetGPX instance. Both use `/api/v1/openapi.json`. Public metadata, detailed analysis
+and GPX reads are anonymous; all management and favorite operations currently
+require the website session cookie. See [API v1](docs/specs/public-api-v1.md).

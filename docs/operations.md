@@ -20,7 +20,12 @@ also supply `TRACK_CLOUDFRONT_DOMAIN`, `TRACK_CLOUDFRONT_PUBLIC_KEY_ID`, and
 `/internal/track-files/:id/:kind` on its normal HTTP listener in nginx mode.
 Nginx must deny direct browser requests to this path while allowing its own
 internal subrequests. Nginx, CloudFront, bucket policy, and IAM setup
-are maintained in the separate infrastructure deployment.
+are maintained in the separate infrastructure deployment. Public file locations must
+use `/api/v1/tracks/:id/gpx` and `/api/v1/tracks/:id/analysis`. Forward the original
+`Origin`, `Sec-Fetch-Site`, and `Sec-Fetch-Mode` headers to the signing subrequest:
+the internal router applies the same browser-origin policy as the API. Do not add
+CORS grants or cache signed responses. Deploy these proxy changes together with
+API v1; this repository cannot update the external Nginx configuration.
 
 Set `HOMEPAGE_TRACK_CACHE_ENABLED=true` to cache the homepage tracks response in each
 server process. It is disabled by default. The process attempts an initial load,

@@ -1,6 +1,6 @@
 # Public API v1 — phase 1
 
-Status: implementation specification. Based on main 4c6ee36 and the user's approved
+Status: implemented (phase 1). Based on main 4c6ee36 and the user's approved
 routing, versioning, documentation, and three-phase scope.
 
 ## Objective and scope
