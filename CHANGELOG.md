@@ -4,6 +4,10 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+### Added
+
+- Elevation coloring for the map and profile, with smooth transitions blending absolute altitude (30%) and route-relative altitude (up to 70%). The profile fill continues to show slope; compact legend markers show minimum and maximum altitude.
+
 ## [0.4.2] - 2026-10-01
 
 ### Fixed

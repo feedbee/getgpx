@@ -1,8 +1,9 @@
 import L from 'leaflet';
+import { createElevationMapRenderer } from './elevation-map-renderer.js';
 import { t, bindText, bindAttribute, htmlMessage } from './i18n.js';
 import { poiName } from './analysis-presentation.js';
 import { nearestRoutePointIndex } from './domain/profile-math.js';
-import { colorRunsForMode, highlightRunsForFilter } from './domain/route-color.js';
+import { colorRunsForMode, elevationRange, highlightRunsForFilter } from './domain/route-color.js';
 import { isClosedRoute } from './domain/route-shape.js';
 
 export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilter, getTerrainRange,
@@ -13,6 +14,7 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
   let poiMarkers = [];
   let focusLayers = [];
   let currentTrack;
+  let elevationRenderer;
 
   function makeEndpointIcon(label, type) {
     return leaflet.divIcon({ className: '', html: `<div class="endpoint endpoint-${type}">${label}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
@@ -24,6 +26,8 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
 
   function init() {
     map = leaflet.map('map', { zoomControl: false, attributionControl: true });
+    map.createPane('elevationPane');
+    map.getPane('elevationPane').style.zIndex = '399';
     map.createPane('startMarkerPane');
     map.getPane('startMarkerPane').style.zIndex = '675';
     leaflet.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -46,8 +50,15 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
     if (routeLine) map.eachLayer((layer) => { if (layer.options?.trackLayer && !layer.options?.rangeFocus) map.removeLayer(layer); });
     poiMarkers = [];
     const coordinates = track.points.map((point) => [point.lat, point.lon]);
-    leaflet.polyline(coordinates, { color: '#ffffff', weight: 8, opacity: 0.92, trackLayer: true, interactive: false }).addTo(map);
-    colorRunsForMode(track.points, getMapColorMode()).forEach((run) => {
+    const elevationMode = getMapColorMode() === 'elevation';
+    if (elevationMode) elevationRenderer ??= createElevationMapRenderer(leaflet);
+    leaflet.polyline(coordinates, { ...(elevationMode ? { renderer: elevationRenderer, noClip: true, smoothFactor: 0 } : {}), color: '#ffffff', weight: 8, opacity: 0.92, trackLayer: true, interactive: false }).addTo(map);
+    if (elevationMode) {
+      leaflet.polyline(coordinates, {
+        renderer: elevationRenderer, elevationRange: elevationRange(track.points), elevations: track.points.map(point => point.ele),
+        noClip: true, smoothFactor: 0, weight: 5, opacity: 1, trackLayer: true, interactive: false,
+      }).addTo(map);
+    } else colorRunsForMode(track.points, getMapColorMode()).forEach((run) => {
       leaflet.polyline(coordinates.slice(run.startIndex, run.endIndex + 1), {
         color: run.color,
         weight: 5,

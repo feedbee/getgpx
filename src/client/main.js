@@ -258,6 +258,7 @@ function setColorMode(scope, mode) {
     button.setAttribute('aria-pressed', String(active));
   });
   if (scope === 'profile') {
+    document.querySelector('#elevation-legend').hidden = mode !== 'elevation';
     document.querySelector('#gradient-legend').hidden = mode !== 'gradient';
     document.querySelector('#surface-legend').hidden = mode !== 'surface';
     document.querySelector('#waytype-legend').hidden = mode !== 'waytype';
