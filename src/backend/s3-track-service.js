@@ -56,9 +56,28 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
   return {
     authorizeTrackRead,
     previewConfiguration: previews.configuration,
-    async getPreview(publicId, identity = null) {
-      const descriptor = await fileDescriptor(publicId, 'preview', identity);
-      return descriptor?.key ? objectStore.openRead(descriptor.key) : null;
+    async previewDescriptor(publicId, identity = null, variant = 'list') {
+      const track = await findReadable(publicId, identity);
+      if (!track) return null;
+      const ready = await previews.ensure(track, { variant });
+      if (!ready || !authorizeTrackRead(identity, ready)) return null;
+      const image = ready.result?.[variant === 'social' ? 'shareImage' : 'previewImage'];
+      if (image?.key) objectStore.assertKey(image.key);
+      return { key: image?.key || null, revision: ready.result?.revision };
+    },
+    async getPreview(publicId, identity = null, variant = 'list') {
+      const descriptor = await this.previewDescriptor(publicId, identity, variant);
+      if (!descriptor?.key) return null;
+      try { return await objectStore.openRead(descriptor.key); }
+      catch (error) {
+        if (!['NoSuchKey', 'NotFound'].includes(error.name) && error.$metadata?.httpStatusCode !== 404) throw error;
+        const track = await findReadable(publicId, identity);
+        if (!track || !authorizeTrackRead(identity, track)) return null;
+        const ready = await previews.ensure(track, { variant, missingObject: true });
+        if (!ready || !authorizeTrackRead(identity, ready)) return null;
+        const image = ready.result?.[variant === 'social' ? 'shareImage' : 'previewImage'];
+        return image?.key && image.key !== descriptor.key ? objectStore.openRead(image.key) : null;
+      }
     },
     async getHomepageTracks(homepageTrackIds = configuration.homepageTrackIds) {
       const ids = homepageTrackIds?.map((id) => ObjectId.createFromHexString(id));

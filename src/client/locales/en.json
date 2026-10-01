@@ -361,5 +361,7 @@
   "errors.interrupted": "Processing was interrupted. Retry analysis to finish the track.",
   "errors.fileUnavailable": "The track file is temporarily unavailable. Try again later.",
   "errors.analysisNotReady": "Track analysis is not ready yet.",
-  "errors.editConflict": "Wait for track processing to finish before editing."
+  "errors.editConflict": "Wait for track processing to finish before editing.",
+  "sharing.myTracks": "Your GPX routes, maps and route details in one place.",
+  "sharing.favorites": "Your favorite public GPX routes in one place."
 }

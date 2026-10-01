@@ -36,10 +36,14 @@ export function createMapboxPreviewProvider({ token, style, version, fetch = glo
       { label: '© Mapbox', url: 'https://www.mapbox.com/about/maps/' },
       { label: '© OpenStreetMap', url: 'https://www.openstreetmap.org/copyright' },
     ],
-    async render(points) {
+    async render(points, { variant = 'list' } = {}) {
+      const sharing = variant === 'social';
+      if (!['list', 'social'].includes(variant)) throw new Error('Unsupported preview variant.');
+      const width = sharing ? 1200 : 512;
+      const height = sharing ? 630 : 512;
       const path = encodedRoute(points);
-      const url = new URL(`https://api.mapbox.com/styles/v1/${style}/static/path-15+ffffff-1(${path}),path-6+1769d2-1(${path})/auto/256x256@2x`);
-      url.search = new URLSearchParams({ access_token: token, padding: '28', attribution: 'false', logo: 'false', format: 'png' });
+      const url = new URL(`https://api.mapbox.com/styles/v1/${style}/static/path-15+ffffff-1(${path}),path-6+1769d2-1(${path})/auto/${sharing ? '600x315@2x' : '256x256@2x'}`);
+      url.search = new URLSearchParams({ access_token: token, padding: '28', attribution: String(sharing), logo: String(sharing), format: 'png' });
       // Mapbox's Static Images URL limit is 8192 characters. Reject rather than cut off a route.
       if (url.href.length > 8192) throw new Error('Preview route exceeds the Mapbox URL limit.');
       const response = await fetch(url.href, { signal: AbortSignal.timeout(15_000), redirect: 'error' });
@@ -60,7 +64,7 @@ export function createMapboxPreviewProvider({ token, style, version, fetch = glo
       }
       const image = Buffer.concat(chunks);
       if (image.length < 45 || !image.subarray(0, 8).equals(PNG_SIGNATURE)
-        || !image.subarray(-8).equals(PNG_END) || image.toString('ascii', 12, 16) !== 'IHDR' || image.readUInt32BE(16) !== 512 || image.readUInt32BE(20) !== 512) {
+        || !image.subarray(-8).equals(PNG_END) || image.toString('ascii', 12, 16) !== 'IHDR' || image.readUInt32BE(16) !== width || image.readUInt32BE(20) !== height) {
         throw new Error('Invalid preview image.');
       }
       return image;

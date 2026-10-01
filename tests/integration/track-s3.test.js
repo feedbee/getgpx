@@ -39,7 +39,7 @@ describeWithMongo('MongoDB S3 track contract', () => {
           MAPBOX_ACCESS_TOKEN: 'dry-run-never-sends-this-token', TRACK_FILE_DELIVERY: 'nginx' }, timeout: 10_000 });
       const output = stdout.trim().split('\n').map((line) => JSON.parse(line));
       expect(output[0]).toMatchObject({ mode: 'dry-run', provider: 'mapbox', prefix: 'dev' });
-      expect(output.at(-1).summary).toMatchObject({ planned: 1, generated: 0, failed: 0 });
+      expect(output.at(-1).summary).toMatchObject({ planned: 2, generated: 0, failed: 0 });
       expect(await collection.findOne({ _id: trackId })).toEqual(record);
     } finally { await collection.deleteOne({ _id: trackId }); }
   });
@@ -335,6 +335,9 @@ describeWithMongo('MongoDB S3 track contract', () => {
         rendererVersion: 3, sourceRevision: initial.revision });
       const imageKey = storedInitial.result.previewImage.key;
       expect(objects.has(imageKey)).toBe(true);
+      const socialImage = await service.previewDescriptor(publicId, null, 'social');
+      expect(objects.has(socialImage.key)).toBe(true);
+      expect((await repository.findByPublicId(publicId)).result.shareImage).toMatchObject({ width: 1200, height: 630 });
       const batch = await repository.iteratePreviewTracks({ publicId }).toArray();
       expect(batch).toHaveLength(1);
       expect(batch[0].result.previewImage.key).toBe(imageKey);
@@ -369,6 +372,7 @@ describeWithMongo('MongoDB S3 track contract', () => {
       expect(retried.revision).not.toBe(initial.revision);
       expect(objects.size).toBe(3);
       expect(objects.has(imageKey)).toBe(false);
+      expect(objects.has(socialImage.key)).toBe(false);
       const stored = await repository.findByPublicId(publicId);
       const cards = await service.listMyTracks({ ownerId });
       expect(cards.items[0]).toMatchObject({ id: publicId, metrics: { speedKmh: 25 } });

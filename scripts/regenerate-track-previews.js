@@ -15,10 +15,11 @@ import { safeErrorDetails } from '../src/backend/safe-error-details.js';
 async function main() {
   const options = parsePreviewRegenerationOptions(process.argv.slice(2));
   if (options.help) {
-    console.log('npm run previews:regenerate -- [--dry-run | --apply] [--force] [--track PUBLIC_ID] [--limit N] [--after MONGO_ID]');
+    console.log('npm run previews:regenerate -- [--dry-run | --apply] [--force] [--variant list|social|all] [--track PUBLIC_ID] [--limit N] [--after MONGO_ID]');
     console.log('Default: dry run. Apply updates missing/obsolete previews; force also rebuilds current ones.');
     return;
   }
+  options.variant ||= 'all';
   if (existsSync('.env')) process.loadEnvFile('.env');
   // This job writes S3 directly and needs no CloudFront signing key or website OAuth settings.
   const config = loadTrackStorageConfig({ ...process.env, TRACK_FILE_DELIVERY: 'stream' });

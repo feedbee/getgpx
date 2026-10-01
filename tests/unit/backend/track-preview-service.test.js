@@ -4,11 +4,12 @@ import { createTrackPreviewService } from '../../../src/backend/track-previews/s
 function fixture() {
   let track = { _id: '0123456789abcdef01234567', publicId: 'route', result: { revision: 'one', analysisKey: 'dev/tracks/0123456789abcdef01234567/one/analysis.json', preview: [{ lat: 50, lon: 20 }, { lat: 51, lon: 21 }] } };
   const objects = new Map();
-  const repository = { findByPublicId: async () => track,
-    attachPreview: async ({ revision, expectedKey, previewImage }) => {
-      if (!track || track.result.revision !== revision || (track.result.previewImage?.key || null) !== expectedKey) return null;
+  const repository = { findByPublicId: async () => track, findById: async () => track,
+    attachPreview: async ({ revision, expectedKey, previewImage, variant = 'list' }) => {
+      const field = variant === 'social' ? 'shareImage' : 'previewImage';
+      if (!track || track.result.revision !== revision || (track.result[field]?.key || null) !== expectedKey) return null;
       const previous = structuredClone(track);
-      track.result.previewImage = previewImage;
+      track.result[field] = previewImage;
       return previous;
     } };
   const store = {
@@ -71,6 +72,25 @@ describe('permanent track preview generation', () => {
     expect(await service.regenerate(track, { force: true })).toBe('failed');
     expect(track.result.previewImage).toEqual(previous);
     expect(objects.has(previous.key)).toBe(true);
+  });
+  it('coalesces concurrent misses, persists both variants, and reuses existing styles', async () => {
+    const { service, provider, track } = fixture();
+    await Promise.all([service.ensure(structuredClone(track)), service.ensure(structuredClone(track))]);
+    expect(provider.render).toHaveBeenCalledTimes(1);
+    provider.version = 'changed';
+    await service.ensure(track);
+    expect(provider.render).toHaveBeenCalledTimes(1);
+    await service.ensure(track, { variant: 'social' });
+    expect(track.result.shareImage).toMatchObject({ width: 1200, height: 630, variant: 'social' });
+    expect(track.result.previewImage.width).toBe(512);
+    expect(provider.render).toHaveBeenLastCalledWith(track.result.preview, { variant: 'social' });
+  });
+  it('backs off repeated failures instead of rendering on every request', async () => {
+    const { service, provider, track } = fixture();
+    provider.render.mockRejectedValue(new Error('unavailable'));
+    await service.ensure(track);
+    await service.ensure(track);
+    expect(provider.render).toHaveBeenCalledTimes(1);
   });
   it('does not regenerate tracks from another storage environment', async () => {
     const { service, provider, track } = fixture();

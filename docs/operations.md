@@ -44,7 +44,7 @@ still share the 50-second analysis budget.
 
 Enable `TRACK_PREVIEW_PROVIDER=mapbox` with the server-side `MAPBOX_ACCESS_TOKEN`.
 Uploads and GPX replacements store PNGs in the same private S3 bucket. A provider
-outage leaves the SVG fallback; reads do not retry generation. Existing images retain
+outage leaves the SVG fallback; missing images are generated on first request with a one-minute failure cooldown. Existing images retain
 their original provider/style until a maintenance run updates them.
 
 Inspect the planned changes first, then apply them using the same MongoDB, AWS,
@@ -64,7 +64,8 @@ The job needs no OAuth or CloudFront signing configuration. Keep the env file ou
 version control. It writes only under the configured S3 prefix; records from other
 prefixes are skipped. Dry runs read MongoDB but never call Mapbox or write S3/MongoDB.
 
-By default the job rebuilds only missing images or images whose provider, style,
+By default the job checks both list and social variants; select one with
+`--variant list` or `--variant social`. It rebuilds only missing images or images whose provider, style,
 renderer version or source revision differs. Use `--force` to also rebuild current
 images (for example after an in-place Studio style update or a missing S3 object), `--track PUBLIC_ID` for
 one track, `--limit N` for a batch, and `--after MONGO_ID` to continue from the logged
@@ -134,3 +135,12 @@ Handoff errors include `publicId`, safe error names/codes and upstream status wh
 available. They never log signed URLs, raw provider messages or stacks.
 Background worker, heartbeat, diagnostic-write and cleanup failures have separate
 event names and track/revision identifiers where available.
+
+Social crawlers must reach `/`, `/my-tracks`, `/favorite-tracks`, `/tracks/:id`,
+`/getgpx-icon.png` and `/share-images/tracks/:id.png` without login or a JavaScript
+challenge. Forward these website routes to Node; personalized collection data stays
+behind the existing authenticated API. `SITE_URL` provides the public HTTPS origin.
+The sharing image route still signs the existing private CloudFront path in nginx
+mode. No new S3 policy or distribution is required. Do not externally cache HTML;
+metadata varies by language and current track edits. Social platforms may independently
+cache fetched previews; refresh via their tools after important changes.

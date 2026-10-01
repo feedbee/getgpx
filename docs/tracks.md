@@ -102,8 +102,10 @@ and retry prepare a new image; title/speed edits do not require regeneration.
 Provider failures do not block publication and leave SVG fallback previews usable.
 Rendering is limited to four concurrent jobs.
 
-HTTP reads never generate images. Changing provider/style affects subsequent
-processing; existing images remain available until explicitly regenerated.
+Missing images are generated on their first image request, stored in S3 and attached
+conditionally to the current revision. Concurrent requests for the same variant share
+one render; provider concurrency is capped at four, the queue at 32 and failures have
+a one-minute cooldown. Changing provider/style affects subsequent processing; existing images remain available until explicitly regenerated.
 `npm run previews:regenerate` defaults to a dry run. Add `--apply` to generate
 missing/outdated images, or `--apply --force` to rebuild all eligible images.
 The command streams records sequentially, skips other S3 environments, and swaps
@@ -163,3 +165,34 @@ ribbon use continuous gradients. The profile area always uses slope gradient
 colors, just as in Surface, Road Type and Quality modes. Compact legend markers
 show the track minimum and maximum with their actual colors and selected units.
 Points without altitude use neutral gray.
+
+## Sharing and Open Graph
+
+The initial HTML for the homepage, `/my-tracks`, `/favorite-tracks` and public track
+pages includes Open Graph, Twitter card tags, a canonical URL and description. Bots
+need no JavaScript. The homepage uses its existing service description and brand icon;
+collections have generic localized descriptions, without any owner/list data. Track
+pages use the current public title, activity type, distance, ascent/descent, estimated
+time and selected speed. All user text is HTML-escaped. Missing tracks return 404 and
+noindex. Metadata follows Accept-Language (English fallback) with metric units.
+Browser localStorage preferences are unavailable to server-rendered bot metadata.
+
+A public `/share-images/tracks/:publicId.png` website route delivers the 1200×630
+map stored in `result.shareImage`, using the same read policy as track metadata.
+The 512×512 list image remains in `result.previewImage`; there are no separate retina
+files. Sharing maps include Mapbox/OSM attribution and logo because they are displayed
+outside the site. Source GPX replacement invalidates both variants; deletion removes
+both. Titles/speed edits only update metadata and do not regenerate maps.
+
+First image requests generate missing references and persist both provenance and PNG.
+Existing images keep their style until explicit maintenance; `--variant list|social|all`
+selects maintenance formats (the CLI defaults to all). Stream delivery also repairs a
+referenced object if S3 reports it missing. In nginx mode an upstream missing object
+needs a forced maintenance run. Image failures leave list SVGs usable; a sharing image
+failure returns 502/404 for the bot to retry. Platform-side caches and cropping remain
+controlled by each messenger or social network.
+
+`SITE_URL` sets the trusted absolute origin for canonical/image URLs. It defaults to
+the origin of `GOOGLE_REDIRECT_URI`, then `https://getgpx.link`; configure a localhost
+origin explicitly for local sharing checks. Arbitrary request Host headers never
+control canonical URLs. Production and Vite use the same metadata adapter.

@@ -35,6 +35,17 @@ describe('track preview provider', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('renders only one landscape sharing size with embedded attribution', async () => {
+    const social = Buffer.from(png);
+    social.writeUInt32BE(1200, 16); social.writeUInt32BE(630, 20);
+    const fetch = vi.fn(async () => new Response(social, { headers: { 'Content-Type': 'image/png' } }));
+    const provider = createTrackPreviewProvider({ TRACK_PREVIEW_PROVIDER: 'mapbox', MAPBOX_ACCESS_TOKEN: 'test-secret' }, { fetch });
+    expect(await provider.render(points, { variant: 'social' })).toEqual(social);
+    const url = new URL(fetch.mock.calls[0][0]);
+    expect(url.pathname).toContain('/600x315@2x');
+    expect(url.searchParams.get('attribution')).toBe('true');
+    expect(url.searchParams.get('logo')).toBe('true');
+  });
   it('versions images when the style changes, independently of credentials', () => {
     const config = { TRACK_PREVIEW_PROVIDER: 'mapbox', MAPBOX_ACCESS_TOKEN: 'first' };
     expect(createTrackPreviewProvider(config).version).toBe(createTrackPreviewProvider({ ...config, MAPBOX_ACCESS_TOKEN: 'second' }).version);

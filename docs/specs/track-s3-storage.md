@@ -311,7 +311,7 @@ configuration fingerprint, source revision, dimensions, format, attribution and
 creation time. Object names use a unique 16-hex image ID, so forced regeneration
 never overwrites a published object. Failed rendering does not fail track processing.
 
-Image reads never render. The maintenance command defaults to a read-only dry run;
+Missing images render on first image request; existing references retain their style. The maintenance command defaults to a read-only dry run;
 apply mode streams eligible records and conditionally replaces their image metadata
 only if the result revision and previous image key still match. Only records whose
 analysis key belongs to the configured S3 prefix are eligible. Normal runs skip
@@ -570,3 +570,5 @@ revision URLs, basic metrics, or the infrastructure scope.
 - [CloudFront trusted signers and key groups](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-trusted-signers.html).
 - [Nginx proxy module](https://nginx.org/en/docs/http/ngx_http_proxy_module.html).
 - [Nginx auth_request status semantics](https://nginx.org/en/docs/http/ngx_http_auth_request_module.html).
+
+Sharing metadata and the second PNG variant follow [the social preview specification](social-previews.md).

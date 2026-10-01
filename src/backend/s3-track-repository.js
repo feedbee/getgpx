@@ -133,12 +133,14 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
       if (publicId) filter.publicId = publicId;
       if (after) filter._id = { $gt: ObjectId.createFromHexString(after) };
       const cursor = tracks.find(filter, { projection: { _id: 1, publicId: 1,
-        'result.analysisKey': 1, 'result.revision': 1, 'result.preview': 1, 'result.previewImage': 1 } }).sort({ _id: 1 });
+        'result.analysisKey': 1, 'result.revision': 1, 'result.preview': 1, 'result.previewImage': 1, 'result.shareImage': 1 } }).sort({ _id: 1 });
       return limit ? cursor.limit(limit) : cursor;
     },
-    attachPreview({ trackId, revision, expectedKey, previewImage }) {
+    attachPreview({ trackId, revision, expectedKey, previewImage, variant = 'list' }) {
+      if (!['list', 'social'].includes(variant)) throw new Error('Unsupported preview variant.');
+      const field = variant === 'social' ? 'shareImage' : 'previewImage';
       return tracks.findOneAndUpdate({ _id: trackId, 'result.revision': revision,
-        'result.previewImage.key': expectedKey }, { $set: { 'result.previewImage': previewImage } },
+        [`result.${field}.key`]: expectedKey }, { $set: { [`result.${field}`]: previewImage } },
       { returnDocument: 'before' });
     },
     updateDetails({ trackId, ownerId, title, speedKmh, routeType, externalLinks }, now = new Date()) {
@@ -154,7 +156,7 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
 }
 
 export function trackObjectKeys(track) {
-  return [...new Set([track.result?.sourceKey, track.result?.analysisKey, track.result?.previewImage?.key,
+  return [...new Set([track.result?.sourceKey, track.result?.analysisKey, track.result?.previewImage?.key, track.result?.shareImage?.key,
     track.processing?.sourceKey].filter(Boolean))];
 }
 

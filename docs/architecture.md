@@ -78,3 +78,8 @@ at startup by `TRACK_PREVIEW_PROVIDER`. Provider credentials remain server-side.
 `site/track-preview-routes.js` exposes authenticated website configuration and image
 delivery, independently of API v1 and the analysis/metadata read boundary. PNGs and
 their internal S3 references follow the result revision lifecycle; see [tracks](tracks.md).
+
+`site/social-metadata.js` injects localized Open Graph/Twitter metadata into the
+initial production and Vite HTML. Public sharing PNGs use centralized track reads,
+with lazy S3 generation in the existing preview service. Only JSON translation
+catalogs cross into server metadata formatting; browser modules do not run there.

@@ -16,6 +16,7 @@ Nginx must equal `TRACK_CLOUDFRONT_DOMAIN` (the template currently uses
 | --- | --- |
 | GET/HEAD `/api/v1/tracks/:id/gpx` | Node authorizes and hands the current source GPX to Nginx |
 | GET/HEAD `/api/v1/tracks/:id/analysis` | Node authorizes and hands current detailed JSON to Nginx |
+| GET/HEAD `/share-images/tracks/:id.png` | Public website PNG under the track read policy; Node generates absent sharing variants and hands stored PNG to Nginx |
 | GET/HEAD `/track-previews/:id.png` | Authenticated website route; Node hands the stored PNG to Nginx |
 | PUT `/api/v1/tracks/:id/gpx` | Node replaces GPX; preserve method, body and headers |
 | GET `/api/v1/tracks/:id` | Point-free MongoDB metadata; ordinary Node response |
@@ -192,3 +193,15 @@ part of this task.
 Deliver a patch, rationale, verification results, commands for rollout and joint
 rollback. Clearly identify unperformed checks. Do not claim nginx -t alone verifies
 production delivery.
+
+## Social metadata and sharing PNGs
+
+Ordinary Node website proxying must include public `/share-images/tracks/:id.png`,
+track pages and static brand assets. Bots need no session; the sharing route uses the
+central public track read policy. Metadata is injected in HTML on the server, without
+JavaScript. The same internal `preview-<16-hex>.png` allowlist applies to both list and
+sharing objects. Sharing PNGs are 1200×630 and include attribution. Missing/inaccessible
+sharing references return 404; generation/transfer errors before handoff return 502.
+Keep successful image Content-Type image/png and private/no-store. Treat these public
+sharing paths as file routes for safe upstream-failure normalization and logging.
+Never expose signed redirects or proxy browser credentials to CloudFront.

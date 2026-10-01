@@ -23,6 +23,7 @@ Public API:
 
 Implementation specification:
 
+- [Social previews](specs/social-previews.md) — server-rendered metadata, public sharing images and lazy generation.
 - [Track storage and delivery through S3](specs/track-s3-storage.md) — contracts, failure handling, and acceptance criteria.
 
 Current client localization:

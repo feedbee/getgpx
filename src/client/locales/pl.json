@@ -361,5 +361,7 @@
   "errors.interrupted": "Przetwarzanie zostało przerwane. Ponów analizę, aby ukończyć trasę.",
   "errors.fileUnavailable": "Plik trasy jest chwilowo niedostępny. Spróbuj ponownie później.",
   "errors.analysisNotReady": "Analiza trasy nie jest jeszcze gotowa.",
-  "errors.editConflict": "Zaczekaj na zakończenie przetwarzania trasy przed edycją."
+  "errors.editConflict": "Zaczekaj na zakończenie przetwarzania trasy przed edycją.",
+  "sharing.myTracks": "Twoje trasy GPX, mapy i szczegóły tras w jednym miejscu.",
+  "sharing.favorites": "Twoje ulubione publiczne trasy GPX w jednym miejscu."
 }

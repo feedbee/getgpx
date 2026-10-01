@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { createSocialMetadata, createSocialPageRouter, socialPreviewOrigin } from './src/backend/site/social-metadata.js';
 import { createTrackPreviewProvider } from './src/backend/track-previews/provider.js';
 import { createTrackPreviewRouter } from './src/backend/site/track-preview-routes.js';
 import { defineConfig, loadEnv } from 'vite';
@@ -54,6 +56,10 @@ export default defineConfig(({ command, mode }) => {
       http.use(createTrackPreviewRouter(trackService, { sessionMiddleware: authentication.sessionMiddleware,
         delivery: trackConfig.delivery,
         fileDelivery: trackConfig.delivery === 'nginx' ? createTrackFileDelivery(trackConfig) : null }));
+      http.use(createSocialPageRouter({
+        metadata: createSocialMetadata({ trackService, origin: socialPreviewOrigin(environment) }),
+        loadHtml: async (url) => server.transformIndexHtml(url, await readFile('index.html', 'utf8')),
+      }));
       server.middlewares.use(http);
       server.httpServer?.once('close', () => database.close());
     },

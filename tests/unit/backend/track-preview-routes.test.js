@@ -27,19 +27,36 @@ describe('website track previews', () => {
   });
   it('hands preview delivery to nginx without opening S3 in Node', async () => {
     const getPreview = vi.fn();
-    const fileDescriptor = vi.fn(async () => ({ key: 'prod/tracks/object/revision/preview-aaaaaaaaaaaaaaaa.png' }));
+    const previewDescriptor = vi.fn(async () => ({ key: 'prod/tracks/object/revision/preview-aaaaaaaaaaaaaaaa.png' }));
     const redirect = '/_track_files/tracks/object/revision/preview-aaaaaaaaaaaaaaaa.png?Signature=test';
-    const result = await request(app({ fileDescriptor, getPreview }, true, {
+    const result = await request(app({ previewDescriptor, getPreview }, true, {
       delivery: 'nginx', fileDelivery: { redirectFor: () => redirect },
     }), { url: '/track-previews/route.png' });
     expect(result.status).toBe(200);
     expect(result.text).toBe('');
     expect(result.headers['content-type']).toBe('image/png');
     expect(result.headers['x-accel-redirect']).toBe(redirect);
-    expect(fileDescriptor).toHaveBeenCalledWith('route', 'preview', { id: 'user' });
+    expect(previewDescriptor).toHaveBeenCalledWith('route', { id: 'user' });
     expect(getPreview).not.toHaveBeenCalled();
   });
 
+  it('lets anonymous bots stream sharing images but keeps list images protected', async () => {
+    const service = { previewDescriptor: vi.fn(async () => ({ key: 'stored-image' })),
+      getPreview: vi.fn(async () => Readable.from('social png')) };
+    const result = await request(app(service, false), { url: '/share-images/tracks/route.png' });
+    expect(result.status).toBe(200);
+    expect(result.text).toBe('social png');
+    expect(service.previewDescriptor).toHaveBeenCalledWith('route', null, 'social');
+    expect(service.getPreview).toHaveBeenCalledWith('route', null, 'social');
+    expect((await request(app(service, false), { url: '/track-previews/route.png' })).status).toBe(401);
+  });
+  it('does not hand inaccessible sharing images to nginx', async () => {
+    const sign = vi.fn();
+    const result = await request(app({ previewDescriptor: async () => null }, false,
+      { delivery: 'nginx', fileDelivery: { redirectFor: sign } }), { url: '/share-images/tracks/route.png' });
+    expect(result.status).toBe(404);
+    expect(sign).not.toHaveBeenCalled();
+  });
   it('returns no image for unavailable previews and rejects invalid identities', async () => {
     const server = app({ getPreview: async () => null });
     expect((await request(server, { url: '/track-previews/route.png' })).status).toBe(204);

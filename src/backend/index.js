@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { createSocialMetadata, createSocialPageRouter, socialPreviewOrigin } from './site/social-metadata.js';
 import { createTrackPreviewProvider } from './track-previews/provider.js';
 import { createTrackPreviewRouter } from './site/track-preview-routes.js';
 import { existsSync } from 'node:fs';
@@ -58,6 +60,8 @@ async function start() {
   const homepageRouter = createHomepageRouter(homepageCache
     ? { getHomepageTracks: homepageCache.getHomepageTracks } : trackService);
   const server = createApp({ database, authRouter: authentication.middleware, apiRouter, homepageRouter,
+    socialPageRouter: createSocialPageRouter({ metadata: createSocialMetadata({ trackService, origin: socialPreviewOrigin(process.env) }),
+      loadHtml: () => readFile(new URL('../../dist/index.html', import.meta.url), 'utf8') }),
     trackPreviewRouter: createTrackPreviewRouter(trackService, { sessionMiddleware: authentication.sessionMiddleware,
       delivery: trackConfig.delivery,
       fileDelivery: trackConfig.delivery === 'nginx' ? createTrackFileDelivery(trackConfig) : null }) }).listen(port, host, () => {

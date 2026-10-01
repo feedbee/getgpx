@@ -113,6 +113,23 @@ describe('S3 track service', () => {
     expect(provider.render).not.toHaveBeenCalled();
   });
 
+  it('repairs a missing stored object once and persists its new key', async () => {
+    const provider = { provider: 'mapbox', style: 'mapbox/streets-v12', rendererVersion: 3,
+      version: 'aaaaaaaaaaaaaaaa', attribution: [], render: vi.fn(async () => Buffer.from('png')) };
+    const { service, track, repository, store } = fixture({ previewProvider: provider });
+    track.result = { revision: 'revision', analysisKey: 'dev/tracks/0123456789abcdef01234567/revision/analysis.json',
+      preview: [{ lat: 1, lon: 2 }, { lat: 2, lon: 3 }], previewImage: { key: 'missing-object' } };
+    repository.attachPreview = vi.fn(async ({ previewImage }) => {
+      const previous = structuredClone(track); track.result.previewImage = previewImage; return previous;
+    });
+    store.openRead.mockRejectedValueOnce(Object.assign(new Error('missing'), { name: 'NoSuchKey' }));
+    expect(await service.getPreview(track.publicId)).toBeInstanceOf(Readable);
+    expect(provider.render).toHaveBeenCalledTimes(1);
+    expect(track.result.previewImage.key).not.toBe('missing-object');
+    await service.getPreview(track.publicId);
+    expect(provider.render).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the parsed GPX title while enrichment is still running', async () => {
     let finishEnrichment;
     const { service, repository, jobs } = fixture({ parsedName: 'THE TRAKA 200 _2026',

@@ -7,6 +7,10 @@ export function parsePreviewRegenerationOptions(args) {
     if (flag === '--apply') options.apply = true;
     else if (flag === '--force') options.force = true;
     else if (flag === '--dry-run') options.dryRun = true;
+    else if (flag === '--variant') {
+      options.variant = args[++index];
+      if (!['list', 'social', 'all'].includes(options.variant)) throw new Error('Invalid --variant.');
+    }
     else if (flag === '--help') options.help = true;
     else if (flag === '--track') {
       options.publicId = args[++index];
@@ -30,17 +34,20 @@ export async function runPreviewRegeneration({ trackRepository, previews, option
   const summary = { scanned: 0, eligible: 0, planned: 0, generated: 0, unchanged: 0,
     skipped: 0, conflict: 0, failed: 0, lastId: null };
   for await (const track of trackRepository.iteratePreviewTracks(options)) {
-    let status;
-    if (!previews.canGenerate(track)) status = 'skipped';
-    else if (!options.force && previews.isCurrent(track)) status = 'unchanged';
-    else {
-      summary.eligible++;
-      status = options.apply ? await previews.regenerate(track, { force: options.force }) : 'planned';
+    const variants = options.variant === 'all' ? ['list', 'social'] : [options.variant || 'list'];
+    for (const variant of variants) {
+      let status;
+      if (!previews.canGenerate(track)) status = 'skipped';
+      else if (!options.force && previews.isCurrent(track, variant)) status = 'unchanged';
+      else {
+        summary.eligible++;
+        status = options.apply ? await previews.regenerate(track, { force: options.force, variant }) : 'planned';
+      }
+      summary[status]++;
+      onProgress({ publicId: track.publicId, id: String(track._id), variant, status });
     }
     summary.scanned++;
-    summary[status]++;
     summary.lastId = String(track._id);
-    onProgress({ publicId: track.publicId, id: summary.lastId, status });
   }
   return summary;
 }
