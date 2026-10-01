@@ -161,7 +161,8 @@ export function createTrackCard(track, documentRef = document, { ownerActions = 
   remove.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg>';
   const download = documentRef.createElement('a');
   download.className = 'track-card-download';
-  download.href = track.gpxUrl;
+  download.href = track.downloadURL.gpx || '#';
+  download.hidden = !track.downloadURL.gpx;
   download.setAttribute('download', '');
   bindAttribute(download, 'aria-label', () => t('tracks.download', { title: displayTitle }));
   download.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-4-4 4 4 4-4M5 20h14"/></svg>';

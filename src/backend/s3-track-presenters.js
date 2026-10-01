@@ -48,13 +48,13 @@ export function publicTrack(track, author = null) {
     sources: result?.analysisSources || { gpx: track.analysisStatus === 'PROCESSING' ? 'PENDING' : 'FAILED', valhalla: 'PENDING', openStreetMap: 'PENDING' },
     externalLinks: track.externalLinks || {}, createdAt: track.createdAt?.toISOString() || null,
     author, analysisUrl: result?.analysisKey ? `/api/v1/tracks/${id}/analysis` : null,
-    gpxUrl: result?.sourceKey || track.attempt?.sourceKey ? `/api/v1/tracks/${id}/gpx` : null,
+    downloadURL: result?.sourceKey || track.attempt?.sourceKey ? { gpx: `/api/v1/tracks/${id}/gpx` } : {},
   };
 }
 export function card(track) {
   const value = publicTrack(track);
-  const { id, title, routeType, createdAt, processing, metrics, externalLinks, gpxUrl, author } = value;
-  return { id, title, routeType, createdAt, processing, metrics, externalLinks, gpxUrl, author,
+  const { id, title, routeType, createdAt, processing, metrics, externalLinks, downloadURL, author } = value;
+  return { id, title, routeType, createdAt, processing, metrics, externalLinks, downloadURL, author,
     preview: resultOf(track)?.preview || null, url: `/tracks/${id}` };
 }
 export function homepage(track) {

@@ -537,7 +537,7 @@
       "get": {
         "operationId": "savedState",
         "summary": "Check favorite state",
-        "description": "Requires a session. Returns saved=false for a missing track with a valid ID.",
+        "description": "Requires a session. Returns saved=false when an existing track is not saved, or 404 when the track does not exist.",
         "tags": [
           "Favorites"
         ],
@@ -784,7 +784,7 @@
       "get": {
         "operationId": "download",
         "summary": "Download the original GPX",
-        "description": "Original bytes with an attachment filename. Active source, or the initial source before first publication. The frontend/API URLs stay on the same origin even when the deployment proxies delivery through CloudFront. HEAD is also supported.",
+        "description": "Downloads the original GPX bytes through a same-origin URL. The active revision remains available during replacement; before first publication, the stored initial source is served.",
         "tags": [
           "Tracks"
         ],
@@ -1115,26 +1115,23 @@
         "properties": {
           "komoot": {
             "type": "string",
-            "format": "uri",
-            "description": "HTTPS link on the matching service domain."
+            "description": "Matching service HTTPS URL after trimming, or an empty string to remove the entry."
           },
           "strava": {
             "type": "string",
-            "format": "uri",
-            "description": "HTTPS link on the matching service domain."
+            "description": "Matching service HTTPS URL after trimming, or an empty string to remove the entry."
           },
           "garmin": {
             "type": "string",
-            "format": "uri",
-            "description": "HTTPS link on the matching service domain."
+            "description": "Matching service HTTPS URL after trimming, or an empty string to remove the entry."
           },
           "rideWithGps": {
             "type": "string",
-            "format": "uri",
-            "description": "HTTPS link on the matching service domain."
+            "description": "Matching service HTTPS URL after trimming, or an empty string to remove the entry."
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Supported HTTPS links: komoot \u2192 komoot.com, strava \u2192 strava.com, garmin \u2192 garmin.com, rideWithGps \u2192 ridewithgps.com. Subdomains are accepted. Values are trimmed; empty strings remove entries; each trimmed value may contain at most 2048 characters. In PATCH, a supplied externalLinks object replaces all links; omitted externalLinks preserves them."
       },
       "Error": {
         "type": "object",
@@ -1246,14 +1243,16 @@
               "ENRICHING",
               "PUBLISHING",
               null
-            ]
+            ],
+            "description": "Current stage while PROCESSING; null after processing finishes."
           },
           "error": {
             "type": "object",
             "nullable": true,
             "properties": {
               "code": {
-                "type": "string"
+                "type": "string",
+                "description": "Known codes: INVALID_GPX (cannot parse usable route), GPX_POINT_LIMIT (too many route points), ENRICHMENT_UNAVAILABLE (route enrichment failed), ANALYSIS_STORAGE_UNAVAILABLE (analysis could not be stored), TRACK_FILE_UNAVAILABLE (source could not be read), PROCESSING_INTERRUPTED (worker lease expired)."
               }
             },
             "required": [
@@ -1262,7 +1261,8 @@
             "additionalProperties": false
           },
           "canRetry": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the owner may request another analysis attempt."
           }
         },
         "required": [
@@ -1271,7 +1271,8 @@
           "error",
           "canRetry"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Outcome of the current processing attempt, independent of available revision data. A failed replacement can leave the previous revision available. READY with PARTIAL completeness and canRetry=true means usable analysis is available but optional enrichment can be retried."
       },
       "ProcessingStatus": {
         "type": "object",
@@ -1296,14 +1297,16 @@
               "ENRICHING",
               "PUBLISHING",
               null
-            ]
+            ],
+            "description": "Current stage while PROCESSING; null after processing finishes."
           },
           "error": {
             "type": "object",
             "nullable": true,
             "properties": {
               "code": {
-                "type": "string"
+                "type": "string",
+                "description": "Known codes: INVALID_GPX (cannot parse usable route), GPX_POINT_LIMIT (too many route points), ENRICHMENT_UNAVAILABLE (route enrichment failed), ANALYSIS_STORAGE_UNAVAILABLE (analysis could not be stored), TRACK_FILE_UNAVAILABLE (source could not be read), PROCESSING_INTERRUPTED (worker lease expired)."
               }
             },
             "required": [
@@ -1312,7 +1315,8 @@
             "additionalProperties": false
           },
           "canRetry": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the owner may request another analysis attempt."
           }
         },
         "required": [
@@ -1322,7 +1326,8 @@
           "error",
           "canRetry"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Outcome of the current processing attempt, independent of available revision data. A failed replacement can leave the previous revision available. READY with PARTIAL completeness and canRetry=true means usable analysis is available but optional enrichment can be retried."
       },
       "Author": {
         "type": "object",
@@ -1367,27 +1372,33 @@
           },
           "speedKmh": {
             "type": "number",
-            "nullable": true
+            "nullable": true,
+            "description": "Speed used to estimate duration. Initially the moving average recorded in GPX when available, otherwise the default estimated speed; editable in metadata. Analysis retains the original value."
           },
           "estimatedDurationMs": {
             "type": "number",
-            "nullable": true
+            "nullable": true,
+            "description": "Expected duration in milliseconds: initially recorded moving time when available, otherwise distance divided by speedKmh. Editing speed or replacing the source recalculates it from distance and the selected speed."
           },
           "durationMs": {
             "type": "number",
-            "nullable": true
+            "nullable": true,
+            "description": "Elapsed time between the first and last recorded GPX timestamps; null when unavailable or non-positive."
           },
           "movingTimeMs": {
             "type": "number",
-            "nullable": true
+            "nullable": true,
+            "description": "Recorded time for segments travelling at least 1 km/h, capped at elapsed duration when available; null when no moving time is recorded."
           },
           "movingAverageSpeedKmh": {
             "type": "number",
-            "nullable": true
+            "nullable": true,
+            "description": "Distance over recorded moving segments divided by their moving time; null when unavailable."
           },
           "averageSpeedKmh": {
             "type": "number",
-            "nullable": true
+            "nullable": true,
+            "description": "Full route distance divided by elapsed GPX duration; null when duration is unavailable."
           },
           "hasElevation": {
             "type": "boolean"
@@ -1452,14 +1463,16 @@
             "type": "number"
           },
           "elevationChangeM": {
-            "type": "number"
+            "type": "number",
+            "description": "Positive elevation magnitude: accumulated gain for climbs, accumulated loss for descents."
           },
           "averageGradePercent": {
             "type": "number",
             "description": "Non-negative slope magnitude in percent."
           },
           "score": {
-            "type": "number"
+            "type": "number",
+            "description": "Terrain classification score: segment length in metres multiplied by averageGradePercent, rounded to an integer."
           },
           "category": {
             "type": "string",
@@ -1633,10 +1646,6 @@
           "author": {
             "$ref": "#/components/schemas/Author"
           },
-          "gpxUrl": {
-            "type": "string",
-            "nullable": true
-          },
           "revision": {
             "type": "string",
             "nullable": true
@@ -1685,6 +1694,9 @@
             "items": {
               "$ref": "#/components/schemas/Poi"
             }
+          },
+          "downloadURL": {
+            "$ref": "#/components/schemas/DownloadURLs"
           }
         },
         "required": [
@@ -1696,7 +1708,7 @@
           "metrics",
           "externalLinks",
           "author",
-          "gpxUrl",
+          "downloadURL",
           "revision",
           "completeness",
           "sources",
@@ -1759,10 +1771,6 @@
           "author": {
             "$ref": "#/components/schemas/Author"
           },
-          "gpxUrl": {
-            "type": "string",
-            "nullable": true
-          },
           "preview": {
             "$ref": "#/components/schemas/Preview"
           },
@@ -1776,6 +1784,9 @@
             "type": "string",
             "nullable": true,
             "format": "date-time"
+          },
+          "downloadURL": {
+            "$ref": "#/components/schemas/DownloadURLs"
           }
         },
         "required": [
@@ -1787,7 +1798,7 @@
           "metrics",
           "externalLinks",
           "author",
-          "gpxUrl",
+          "downloadURL",
           "preview",
           "url",
           "isFavorite",
@@ -1966,6 +1977,19 @@
           "data"
         ],
         "additionalProperties": false
+      },
+      "DownloadURLs": {
+        "type": "object",
+        "description": "Available download formats mapped to same-origin URLs. An unavailable format is omitted; an empty object means no download is available. Additional formats may be added.",
+        "properties": {
+          "gpx": {
+            "type": "string",
+            "description": "Original GPX download URL."
+          }
+        },
+        "additionalProperties": {
+          "type": "string"
+        }
       }
     },
     "responses": {

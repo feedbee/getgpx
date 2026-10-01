@@ -73,7 +73,7 @@ describe('my tracks UI', () => {
     };
     const card = createTrackCard({
       id: 'track-1', title: 'Ride', processing: { status: 'READY' }, createdAt: '2026-09-17T10:00:00.000Z',
-      url: '/tracks/track-1', gpxUrl: '/api/v1/tracks/track-1/gpx',
+      url: '/tracks/track-1', downloadURL: { gpx: '/api/v1/tracks/track-1/gpx' },
       externalLinks: { strava: 'https://www.strava.com/routes/1' },
     }, documentRef);
 
@@ -99,7 +99,7 @@ describe('my tracks UI', () => {
     };
     const card = createTrackCard({
       id: 'track-1', title: 'Ride', author: { displayName: 'Анна', avatarUrl: 'https://example.com/anna.jpg' }, processing: { status: 'READY' },
-      createdAt: '2026-09-17T10:00:00.000Z', url: '/tracks/track-1', externalLinks: {},
+      createdAt: '2026-09-17T10:00:00.000Z', url: '/tracks/track-1', downloadURL: {}, externalLinks: {},
     }, documentRef, { ownerActions: false });
 
     const dateRow = card.children[1].children[3];
@@ -110,6 +110,7 @@ describe('my tracks UI', () => {
     expect(dateRow.children[2].tagName).toBe('time');
     expect(card.children[2].children.map((child) => child.dataset.trackAction).filter(Boolean)).toEqual(['unsave']);
     expect(card.children[2].children[0].type).toBe('checkbox');
+    expect(card.children[2].children.at(-1).hidden).toBe(true);
   });
 
   it('marks a favorited own track with a filled heart state before editing', () => {
@@ -123,7 +124,7 @@ describe('my tracks UI', () => {
     };
     const card = createTrackCard({
       id: 'track-1', title: 'Ride', processing: { status: 'READY' }, isFavorite: true,
-      createdAt: '2026-09-17T10:00:00.000Z', url: '/tracks/track-1', externalLinks: {},
+      createdAt: '2026-09-17T10:00:00.000Z', url: '/tracks/track-1', downloadURL: {}, externalLinks: {},
     }, documentRef);
 
     expect(card.children[2].children[1]).toMatchObject({ className: 'track-card-action track-card-favorite is-favorite', attributes: { 'aria-pressed': 'true' } });

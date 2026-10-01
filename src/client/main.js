@@ -319,8 +319,8 @@ async function loadPublicTrack(trackId, retries = 0) {
   document.querySelector('#external-track-links-nav').hidden = linksSection.hidden;
   renderTrackAttribution();
   const download = document.querySelector('#download-track');
-  download.href = data.gpxUrl || '#';
-  download.hidden = !data.gpxUrl;
+  download.href = data.downloadURL.gpx || '#';
+  download.hidden = !data.downloadURL.gpx;
   if (!data.analysisUrl) {
     routeSummaryView.renderUnavailableTrack(data.revision ? { ...data, analysisNote: t('errors.fileUnavailable') } : data);
     return;

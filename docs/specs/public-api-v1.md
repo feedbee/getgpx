@@ -22,7 +22,8 @@ at `/api/v1/openapi.json`. The website and external clients use the same API.
 
 `GET /tracks/{id}` returns editable metadata and point-free route data:
 `metrics`, `distributions`, `climbs`, `descents`, `pointsOfInterest`, `sources`,
-`completeness`, `revision`, `processing`, public `author`, and file URLs.
+`completeness`, `revision`, `processing`, public `author`, and file URLs. `downloadURL` maps available formats to URLs, currently
+`{ gpx: "/api/v1/tracks/{id}/gpx" }`; unavailable formats are omitted.
 Each data group has one representation. Author information contains display name
 and avatar, without account identifiers or email.
 
@@ -35,7 +36,9 @@ original GPX name or filename fallback, while metadata `title` is editable.
 Processing has one model: `status`, `step`, `error`, `canRetry`. The owner-only
 `GET /tracks/{id}/status` adds `id` to that model. Result availability is determined
 by `revision` and file URLs. A failed replacement can coexist with an available
-previous revision. Analysis returns 409 while no result is available; an unknown
+previous revision. READY with PARTIAL completeness and canRetry=true indicates
+usable analysis with optional enrichment available for retry. Known processing
+error codes and their meanings are documented in OpenAPI. Analysis returns 409 while no result is available; an unknown
 track returns 404.
 
 `GET` and `PUT /tracks/{id}/gpx` read and replace the source resource. Uploads use
@@ -43,7 +46,8 @@ raw GPX request bodies and return 202 with processing status. An initial upload
 also returns a status URL in `Location`.
 
 `PATCH /tracks/{id}` accepts any nonempty subset of `title`, `routeType`, `speedKmh`
-and `externalLinks`. Omitted fields are preserved. An empty links object clears
+and `externalLinks`. Omitted top-level fields are preserved. A supplied externalLinks object replaces
+all links. An empty links object clears
 links. Unknown fields and invalid values return 422. Speed changes recalculate
 estimated duration without changing the source analysis.
 

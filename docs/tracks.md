@@ -57,7 +57,7 @@ title and calculated speed until the owner edits them.
 The complete contract is [API v1](specs/public-api-v1.md) and its linked OpenAPI.
 Track metadata comes from `GET /api/v1/tracks/:id`; detailed route points come from
 `GET /api/v1/tracks/:id/analysis`. Metadata exposes metrics, distributions, climbs,
-descents, POIs, processing, revision, author and file URLs, without a duplicate
+descents, POIs, processing, revision, author, analysis URL and a downloadURL object keyed by file format, without a duplicate
 summary wrapper. `/analysis` is streamed directly from S3. It includes `sourceName`
 from GPX or the original filename, separate from the editable metadata title.
 

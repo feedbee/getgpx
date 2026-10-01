@@ -11,7 +11,13 @@ export function serialize(schema, value) {
   if (schema.$ref) return serialize(resolve(schema), value);
   if (schema.type === 'array') return value.map((item) => serialize(schema.items, item));
   if (schema.type !== 'object') return value;
-  return Object.fromEntries(Object.entries(schema.properties || {})
+  const properties = { ...schema.properties };
+  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+    for (const key of Object.keys(value)) {
+      if (!Object.hasOwn(properties, key)) properties[key] = schema.additionalProperties;
+    }
+  }
+  return Object.fromEntries(Object.entries(properties)
     .filter(([key]) => Object.hasOwn(value, key) && value[key] !== undefined)
     .map(([key, child]) => [key, serialize(child, value[key])]));
 }

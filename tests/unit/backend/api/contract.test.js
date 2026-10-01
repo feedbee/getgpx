@@ -51,6 +51,15 @@ async function fixture(enriched = true) {
   return { track, document, objectStore, service };
 }
 
+describe('download formats', () => {
+  it('returns GPX as a keyed URL and supports additive download formats', () => {
+    const schema = contract.components.schemas.DownloadURLs;
+    expect(serialize(schema, { gpx: '/track.gpx', fit: '/track.fit' })).toEqual({ gpx: '/track.gpx', fit: '/track.fit' });
+    conforms('DownloadURLs', { gpx: '/track.gpx', fit: '/track.fit' });
+    conforms('DownloadURLs', {});
+  });
+});
+
 describe('API v1 contract', () => {
   it('validates as OpenAPI and remains identical to the explicitly approved baseline', async () => {
     await SwaggerParser.validate(structuredClone(contract));
@@ -80,7 +89,10 @@ describe('API v1 contract', () => {
       conforms(schema, result.json());
       expect(result.text).not.toContain('private/');
       expect(result.text).not.toContain('private-owner');
-      if (!suffix) expect(result.json().data).not.toHaveProperty('preview');
+      if (!suffix) {
+        expect(result.json().data).not.toHaveProperty('preview');
+        expect(result.json().data.downloadURL).toEqual({ gpx: `/api/v1/tracks/${track.publicId}/gpx` });
+      }
     }
     expect(objectStore.openRead).not.toHaveBeenCalled();
     conforms('TrackPage', await service.listMyTracks({ ownerId: track.ownerId }));
