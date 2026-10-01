@@ -14,7 +14,7 @@ function fakeDocument() {
 }
 
 describe('elevation profile', () => {
-  it('draws the visible points and recalculates coordinates after a range change', () => {
+  it.each(['gradient', 'elevation'])('draws %s colors and recalculates coordinates after a range change', (mode) => {
     const surface = { id: 'asphalt', color: '#111', highway: 'secondary', quality: { id: 'good', color: '#0a0' } };
     const track = { points: [
       { distanceKm: 0, ele: 100, grade: 1, surface },
@@ -24,15 +24,25 @@ describe('elevation profile', () => {
     const documentRef = fakeDocument();
     let range = [0, 2];
     const profile = createElevationProfile({ getTrack: () => track, getViewRange: () => range,
-      getSummaryMetrics: () => null, getColorMode: () => 'gradient', getFocusPlacement: () => 'ribbon',
+      getSummaryMetrics: () => null, getColorMode: () => mode, getFocusPlacement: () => 'ribbon',
       getRouteFilter: () => null, getTerrainRange: () => null, documentRef });
 
     profile.drawProfile(track);
     expect(documentRef.querySelector('#profile-area').setAttribute).toHaveBeenCalledWith('d', expect.stringContaining('M0.0'));
     expect(profile.chartCoordinates(track.points[1]).x).toBe(600);
+    if (mode === 'elevation') {
+      expect(documentRef.querySelector('#elevation-legend').innerHTML).toContain('100 m');
+      expect(documentRef.querySelector('#elevation-legend').innerHTML).toContain('120 m');
+      expect(documentRef.querySelector('#gradient-line').innerHTML).toContain('url(#profile-elevation-stroke)');
+    }
 
     range = [1, 2];
     profile.resetMetrics();
     expect(profile.chartCoordinates(track.points[1]).x).toBe(0);
+    profile.drawProfile(track);
+    if (mode === 'elevation') {
+      expect(documentRef.querySelector('#elevation-legend').innerHTML).toContain('100 m');
+      expect(documentRef.querySelector('#gradient-line').innerHTML).toContain('url(#profile-elevation-stroke)');
+    }
   });
 });

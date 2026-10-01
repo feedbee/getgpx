@@ -22,6 +22,7 @@ function fakeLeaflet() {
   return {
     layers, map,
     leaflet: {
+      canvas: () => ({ _updatePoly: vi.fn() }),
       map: () => map, tileLayer: () => layer([]), polyline: layer, marker: layer,
       circleMarker: layer, divIcon: (options) => options,
       control: { zoom: () => layer([]) },
@@ -30,7 +31,7 @@ function fakeLeaflet() {
 }
 
 describe('route map', () => {
-  it('renders the route, tracks a selected point, and focuses a range', () => {
+  it.each(['gradient', 'elevation'])('renders the %s route, tracks a selected point, and focuses a range', (mode) => {
     const { layers, map, leaflet } = fakeLeaflet();
     const elements = new Map();
     const documentRef = { querySelector(selector) {
@@ -45,13 +46,19 @@ describe('route map', () => {
     let pinnedIndex = null;
     const onActivePoint = vi.fn();
     const routeMap = createRouteMap({ getPoiSelection: () => ({ pinnedIndex, hoveredIndex: null }),
-      getMapColorMode: () => 'gradient', getRouteFilter: () => null, getTerrainRange: () => null,
+      getMapColorMode: () => mode, getRouteFilter: () => null, getTerrainRange: () => null,
       onActivePoint, onPointContext: vi.fn(), onPoiHover: vi.fn(), onPoiLeave: vi.fn(), onPoiToggle: vi.fn(),
       documentRef, leaflet });
 
     routeMap.init();
     routeMap.draw(track);
     expect(map.fitBounds).toHaveBeenCalledWith(expect.any(Array), { padding: [48, 48] });
+    if (mode === 'elevation') {
+      const baseLayer = layers.find(item => item.options.elevations);
+      expect(baseLayer.options).toMatchObject({ noClip: true, smoothFactor: 0, interactive: false });
+      expect(baseLayer.options.elevations).toHaveLength(track.points.length);
+      expect(layers.find(item => item.options.color === '#ffffff').options.renderer).toBe(baseLayer.options.renderer);
+    }
     const routeLine = layers.find((item) => item.options.opacity === 0);
     routeLine.events.mousemove({ latlng: { lat: 3, lng: 4 } });
     expect(onActivePoint).toHaveBeenCalledWith(1, { showContext: true });

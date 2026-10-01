@@ -2,7 +2,7 @@ import { t, bindText, escapeHtml, formatMeasurement, preferences, percent } from
 import { elevationValue, number } from './measurements.js';
 import { poiName } from './analysis-presentation.js';
 import { areaPathFromCoordinates, elevationGainLoss, profileFocusVisibility, profileRangePosition, visibleRangeIndices } from './domain/profile-math.js';
-import { colorRunsForMode, highlightRunsForFilter, profileColorRuns } from './domain/route-color.js';
+import { elevationRange, elevationColor, elevationGradientStops, highlightRunsForFilter, profileColorRuns } from './domain/route-color.js';
 
 export function createElevationProfile({ getTrack, getViewRange, getSummaryMetrics, getColorMode,
   getFocusPlacement, getRouteFilter, getTerrainRange, documentRef = document }) {
@@ -43,6 +43,9 @@ export function createElevationProfile({ getTrack, getViewRange, getSummaryMetri
 
   function drawProfile(track) {
     viewMetrics = visibleMetrics();
+    const altitudeRange = elevationRange(track.points);
+    documentRef.querySelector('#elevation-legend').innerHTML = [altitudeRange.min, altitudeRange.max].map((height) =>
+      `<span><i style="background:${elevationColor(height, altitudeRange)}"></i>${escapeHtml(formatMeasurement('elevation', height))}</span>`).join('');
     const { startIndex, endIndex, startKm, endKm, min, max } = viewMetrics;
     const isFullRange = startIndex === 0 && endIndex === track.points.length - 1;
     const summaryMetrics = isFullRange ? getSummaryMetrics() : null;
@@ -67,16 +70,21 @@ export function createElevationProfile({ getTrack, getViewRange, getSummaryMetri
       if (runPoints.length < 2) return '';
       return runPoints.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
     };
-    const profileRuns = profileColorRuns(track.points, getColorMode());
+    const mode = getColorMode();
+    const profileRuns = profileColorRuns(track.points, mode);
     const gradientAreaPaths = profileRuns.area.map((run) => {
       const path = areaPathFromCoordinates(profileCoordinates(run), 264);
       return path ? `<path d="${path}" fill="${run.color}"></path>` : '';
     }).join('');
     documentRef.querySelector('#profile-gradient-area').innerHTML = gradientAreaPaths;
-    const baseProfilePaths = profileRuns.line.map((run) => {
-      const path = profilePath(run);
-      return path ? `<path d="${path}" stroke="${run.color}"><title>${escapeHtml(t(run.label))}</title></path>` : '';
-    }).join('');
+    const elevationStops = mode === 'elevation' ? elevationGradientStops(min, max, altitudeRange).map(({ offset, color }) => `<stop offset="${offset}" stop-color="${color}"/>`).join('') : '';
+    const elevationStroke = `<defs><linearGradient id="profile-elevation-stroke" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="${chartCoordinates({ ele: min, distanceKm: startKm }).y}" y2="${chartCoordinates({ ele: max, distanceKm: startKm }).y}">${elevationStops}</linearGradient></defs>`;
+    const baseProfilePaths = mode === 'elevation'
+      ? `${elevationStroke}<path d="${line}" stroke="url(#profile-elevation-stroke)"><title>${escapeHtml(t('common.elevation'))}</title></path>`
+      : profileRuns.line.map((run) => {
+        const path = profilePath(run);
+        return path ? `<path d="${path}" stroke="${run.color}"><title>${escapeHtml(t(run.label))}</title></path>` : '';
+      }).join('');
     documentRef.querySelector('#gradient-line').innerHTML = baseProfilePaths;
     const focusedRuns = highlightRunsForFilter(track.points, getRouteFilter());
     const terrainRange = getTerrainRange();
@@ -98,14 +106,28 @@ export function createElevationProfile({ getTrack, getViewRange, getSummaryMetri
       const width = ((to - from) / Math.max(endKm - startKm, 0.001)) * 1200;
       return `<rect class="climb-band" x="${x}" y="18" width="${width}" height="246" fill="${climb.color}"><title>${escapeHtml(t('profile.climb', { distance: formatMeasurement('distance', climb.lengthM / 1000), grade: percent(climb.averageGrade) }))}</title></rect>`;
     }).join('');
-    const ribbonRuns = colorRunsForMode(track.points, getColorMode());
+    const ribbonRuns = profileRuns.line;
     const ribbonRect = (run) => {
       const position = profileRangePosition(track.points, run, startKm, endKm);
       if (!position) return '';
       const { x, width } = position;
       return `<rect x="${x}" y="269" width="${Math.max(width, 1)}" height="9" fill="${run.color}"><title>${escapeHtml(t(run.label))}</title></rect>`;
     };
-    documentRef.querySelector('#surface-ribbon').innerHTML = ribbonRuns.map(ribbonRect).join('');
+    if (mode === 'elevation') {
+      const firstKm = track.points[0].distanceKm;
+      const lengthKm = Math.max(track.points.at(-1).distanceKm - firstKm, 0.001);
+      const stops = ribbonRuns.flatMap((run) => {
+        const from = track.points[run.startIndex];
+        const to = track.points[run.endIndex];
+        return elevationGradientStops(from.ele, to.ele, altitudeRange).map(({ offset, color }) => {
+          const distanceKm = from.distanceKm + (to.distanceKm - from.distanceKm) * offset;
+          return `<stop offset="${(distanceKm - firstKm) / lengthKm}" stop-color="${color}"/>`;
+        });
+      }).join('');
+      const x1 = (firstKm - startKm) / Math.max(endKm - startKm, 0.001) * 1200;
+      const x2 = (track.points.at(-1).distanceKm - startKm) / Math.max(endKm - startKm, 0.001) * 1200;
+      documentRef.querySelector('#surface-ribbon').innerHTML = `<defs><linearGradient id="elevation-ribbon" gradientUnits="userSpaceOnUse" x1="${x1}" x2="${x2}" y1="0" y2="0">${stops}</linearGradient></defs><rect x="0" y="269" width="1200" height="9" fill="url(#elevation-ribbon)"><title>${escapeHtml(t('common.elevation'))}</title></rect>`;
+    } else documentRef.querySelector('#surface-ribbon').innerHTML = ribbonRuns.map(ribbonRect).join('');
     const focusRect = (run) => {
       const position = profileRangePosition(track.points, run, startKm, endKm);
       if (!position) return '';

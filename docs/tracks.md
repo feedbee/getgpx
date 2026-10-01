@@ -148,3 +148,18 @@ including their completion titles. Metadata editors appear once the owner status
 after parsing has extracted the source title, or READY. Edits persist immediately
 and survive publication, processing failure and retry. Each operation resets previous editors, errors and completion
 actions; each save sends only explicitly edited fields to avoid overwriting other metadata.
+
+### Elevation coloring
+
+The map and elevation profile each offer an independent Elevation color mode.
+It blends absolute altitude (30%) with position within the full track altitude
+range (70%), using a smooth blue-to-red palette. The relative contribution
+reaches 70% at a 300 m range and decreases proportionally for smaller ranges
+to avoid amplifying altitude noise. Flat tracks use absolute altitude only.
+Sea level and lower stay blue; Everest (8,849 m) and higher stay red. The relative
+range is clipped to these bounds. Low tracks stay cooler and high tracks warmer,
+while local elevation changes gain contrast. Colors remain stable during zoom. The map interpolates colors along each edge, and the profile line and
+ribbon use continuous gradients. The profile area always uses slope gradient
+colors, just as in Surface, Road Type and Quality modes. Compact legend markers
+show the track minimum and maximum with their actual colors and selected units.
+Points without altitude use neutral gray.

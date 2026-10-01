@@ -27,7 +27,7 @@ describe('route color layers', () => {
     expect(colorRunsForMode(points, 'gradient').map((run) => run.color)).toEqual(['#84a83f', '#d6b737']);
   });
 
-  it.each(['gradient', 'surface', 'waytype', 'quality'])('keeps gradient area colors behind %s profile lines', (mode) => {
+  it.each(['gradient', 'elevation', 'surface', 'waytype', 'quality'])('keeps gradient area colors behind %s profile lines', (mode) => {
     expect(profileColorRuns(points, mode).area.map((run) => run.color)).toEqual(['#84a83f', '#d6b737']);
   });
 });

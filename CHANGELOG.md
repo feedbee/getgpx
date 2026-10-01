@@ -6,6 +6,7 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ### Added
 
+- Elevation coloring for the map and profile, with smooth transitions blending absolute altitude (30%) and route-relative altitude (up to 70%). The profile fill continues to show slope; compact legend markers show minimum and maximum altitude.
 - Optional Mapbox static map previews for track lists, generated during GPX processing and stored permanently in S3, with SVG fallback.
 - Provider/style/render provenance and a Docker-compatible `previews:regenerate` command for dry runs, selective updates, forced regeneration and resumable batches.
 
