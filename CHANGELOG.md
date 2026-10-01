@@ -4,6 +4,13 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-01
+
+### Fixed
+
+- Valhalla map-matching segments now leave 1% distance headroom, reducing requests rejected near the provider's segment limit. Provider error codes are retained without logging provider response text.
+- `npm run dev` now loads `VALHALLA_URL`, `VALHALLA_MAX_SEGMENT_KM`, `ELEVATION_URL`, and `OVERPASS_URL` from `.env`, while shell values retain precedence.
+
 ## [0.4.1] - 2026-10-01
 
 ### Changed
