@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { trackObjectKeys } from './s3-track-repository.js';
+import { trackObjectKeys, hasPublishedResult } from './s3-track-repository.js';
 import { analysisFailure } from './analysis-warning.js';
 import { safeErrorDetails } from './safe-error-details.js';
 
@@ -15,12 +15,12 @@ export function createS3TrackProcessor({ trackRepository, objectStore, enrichmen
   analyzeSource, enrichAnalysis, cleanup, schedule, warn, enrichmentTimeoutMs, now }) {
   const scheduleProcessing = (track) => schedule(() => process(track).catch((error) => {
     warn({ event: 'track_analysis_job_failed', trackId: String(track._id),
-      revision: track.attempt?.revision, ...safeErrorDetails(error) });
+      revision: track.processing?.revision, ...safeErrorDetails(error) });
   }));
 
   async function process(track) {
     const identity = { trackId: track._id, ownerId: track.ownerId,
-      revision: track.attempt.revision, workerId: randomUUID() };
+      revision: track.processing.revision, workerId: randomUUID() };
     const claimed = await trackRepository.claim(identity, now());
     if (!claimed) return;
     let lost = false;
@@ -36,11 +36,11 @@ export function createS3TrackProcessor({ trackRepository, objectStore, enrichmen
     let base;
     let step = 'READING';
     try {
-      const source = await objectStore.readSource(claimed.attempt.sourceKey);
+      const source = await objectStore.readSource(claimed.processing.sourceKey);
       step = 'PARSING';
-      base = analyzeSource(source, { filename: claimed.attempt.originalFilename });
+      base = analyzeSource(source, { filename: claimed.processing.originalFilename });
       if (lost || !await trackRepository.setStep(identity, 'ENRICHING', now(),
-        claimed.active ? null : base.name)) return;
+        hasPublishedResult(claimed) ? null : base.name)) return;
       step = 'ENRICHING';
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), enrichmentTimeoutMs);
@@ -71,11 +71,11 @@ export function createS3TrackProcessor({ trackRepository, objectStore, enrichmen
         ? error?.code === 'GPX_POINT_LIMIT' ? 'GPX_POINT_LIMIT' : 'INVALID_GPX'
         : step === 'WRITING' ? 'ANALYSIS_STORAGE_UNAVAILABLE' : 'ENRICHMENT_UNAVAILABLE';
       let diagnostic = null;
-      if (step === 'ENRICHING' && base && !claimed.active) {
+      if (step === 'ENRICHING' && base && !hasPublishedResult(claimed)) {
         try {
           const analysisSources = sourcesOf(base, 'FAILED');
           const analysisKey = await objectStore.writeAnalysis({ trackId: String(track._id),
-            revision: identity.revision, analysis: base, status: 'FAILED', completeness: 'PARTIAL', analysisSources });
+            revision: identity.revision, analysis: base, completeness: 'PARTIAL', analysisSources });
           diagnostic = { analysis: base, analysisKey, analysisSources };
         } catch (writeError) {
           warn({ event: 'track_diagnostic_write_failed', trackId: String(track._id),

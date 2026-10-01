@@ -1,4 +1,5 @@
-import { normalizeTrackName } from './track-repository.js';
+import { TRACK_CARD_PROJECTION } from './s3-track-repository.js';
+import { normalizeTrackName } from './track-contracts.js';
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -66,10 +67,7 @@ export function createSavedTrackRepository(savedTracks, tracks = null, users = n
         { $limit: limit + 1 },
         { $project: {
           savedAt: 1,
-          track: {
-            _id: 1, publicId: 1, title: 1, routeType: 1, createdAt: 1, externalLinks: 1,
-            analysisStatus: 1, analysisStep: 1, analysis: 1, active: 1, diagnostic: 1, attempt: 1,
-          },
+          ...Object.fromEntries(Object.keys(TRACK_CARD_PROJECTION).map((key) => [`track.${key}`, 1])),
           author: { displayName: 1, avatarUrl: 1 },
         } },
       );

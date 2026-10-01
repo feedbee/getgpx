@@ -1,10 +1,9 @@
-import { Readable } from 'node:stream';
 import { ObjectId } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../../src/backend/database.js';
 import { loadConfiguration, loadHomepageTrackIds } from '../../src/backend/configuration.js';
-import { createTrackPersistence } from '../../src/backend/track-persistence.js';
-import { createTrackRepository } from '../../src/backend/track-repository.js';
+import { createS3TrackPersistence } from '../../src/backend/s3-track-persistence.js';
+import { createS3TrackRepository } from '../../src/backend/s3-track-repository.js';
 import { createUserRepository } from '../../src/backend/user-repository.js';
 import { createSavedTrackRepository } from '../../src/backend/saved-track-repository.js';
 import { createSessionRepository } from '../../src/backend/session-repository.js';
@@ -95,40 +94,21 @@ describeWithMongo('MongoDB integration', () => {
     }
   });
 
-  it('uses MongoDB GridFS for GPX source files and creates track indexes', async () => {
-    const { gpxFileStore } = await createTrackPersistence(database);
+  it('creates the S3 track, cache and favorites indexes', async () => {
+    await createS3TrackPersistence(database, { region: 'eu-central-1', bucket: 'test-only', prefix: 'dev' }, { s3: {} });
     const tracks = await database.collection('tracks');
-    const enrichmentCache = await database.collection('enrichmentCache');
-    const savedTracks = await database.collection('savedTracks');
-    const ownerId = 'integration-gridfs-owner';
-    const filename = 'integration-route.gpx';
-    const fileId = await gpxFileStore.save({
-      filename,
-      ownerId,
-      source: Readable.from('<gpx version="1.1"></gpx>'),
-    });
-    const chunks = [];
-    for await (const chunk of gpxFileStore.openDownload(fileId)) chunks.push(chunk);
-    const indexes = await tracks.indexes();
-    const cacheIndexes = await enrichmentCache.indexes();
-    const savedTrackIndexes = await savedTracks.indexes();
-
-    expect(Buffer.concat(chunks).toString()).toBe('<gpx version="1.1"></gpx>');
-    expect(indexes).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: { ownerId: 1, createdAt: -1 } }),
-      expect.objectContaining({ key: { sourceFileId: 1 }, unique: true }),
+    const cache = await database.collection('enrichmentCache');
+    const saved = await database.collection('savedTracks');
+    expect(await tracks.indexes()).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: { publicId: 1 }, unique: true }),
+      expect.objectContaining({ key: { 'processing.status': 1, updatedAt: 1 } }),
     ]));
-    expect(cacheIndexes).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: { key: 1 }, unique: true }),
+    expect(await cache.indexes()).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: { expiresAt: 1 }, expireAfterSeconds: 0 }),
     ]));
-    expect(savedTrackIndexes).toEqual(expect.arrayContaining([
+    expect(await saved.indexes()).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: { userId: 1, trackId: 1 }, unique: true }),
-      expect.objectContaining({ key: { userId: 1, savedAt: -1, _id: -1 } }),
     ]));
-
-    await gpxFileStore.delete(fileId);
   });
 
   it('stores one saved relation and lists it with the track author', async () => {
@@ -141,7 +121,7 @@ describeWithMongo('MongoDB integration', () => {
     const trackId = new ObjectId();
     await savedTracks.deleteMany({ userId });
     await users.insertOne({ _id: authorId, displayName: 'Мария', googleSubject: `saved-author-${authorId}`, email: `${authorId}@example.com` });
-    await tracks.insertOne({ _id: trackId, ownerId: authorId, publicId: 'SavedTrack_1234567890A', title: 'Лесной круг', normalizedName: 'лесной круг', routeType: 'gravel-cycling', createdAt: new Date(), analysisStatus: 'READY', analysisStep: 'COMPLETE' });
+    await tracks.insertOne({ _id: trackId, ownerId: authorId, publicId: 'SavedTrack_1234567890A', title: 'Лесной круг', normalizedName: 'лесной круг', routeType: 'gravel-cycling', createdAt: new Date(), processing: { status: 'READY', step: null, error: null } });
 
     await repository.save({ userId, trackId }, new Date('2026-09-22T10:00:00Z'));
     await repository.save({ userId, trackId }, new Date('2026-09-22T11:00:00Z'));
@@ -159,7 +139,7 @@ describeWithMongo('MongoDB integration', () => {
 
   it('lists only owner tracks newest first with substring search and cursor paging', async () => {
     const tracks = await database.collection('tracks');
-    const repository = createTrackRepository(tracks);
+    const repository = createS3TrackRepository(tracks);
     const ownerId = 'integration-list-owner';
     const otherOwnerId = 'integration-list-other';
     await tracks.deleteMany({ ownerId: { $in: [ownerId, otherOwnerId] } });
@@ -168,7 +148,7 @@ describeWithMongo('MongoDB integration', () => {
       { ownerId, title: 'Evening GRAVEL loop', normalizedName: 'evening gravel loop', createdAt: new Date('2026-09-17T18:00:00Z') },
       { ownerId, title: 'Road ride', normalizedName: 'road ride', createdAt: new Date('2026-09-17T12:00:00Z') },
       { ownerId: otherOwnerId, title: 'Private gravel', normalizedName: 'private gravel', createdAt: new Date('2026-09-18T12:00:00Z') },
-    ].map((document, index) => ({ ...document, sourceFileId: `integration-list-file-${index}`, analysisStatus: 'READY', analysisStep: 'COMPLETE', analysis: null }));
+    ].map((document, index) => ({ ...document, publicId: `integration_list_${index}`, processing: { status: 'READY', step: null, error: null } }));
     await tracks.insertMany(documents);
 
     const firstPage = await repository.listOwned({ ownerId, query: 'GRAVEL', limit: 1 });
@@ -184,56 +164,4 @@ describeWithMongo('MongoDB integration', () => {
     await tracks.deleteMany({ ownerId: { $in: [ownerId, otherOwnerId] } });
   });
 
-  it('keeps the published track intact until a replacement commits atomically', async () => {
-    const tracks = await database.collection('tracks');
-    const repository = createTrackRepository(tracks);
-    const ownerId = 'integration-replacement-owner';
-    await tracks.deleteMany({ ownerId });
-    const original = await repository.createProcessing({
-      ownerId, sourceFileId: 'integration-original-file', originalFilename: 'old.gpx', title: 'Old route',
-    });
-    await tracks.updateOne({ _id: original._id }, { $set: {
-      analysisStatus: 'READY', analysisStep: 'COMPLETE', analysis: { distanceKm: 10, effectiveSpeedKmh: 20 },
-    } });
-
-    const replacing = await repository.beginReplacement({
-      trackId: original._id, ownerId, sourceFileId: 'integration-new-file', originalFilename: 'new.gpx',
-    });
-    await repository.setReplacementStep({ trackId: original._id, ownerId, revision: 2, step: 'PARSING' });
-    await repository.saveReplacementBase({
-      trackId: original._id, ownerId, revision: 2, title: 'New route', analysis: { distanceKm: 20, effectiveSpeedKmh: 20 },
-    });
-    const beforeCommit = await repository.findById(original._id);
-    const previous = await repository.completeReplacement({
-      trackId: original._id, ownerId, revision: 2, title: 'New route', normalizedName: 'new route',
-      analysis: { distanceKm: 20, effectiveSpeedKmh: 20, surfaces: [] },
-    });
-    const committed = await repository.findById(original._id);
-
-    expect(replacing.replacement).toMatchObject({ revision: 2, sourceFileId: 'integration-new-file', status: 'PROCESSING' });
-    expect(beforeCommit).toMatchObject({ sourceFileId: 'integration-original-file', title: 'Old route', analysis: { distanceKm: 10 } });
-    expect(previous.sourceFileId).toBe('integration-original-file');
-    expect(committed).toMatchObject({ sourceFileId: 'integration-new-file', title: 'New route', analysisRevision: 2, analysis: { distanceKm: 20 } });
-    expect(committed.publicId).toBe(original.publicId);
-    expect(committed).not.toHaveProperty('replacement');
-    await tracks.deleteOne({ _id: original._id });
-  });
-
-  it('resumes a ready Valhalla-only track from external enrichment', async () => {
-    const tracks = await database.collection('tracks');
-    const repository = createTrackRepository(tracks);
-    const ownerId = 'integration-partial-owner';
-    await tracks.deleteMany({ ownerId });
-    const track = await repository.createProcessing({
-      ownerId, sourceFileId: 'integration-partial-file', originalFilename: 'partial.gpx', title: 'Partial route',
-    });
-    await tracks.updateOne({ _id: track._id }, { $set: {
-      analysisStatus: 'READY', analysisStep: 'COMPLETE', analysis: { enrichmentSource: 'VALHALLA', points: [{}, {}] },
-    } });
-
-    const restarted = await repository.restartEnrichment({ trackId: track._id, ownerId });
-
-    expect(restarted).toMatchObject({ analysisStatus: 'PROCESSING', analysisStep: 'ENRICHING', analysis: { enrichmentSource: 'VALHALLA' } });
-    await tracks.deleteOne({ _id: track._id });
-  });
 });

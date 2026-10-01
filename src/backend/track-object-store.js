@@ -3,8 +3,7 @@ import { PassThrough, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
-import { GpxFileTooLargeError } from './gpx-file-store.js';
-import { TRACK_UPLOAD_LIMITS } from './track-repository.js';
+import { GpxFileTooLargeError, TRACK_UPLOAD_LIMITS } from './track-contracts.js';
 import { logger } from './logger.js';
 import { safeErrorDetails } from './safe-error-details.js';
 

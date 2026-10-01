@@ -34,11 +34,11 @@ async function fixture(enriched = true) {
   const completeness = enriched ? 'FULL' : 'PARTIAL';
   const summary = trackData(analysis);
   const result = { revision: 'revision1', sourceKey: 'private/source.gpx', analysisKey: 'private/analysis.json',
-    ...summary, preview: analysis.preview, completeness, analysisSources,
+    ...summary, preview: analysis.preview, completeness, sources: analysisSources,
     originalFilename: 'ride.gpx', sourcePointCount: analysis.sourcePointCount, pointsOfInterestCount: analysis.pointsOfInterest.length };
   const track = { _id: '0123456789abcdef01234567', publicId: 'publicTrackId00000001', ownerId: 'private-owner',
     title: 'Contract ride', routeType: 'cycling', createdAt: new Date('2026-09-01T00:00:00Z'),
-    analysisStatus: enriched ? 'READY' : 'FAILED', [enriched ? 'active' : 'diagnostic']: result };
+    processing: { status: enriched ? 'READY' : 'FAILED', step: null, error: null }, result: { ...result, kind: enriched ? 'PUBLISHED' : 'DIAGNOSTIC' } };
   const document = analysisDocument({ revision: result.revision, completeness, analysisSources, analysis });
   const objectStore = { assertKey: (key) => key, openRead: vi.fn(async () => Readable.from(JSON.stringify(document))) };
   const service = createS3TrackService({
@@ -103,9 +103,9 @@ describe('API v1 contract', () => {
 
   it('validates pending metadata and drops accidental nested internal fields', async () => {
     const { track } = await fixture();
-    delete track.active;
-    track.analysisStatus = 'PROCESSING';
-    track.attempt = { status: 'PROCESSING', step: 'QUEUED', revision: 'pending', sourceKey: 'private/source', originalFilename: 'ride.gpx' };
+    delete track.result;
+
+    track.processing = { status: 'PROCESSING', step: 'QUEUED', revision: 'pending', sourceKey: 'private/source', originalFilename: 'ride.gpx' };
     conforms('ProcessingStatus', statusOf(track));
     const value = publicTrack(track);
     value.ownerId = 'secret';

@@ -4,7 +4,7 @@ import { detectClimbs, detectDescents } from '../client/domain/climbs.js';
 import { calculateSegmentGrades } from '../client/domain/gradient.js';
 import { applyValhallaMatches, summarizeRoadQuality, summarizeSurfaces, summarizeWayTypes } from '../client/domain/surface.js';
 import { fetchOsmWayTags, fetchTrackElevations, matchTrackWithValhalla } from './valhalla.js';
-import { TRACK_UPLOAD_LIMITS } from './track-repository.js';
+import { TRACK_UPLOAD_LIMITS } from './track-contracts.js';
 import { analysisFailure } from './analysis-warning.js';
 import { logger } from './logger.js';
 import { simplifyRoute } from '../client/domain/route-simplification.js';

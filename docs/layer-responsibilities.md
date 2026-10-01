@@ -15,7 +15,7 @@
 Track work is split into route/controller, service/domain, and repository layers. Ownership checks belong in the service boundary and every saved track must carry an immutable owner identifier. Do not expose raw MongoDB documents or accept client-provided query operators.
 
 - `src/backend/track-object-store.js` and `s3-track-persistence.js`: S3 adapter and persistence wiring.
-- `src/backend/s3-track-repository.js`: compact MongoDB track state and processing leases.
+- `src/backend/s3-track-repository.js`: MongoDB editable metadata, canonical result snapshots, processing leases and compact card projections.
 - `src/backend/s3-track-processor.js`: background analysis and publication.
 - `src/backend/s3-track-service.js`: track operations and storage coordination; `s3-track-presenters.js` builds API responses.
 - `src/client/app-shell.js`: page markup; `track-api.js`: browser track requests; `track-upload-flow.js`: upload and processing state; `upload-interactions.js`: file input, dropzone, and upload dialog events; `track-collection.js`: library and favorites lists.

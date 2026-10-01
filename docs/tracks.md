@@ -12,6 +12,19 @@ Every track has an immutable MongoDB `_id` for storage and a separate public ID 
 URLs. Users have BASIC/PREMIUM track quotas from startup-loaded configuration. Basic
 track information and card previews come from MongoDB without S3 reads.
 
+## MongoDB document
+
+Editable title, route type, links and selected speed are root fields. `result` holds
+one PUBLISHED or DIAGNOSTIC revision with canonical point-free route data and object
+references. `processing` holds the latest attempt outcome and temporary worker data.
+Result data and processing are independent, so replacement failure leaves the
+published route accessible. Source metrics remain unchanged by edits; API metrics
+combine them with the selected speed. Card queries exclude large aggregate lists.
+
+There are no duplicate root status/step or filename fields, provider classification,
+metadata override copies, or separate active/diagnostic slots. The previous storage
+format and GridFS adapters are unsupported; tracks are reuploaded.
+
 ## Storage and processing
 
 The source GPX and analysis are stored under revisioned keys in a private S3 bucket:

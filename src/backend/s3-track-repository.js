@@ -1,51 +1,51 @@
-import { ObjectId } from 'mongodb';
 import { createPublicId } from './public-id.js';
-import { normalizeTrackName } from './track-repository.js';
+import { normalizeTrackName } from './track-contracts.js';
 import { normalizeRouteType } from '../route-types.js';
 import { trackData } from './track-data.js';
 
 const LEASE_MS = 120_000;
+const terminalProcessing = (status) => ({ status, step: null, error: null });
 
-function compact(analysis, sourceKey, analysisKey, revision, originalFilename, analysisSources, completeness) {
-  const data = trackData(analysis);
-  return {
-    revision, sourceKey, analysisKey, originalFilename,
-    ...data,
-    sourcePointCount: analysis.sourcePointCount ?? null,
-    preview: analysis.preview ?? null,
-    analysisSources,
-    completeness,
-    enrichmentSource: analysis.enrichmentSource ?? null,
-  };
+function resultExpression(analysis, analysisKey, sources, completeness, kind) {
+  // User strings and nested GPX values must never become aggregation expressions.
+  return { $mergeObjects: [{ $literal: { kind, analysisKey, ...trackData(analysis),
+    sourcePointCount: analysis.sourcePointCount ?? null, preview: analysis.preview ?? null,
+    sources, completeness } }, { revision: '$processing.revision', sourceKey: '$processing.sourceKey',
+    originalFilename: '$processing.originalFilename' }] };
 }
+
+// Cards need no terrain, POI or distribution collections from MongoDB.
+export const TRACK_CARD_PROJECTION = Object.freeze({ _id: 1, ownerId: 1, publicId: 1, title: 1,
+  routeType: 1, createdAt: 1, externalLinks: 1, speedKmh: 1,
+  'result.metrics': 1, 'result.preview': 1, 'result.sources': 1, 'result.sourceKey': 1,
+  'processing.status': 1, 'processing.step': 1, 'processing.error': 1,
+  'processing.leaseUntil': 1, 'processing.sourceKey': 1 });
+
+export function hasPublishedResult(track) { return track.result?.kind === 'PUBLISHED'; }
 
 export function createS3TrackRepository(tracks, { generatePublicId = createPublicId } = {}) {
   if (!tracks) throw new Error('Tracks collection is required.');
-  const attemptFilter = ({ trackId, ownerId, revision, workerId }) => ({
-    _id: trackId, ownerId, 'attempt.revision': revision, 'attempt.workerId': workerId,
-    'attempt.status': 'PROCESSING',
+  const processingFilter = ({ trackId, ownerId, revision, workerId }) => ({
+    _id: trackId, ownerId, 'processing.revision': revision, 'processing.workerId': workerId,
+    'processing.status': 'PROCESSING',
   });
   return {
     async ensureIndexes() {
-      const existing = await tracks.indexes().catch((error) => {
-        if (error.code === 26) return [];
-        throw error;
-      });
-      if (existing.some((index) => index.name === 'sourceFileId_1')) await tracks.dropIndex('sourceFileId_1');
       await Promise.all([
-        tracks.createIndex({ publicId: 1 }, { unique: true, partialFilterExpression: { publicId: { $type: 'string' } } }),
+        tracks.createIndex({ publicId: 1 }, { unique: true }),
         tracks.createIndex({ ownerId: 1, createdAt: -1 }),
         tracks.createIndex({ ownerId: 1, normalizedName: 1, createdAt: -1 }),
-        tracks.createIndex({ analysisStatus: 1, updatedAt: 1 }),
+        tracks.createIndex({ 'processing.status': 1, updatedAt: 1 }),
       ]);
     },
     async createProcessing({ trackId, ownerId, sourceKey, revision, originalFilename, title, routeType }, now = new Date()) {
       const document = {
-        _id: trackId, schemaVersion: 4, ownerId, originalFilename, title,
+        _id: trackId, schemaVersion: 5, ownerId, title, titleEdited: false,
+        speedKmh: null, externalLinks: {}, result: null,
         routeType: normalizeRouteType(routeType), normalizedName: normalizeTrackName(title),
-        analysisStatus: 'PROCESSING', analysisStep: 'QUEUED',
-        attempt: { revision, sourceKey, originalFilename, kind: 'INITIAL', status: 'PROCESSING',
-          step: 'QUEUED', workerId: null, leaseUntil: new Date(now.getTime() + LEASE_MS), startedAt: now },
+        processing: { ...terminalProcessing('PROCESSING'), revision, sourceKey, originalFilename,
+          step: 'QUEUED', workerId: null,
+          leaseUntil: new Date(now.getTime() + LEASE_MS), startedAt: now },
         createdAt: now, updatedAt: now,
       };
       for (;;) {
@@ -73,117 +73,80 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
       if (before) filter.$or = [
         { createdAt: { $lt: before.createdAt } }, { createdAt: before.createdAt, _id: { $lt: before.id } },
       ];
-      return tracks.find(filter, { projection: { ownerId: 1, publicId: 1, title: 1, routeType: 1,
-        createdAt: 1, externalLinks: 1, analysisStatus: 1, analysisStep: 1, active: 1, diagnostic: 1,
-        'attempt.status': 1, 'attempt.step': 1, 'attempt.error': 1, 'attempt.leaseUntil': 1 } }).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).toArray();
+      return tracks.find(filter, { projection: TRACK_CARD_PROJECTION })
+        .sort({ createdAt: -1, _id: -1 }).limit(limit + 1).toArray();
     },
     claim({ trackId, ownerId, revision, workerId }, now = new Date()) {
       return tracks.findOneAndUpdate(
-        { _id: trackId, ownerId, 'attempt.revision': revision, 'attempt.status': 'PROCESSING',
-          $or: [{ 'attempt.workerId': null }, { 'attempt.leaseUntil': { $lt: now } }] },
-        { $set: { 'attempt.workerId': workerId, 'attempt.leaseUntil': new Date(now.getTime() + LEASE_MS),
-          'attempt.step': 'PARSING', analysisStep: 'PARSING', updatedAt: now } },
-        { returnDocument: 'after' },
+        { _id: trackId, ownerId, 'processing.revision': revision, 'processing.status': 'PROCESSING',
+          $or: [{ 'processing.workerId': null }, { 'processing.leaseUntil': { $lt: now } }] },
+        { $set: { 'processing.workerId': workerId, 'processing.leaseUntil': new Date(now.getTime() + LEASE_MS),
+          'processing.step': 'PARSING', updatedAt: now } }, { returnDocument: 'after' },
       );
     },
     heartbeat(identity, now = new Date()) {
-      return tracks.updateOne(attemptFilter(identity), { $set: {
-        'attempt.leaseUntil': new Date(now.getTime() + LEASE_MS), updatedAt: now,
+      return tracks.updateOne(processingFilter(identity), { $set: {
+        'processing.leaseUntil': new Date(now.getTime() + LEASE_MS), updatedAt: now,
       } });
     },
     setStep(identity, step, now = new Date(), parsedTitle = null) {
-      const fields = { 'attempt.step': step, analysisStep: step, updatedAt: now };
+      const fields = { 'processing.step': step, updatedAt: now };
       if (parsedTitle) {
-        // The edit and the parsed title are applied atomically. A user edit wins.
-        return tracks.findOneAndUpdate(attemptFilter(identity), [{ $set: {
-          ...fields,
-          title: { $ifNull: ['$attempt.metadataOverrides.title', parsedTitle] },
-          normalizedName: { $ifNull: ['$attempt.metadataOverrides.normalizedName', normalizeTrackName(parsedTitle)] },
+        return tracks.findOneAndUpdate(processingFilter(identity), [{ $set: {
+          ...fields, title: { $cond: ['$titleEdited', '$title', { $literal: parsedTitle }] },
+          normalizedName: { $cond: ['$titleEdited', '$normalizedName', { $literal: normalizeTrackName(parsedTitle) }] },
         } }], { returnDocument: 'after' });
       }
-      return tracks.findOneAndUpdate(attemptFilter(identity),
-        { $set: fields }, { returnDocument: 'after' });
+      return tracks.findOneAndUpdate(processingFilter(identity), { $set: fields }, { returnDocument: 'after' });
     },
-    async publish(identity, { analysis, analysisKey, title, analysisSources, completeness = 'FULL' }, now = new Date()) {
-      for (;;) {
-        const previous = await tracks.findOne(attemptFilter(identity));
-        if (!previous) return null;
-        const active = compact(analysis, previous.attempt.sourceKey, analysisKey,
-          identity.revision, previous.attempt.originalFilename, analysisSources, completeness);
-        const override = previous.attempt.metadataOverrides;
-        const retainedMetadata = previous.attempt.kind !== 'INITIAL' && previous.active;
-        const speedKmh = override?.speedKmh ?? (retainedMetadata
-          ? previous.active.metrics.speedKmh : null);
-        if (speedKmh != null) {
-          const duration = active.metrics.distanceKm / speedKmh * 3_600_000;
-          active.metrics.speedKmh = speedKmh;
-          active.metrics.estimatedDurationMs = duration;
-        }
-        const effectiveTitle = override?.title ?? (retainedMetadata ? previous.title : title);
-        const filter = { ...attemptFilter(identity), 'attempt.metadataVersion': previous.attempt.metadataVersion ?? { $exists: false } };
-        const result = await tracks.updateOne(filter, {
-          $set: { active, title: effectiveTitle, normalizedName: normalizeTrackName(effectiveTitle),
-            originalFilename: active.originalFilename, analysisStatus: 'READY', analysisStep: 'COMPLETE',
-            updatedAt: now },
-          $unset: { attempt: '', diagnostic: '' },
-        });
-        if (result.modifiedCount) return previous;
-        // A metadata edit won the race. Read it again before publishing.
-      }
+    publish(identity, { analysis, analysisKey, title, analysisSources, completeness = 'FULL' }, now = new Date()) {
+      const retainTitle = { $or: ['$titleEdited', { $eq: ['$result.kind', 'PUBLISHED'] }] };
+      return tracks.findOneAndUpdate(processingFilter(identity), [{ $set: {
+        result: resultExpression(analysis, analysisKey, analysisSources, completeness, 'PUBLISHED'),
+        title: { $cond: [retainTitle, '$title', { $literal: title }] },
+        normalizedName: { $cond: [retainTitle, '$normalizedName', { $literal: normalizeTrackName(title) }] },
+        processing: { $literal: terminalProcessing('READY') }, updatedAt: now,
+      } }], { returnDocument: 'before' });
     },
-    async fail(identity, { errorCode, failedStep, diagnostic = null }, now = new Date()) {
-      const existing = await tracks.findOne(attemptFilter(identity));
-      if (!existing) return null;
-      const update = { $set: { 'attempt.status': 'FAILED', 'attempt.step': 'FAILED',
-        'attempt.error': { code: errorCode, failedStep }, analysisStep: 'FAILED', updatedAt: now,
-        analysisStatus: existing.active ? 'READY' : 'FAILED' } };
-      if (diagnostic && !existing.active) update.$set.diagnostic = compact(diagnostic.analysis,
-        existing.attempt.sourceKey, diagnostic.analysisKey, identity.revision,
-        existing.attempt.originalFilename, diagnostic.analysisSources, 'PARTIAL');
-      return tracks.findOneAndUpdate(attemptFilter(identity), update, { returnDocument: 'after' });
+    fail(identity, { errorCode, failedStep, diagnostic = null }, now = new Date()) {
+      const fields = { 'processing.status': 'FAILED', 'processing.step': null,
+        'processing.error': { code: errorCode, failedStep }, updatedAt: now };
+      if (diagnostic) fields.result = { $cond: [{ $eq: ['$result.kind', 'PUBLISHED'] }, '$result',
+        resultExpression(diagnostic.analysis, diagnostic.analysisKey, diagnostic.analysisSources, 'PARTIAL', 'DIAGNOSTIC')] };
+      return tracks.findOneAndUpdate(processingFilter(identity), [
+        { $set: fields }, { $unset: ['processing.workerId', 'processing.leaseUntil'] },
+      ], { returnDocument: 'after' });
     },
-    beginAttempt({ trackId, ownerId, revision, sourceKey, originalFilename, kind }, now = new Date()) {
+    beginAttempt({ trackId, ownerId, revision, sourceKey, originalFilename }, now = new Date()) {
       return tracks.findOneAndUpdate({ _id: trackId, ownerId,
-        $or: [{ attempt: { $exists: false } }, { 'attempt.status': 'FAILED' }, { 'attempt.leaseUntil': { $lt: now } }] },
-      [{ $set: { attempt: { revision, sourceKey, originalFilename, kind, status: 'PROCESSING',
-        step: 'QUEUED', workerId: null, leaseUntil: new Date(now.getTime() + LEASE_MS), startedAt: now },
-      analysisStatus: { $cond: [{ $ifNull: ['$active', false] }, 'READY', 'PROCESSING'] },
-      analysisStep: 'QUEUED', updatedAt: now } }], { returnDocument: 'after' });
-    },
-    updateDetails({ trackId, ownerId, title, speedKmh, estimatedDurationMs, routeType, externalLinks }, now = new Date()) {
-      const fields = { updatedAt: now };
-      if (title !== undefined) Object.assign(fields, { title, normalizedName: normalizeTrackName(title) });
-      if (routeType !== undefined) fields.routeType = normalizeRouteType(routeType);
-      if (externalLinks !== undefined) fields.externalLinks = externalLinks;
-      if (speedKmh !== undefined) Object.assign(fields, { 'active.metrics.speedKmh': speedKmh,
-        'active.metrics.estimatedDurationMs': estimatedDurationMs });
-      return tracks.findOneAndUpdate({ _id: trackId, ownerId, active: { $exists: true },
-        $or: [{ attempt: { $exists: false } }, { 'attempt.status': 'FAILED' }] },
-      { $set: fields }, { returnDocument: 'after' });
-    },
-    updateProcessingDetails({ trackId, ownerId, title, speedKmh, routeType, externalLinks }, now = new Date()) {
-      const fields = { updatedAt: now };
-      if (title !== undefined) Object.assign(fields, { title, normalizedName: normalizeTrackName(title),
-        'attempt.metadataOverrides.title': title, 'attempt.metadataOverrides.normalizedName': normalizeTrackName(title) });
-      if (speedKmh !== undefined) fields['attempt.metadataOverrides.speedKmh'] = speedKmh;
-      if (routeType !== undefined) fields.routeType = normalizeRouteType(routeType);
-      if (externalLinks !== undefined) fields.externalLinks = externalLinks;
-      return tracks.findOneAndUpdate({ _id: trackId, ownerId, active: { $exists: false },
-        'attempt.status': 'PROCESSING' }, { $set: fields, $inc: { 'attempt.metadataVersion': 1 } },
+        $or: [{ 'processing.status': { $ne: 'PROCESSING' } }, { 'processing.leaseUntil': { $lt: now } }] },
+      [{ $set: { processing: { $literal: { ...terminalProcessing('PROCESSING'), revision, sourceKey, originalFilename,
+        step: 'QUEUED', workerId: null, leaseUntil: new Date(now.getTime() + LEASE_MS), startedAt: now } },
+      // Preserve the displayed speed when a published route is reprocessed.
+      speedKmh: { $cond: [{ $eq: ['$result.kind', 'PUBLISHED'] },
+        { $ifNull: ['$speedKmh', '$result.metrics.speedKmh'] }, '$speedKmh'] }, updatedAt: now } }],
       { returnDocument: 'after' });
+    },
+    updateDetails({ trackId, ownerId, title, speedKmh, routeType, externalLinks }, now = new Date()) {
+      const fields = { updatedAt: now };
+      if (title !== undefined) Object.assign(fields, { title, normalizedName: normalizeTrackName(title), titleEdited: true });
+      if (speedKmh !== undefined) fields.speedKmh = speedKmh;
+      if (routeType !== undefined) fields.routeType = normalizeRouteType(routeType);
+      if (externalLinks !== undefined) fields.externalLinks = externalLinks;
+      return tracks.findOneAndUpdate({ _id: trackId, ownerId, $or: [
+        { 'result.kind': 'PUBLISHED', 'processing.status': { $ne: 'PROCESSING' } },
+        { 'result.kind': { $ne: 'PUBLISHED' }, 'processing.status': 'PROCESSING' },
+      ] }, { $set: fields }, { returnDocument: 'after' });
     },
     deleteOwned(trackId, ownerId) { return tracks.findOneAndDelete({ _id: trackId, ownerId }); },
   };
 }
 
 export function trackObjectKeys(track) {
-  return [...new Set([track.active?.sourceKey, track.active?.analysisKey,
-    track.attempt?.sourceKey, track.attempt?.analysisKey,
-    track.diagnostic?.sourceKey, track.diagnostic?.analysisKey].filter(Boolean))];
+  return [...new Set([track.result?.sourceKey, track.result?.analysisKey,
+    track.processing?.sourceKey].filter(Boolean))];
 }
 
-export function hasExpiredAttempt(track, now = new Date()) {
-  return track.attempt?.status === 'PROCESSING' && new Date(track.attempt.leaseUntil) < now;
+export function hasExpiredProcessing(track, now = new Date()) {
+  return track.processing?.status === 'PROCESSING' && new Date(track.processing.leaseUntil) < now;
 }
-
-export function asMongoObjectId(id) { return ObjectId.createFromHexString(id); }

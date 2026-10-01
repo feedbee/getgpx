@@ -14,3 +14,17 @@ export class TrackLimitReachedError extends Error {
     this.limit = limit;
   }
 }
+
+export const TRACK_UPLOAD_LIMITS = Object.freeze({ maxBytes: 25 * 1024 * 1024, maxPoints: 100_000 });
+
+export function normalizeTrackName(name) {
+  return name.normalize('NFKC').trim().toLocaleLowerCase('ru-RU');
+}
+
+export class GpxFileTooLargeError extends Error {
+  constructor(maxBytes) {
+    super(`GPX file exceeds the ${maxBytes} byte limit.`);
+    this.name = 'GpxFileTooLargeError';
+    this.code = 'GPX_FILE_TOO_LARGE';
+  }
+}

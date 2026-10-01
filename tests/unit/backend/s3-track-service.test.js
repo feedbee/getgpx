@@ -6,8 +6,8 @@ function fixture({ parsedName = 'Ride', enrichAnalysis = async (analysis) => ({ 
   const calls = [];
   const jobs = [];
   const track = { _id: '0123456789abcdef01234567', publicId: 'publicTrackId00000001', ownerId: 'owner',
-    title: 'Ride', createdAt: new Date(), analysisStatus: 'PROCESSING',
-    attempt: { revision: 'revision', sourceKey: 'dev/tracks/0123456789abcdef01234567/revision/source.gpx',
+    title: 'Ride', createdAt: new Date(),
+    processing: { revision: 'revision', sourceKey: 'dev/tracks/0123456789abcdef01234567/revision/source.gpx',
       originalFilename: 'ride.gpx', status: 'PROCESSING', kind: 'INITIAL', step: 'QUEUED' } };
   const repository = {
     countOwned: vi.fn(async () => 0),
@@ -20,7 +20,7 @@ function fixture({ parsedName = 'Ride', enrichAnalysis = async (analysis) => ({ 
   };
   const store = {
     assertKey: vi.fn((key) => key),
-    writeSource: vi.fn(async () => { calls.push('s3-source'); return track.attempt.sourceKey; }),
+    writeSource: vi.fn(async () => { calls.push('s3-source'); return track.processing.sourceKey; }),
     readSource: vi.fn(async () => '<gpx/>'),
     writeAnalysis: vi.fn(async () => { calls.push('s3-analysis'); return 'analysis-key'; }),
     openRead: vi.fn(async () => Readable.from('{}')),
@@ -100,25 +100,25 @@ describe('S3 track service', () => {
 
   it('accepts metadata edits before the first analysis is ready', async () => {
     const { service, repository, track } = fixture();
-    repository.updateProcessingDetails = vi.fn(async ({ title, routeType, externalLinks }) => ({
+    repository.updateDetails = vi.fn(async ({ title, routeType, externalLinks }) => ({
       ...track, title, routeType, externalLinks,
     }));
     const result = await service.updateDetails({ publicId: track.publicId, ownerId: track.ownerId,
       title: 'Edited during upload', speedKmh: 25, routeType: 'road-cycling', externalLinks: {} });
     expect(result.title).toBe('Edited during upload');
-    expect(repository.updateProcessingDetails).toHaveBeenCalledWith(expect.objectContaining({ speedKmh: 25 }));
+    expect(repository.updateDetails).toHaveBeenCalledWith(expect.objectContaining({ speedKmh: 25 }));
   });
 
   it('retries a metadata edit when the first publication wins the race', async () => {
     const { service, repository, track } = fixture();
-    const ready = { ...track, attempt: undefined, active: { metrics: { distanceKm: 10 } } };
+    const ready = { ...track, processing: { status: 'READY', step: null, error: null }, result: { kind: 'PUBLISHED', metrics: { distanceKm: 10 } } };
     repository.findOwnedByPublicId.mockResolvedValueOnce(track).mockResolvedValueOnce(ready);
-    repository.updateProcessingDetails = vi.fn().mockResolvedValueOnce(null);
-    repository.updateDetails = vi.fn(async () => ({ ...ready, title: 'Edited' }));
+    repository.updateDetails = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ ...ready, title: 'Edited' });
     const result = await service.updateDetails({ publicId: track.publicId, ownerId: track.ownerId,
       title: 'Edited', speedKmh: 20, routeType: 'cycling', externalLinks: {} });
     expect(result.title).toBe('Edited');
-    expect(repository.updateDetails).toHaveBeenCalledWith(expect.objectContaining({ estimatedDurationMs: 1_800_000 }));
+    expect(repository.updateDetails).toHaveBeenCalledTimes(2);
+    expect(repository.updateDetails).toHaveBeenCalledWith(expect.objectContaining({ speedKmh: 20 }));
   });
 
   it('marks a failed analysis and stores usable diagnostic data separately', async () => {
@@ -130,10 +130,10 @@ describe('S3 track service', () => {
       schedule: (job) => jobs.push(job), warn: vi.fn() });
     await service.upload({ ownerId: 'owner', filename: 'ride.gpx', routeType: 'cycling', source: Readable.from('GPX') });
     await jobs[0]();
-    expect(store.writeAnalysis).toHaveBeenCalledWith(expect.objectContaining({ status: 'FAILED', completeness: 'PARTIAL' }));
+    expect(store.writeAnalysis).toHaveBeenCalledWith(expect.objectContaining({ completeness: 'PARTIAL' }));
     expect(repository.fail).toHaveBeenCalledWith(expect.anything(),
       expect.objectContaining({ errorCode: 'ENRICHMENT_UNAVAILABLE', diagnostic: expect.any(Object) }), expect.any(Date));
-    expect(track.active).toBeUndefined();
+    expect(track.result).toBeUndefined();
   });
 
   it('does not publish READY when the analysis object upload fails', async () => {
@@ -157,13 +157,13 @@ describe('S3 track service', () => {
 
   it('reads basic metrics and list cards without opening S3', async () => {
     const { service, repository, store, track } = fixture();
-    track.analysisStatus = 'READY';
-    track.active = { revision: 'active', sourceKey: 'source', analysisKey: 'analysis',
+    track.processing = { status: 'READY', step: null, error: null };
+    track.result = { kind: 'PUBLISHED', revision: 'active', sourceKey: 'source', analysisKey: 'analysis',
       metrics: { distanceKm: 25, ascentM: 300, descentM: 280, effectiveSpeedKmh: 20, estimatedDurationMs: 4_500_000 },
       summary: { metrics: { distanceKm: 25 }, distributions: { surfaces: [], wayTypes: [], roadQualities: [] },
         climbs: [], descents: [] },
       preview: [{ lat: 50, lon: 20 }, { lat: 51, lon: 21 }] };
-    delete track.attempt;
+    track.processing = { status: 'READY', step: null, error: null };
     repository.listOwned = vi.fn(async () => [track]);
     const basic = await service.getPublicTrack(track.publicId);
     const list = await service.listMyTracks({ ownerId: 'owner' });
@@ -179,12 +179,12 @@ describe('S3 track service', () => {
 
   it('keeps the active version visible while a replacement is queued', async () => {
     const { service, repository, store, track } = fixture();
-    track.active = { revision: 'active', sourceKey: 'old-source', analysisKey: 'old-analysis',
+    track.result = { kind: 'PUBLISHED', revision: 'active', sourceKey: 'old-source', analysisKey: 'old-analysis',
       originalFilename: 'old.gpx', metrics: { distanceKm: 10 } };
-    track.analysisStatus = 'READY';
-    track.attempt.status = 'FAILED';
+    track.processing = { status: 'READY', step: null, error: null };
+    track.processing.status = 'FAILED';
     repository.beginAttempt = vi.fn(async () => {
-      track.attempt = { ...track.attempt, revision: 'replacement', status: 'PROCESSING', kind: 'REPLACE' };
+      track.processing = { ...track.processing, revision: 'replacement', status: 'PROCESSING', kind: 'REPLACE' };
       return track;
     });
     await service.replaceFile({ publicId: track.publicId, ownerId: 'owner', filename: 'new.gpx', source: Readable.from('GPX') });

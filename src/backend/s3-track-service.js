@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { ObjectId } from 'mongodb';
 import { DEFAULT_USER_TIERS } from './configuration.js';
 import { TrackLimitReachedError, EXTERNAL_ANALYSIS_TIMEOUT_MS } from './track-contracts.js';
-import { hasExpiredAttempt, trackObjectKeys } from './s3-track-repository.js';
-import { PAGE_SIZE, cursorOf, decodeCursor, titleFromFilename, resultOf, statusOf, publicTrack, card, homepage } from './s3-track-presenters.js';
+import { hasExpiredProcessing, hasPublishedResult, trackObjectKeys } from './s3-track-repository.js';
+import { PAGE_SIZE, cursorOf, decodeCursor, titleFromFilename, statusOf, publicTrack, card, homepage } from './s3-track-presenters.js';
 import { logger } from './logger.js';
 import { safeErrorDetails } from './safe-error-details.js';
 import { createS3TrackProcessor } from './s3-track-processor.js';
@@ -31,11 +31,11 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
   async function fileDescriptor(publicId, kind, identity = null) {
     const track = await findReadable(publicId, identity);
     if (!track) return null;
-    const result = resultOf(track);
-    const key = kind === 'analysis' ? result?.analysisKey : result?.sourceKey || track.attempt?.sourceKey;
+    const result = track.result;
+    const key = kind === 'analysis' ? result?.analysisKey : result?.sourceKey || track.processing?.sourceKey;
     if (key) objectStore.assertKey(key);
-    return { key: key || null, revision: result?.revision || track.attempt?.revision,
-      filename: result?.originalFilename || track.attempt?.originalFilename };
+    return { key: key || null, revision: result?.revision || track.processing?.revision,
+      filename: result?.originalFilename || track.processing?.originalFilename };
   }
   async function deleteTrack(track) {
     const removed = await trackRepository.deleteOwned(track._id, track.ownerId);
@@ -105,17 +105,12 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
       for (let attempt = 0; attempt < 2; attempt++) {
         const existing = await trackRepository.findOwnedByPublicId(publicId, ownerId);
         if (!existing) return null;
-        if (existing.active && existing.attempt?.status === 'PROCESSING') {
+        if (hasPublishedResult(existing) && existing.processing?.status === 'PROCESSING') {
           const conflict = new Error('Track processing is in progress.');
           conflict.code = 'TRACK_EDIT_CONFLICT';
           throw conflict;
         }
-        const updated = !existing.active && existing.attempt?.status === 'PROCESSING'
-          ? await trackRepository.updateProcessingDetails({ trackId: existing._id, ownerId, ...changes })
-          : existing.active ? await trackRepository.updateDetails({ trackId: existing._id, ownerId, ...changes,
-            ...(changes.speedKmh === undefined ? {} : {
-              estimatedDurationMs: existing.active.metrics.distanceKm / changes.speedKmh * 3_600_000,
-            }) }) : null;
+        const updated = await trackRepository.updateDetails({ trackId: existing._id, ownerId, ...changes });
         if (updated) {
           const uploader = userRepository?.findPublicProfileById
             ? await userRepository.findPublicProfileById(updated.ownerId) : null;
@@ -129,22 +124,24 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
       onStage('track_lookup');
       const existing = await trackRepository.findOwnedByPublicId(publicId, ownerId);
       if (!existing) { const error = new Error('Track not found'); error.code = 'TRACK_NOT_FOUND'; throw error; }
-      if (existing.attempt?.status === 'PROCESSING' && !hasExpiredAttempt(existing)) return null;
+      if (existing.processing?.status === 'PROCESSING' && !hasExpiredProcessing(existing)) return null;
       const revision = randomUUID();
       onStage('source_upload');
       const sourceKey = await objectStore.writeSource({ trackId: String(existing._id), revision, source });
       try {
         onStage('track_record_create');
         const track = await trackRepository.beginAttempt({ trackId: existing._id, ownerId, revision,
-          sourceKey, originalFilename: filename, kind: 'REPLACE' }, now());
+          sourceKey, originalFilename: filename }, now());
         if (!track) { await cleanup([sourceKey]); return null; }
+        const retained = new Set(trackObjectKeys(track));
+        await cleanup(trackObjectKeys(existing).filter((key) => !retained.has(key)));
         onStage('processing_schedule');
         scheduleProcessing(track);
         return statusOf(track);
       } catch (error) {
         try {
           const current = await trackRepository.findById(existing._id);
-          if (current?.attempt?.revision !== revision) await cleanup([sourceKey]);
+          if (current?.processing?.revision !== revision) await cleanup([sourceKey]);
         } catch (lookupError) {
           warn({ event: 'track_replacement_cleanup_check_failed', trackId: String(existing._id), revision,
             ...safeErrorDetails(lookupError) });
@@ -155,23 +152,24 @@ export function createS3TrackService({ trackRepository, objectStore, enrichmentC
     async retryAnalysis({ publicId, ownerId }) {
       const existing = await trackRepository.findOwnedByPublicId(publicId, ownerId);
       if (!existing) { const error = new Error('Track not found'); error.code = 'TRACK_NOT_FOUND'; throw error; }
-      if (existing.attempt?.status === 'PROCESSING' && !hasExpiredAttempt(existing)) return null;
-      if (!existing.attempt && existing.active?.enrichmentSource !== 'VALHALLA') return null;
-      const from = existing.attempt?.sourceKey || existing.active?.sourceKey;
+      if (existing.processing?.status === 'PROCESSING' && !hasExpiredProcessing(existing)) return null;
+      if (!statusOf(existing).canRetry) return null;
+      const from = existing.processing?.sourceKey || existing.result?.sourceKey;
       if (!from) return null;
       const revision = randomUUID();
       const sourceKey = await objectStore.copySource({ fromKey: from, trackId: String(existing._id), revision });
       try {
         const track = await trackRepository.beginAttempt({ trackId: existing._id, ownerId, revision,
-          sourceKey, originalFilename: existing.attempt?.originalFilename || existing.active.originalFilename,
-          kind: existing.attempt?.kind === 'REPLACE' ? 'REPLACE' : 'RETRY' }, now());
+          sourceKey, originalFilename: existing.processing?.originalFilename || existing.result.originalFilename }, now());
         if (!track) { await cleanup([sourceKey]); return null; }
+        const retained = new Set(trackObjectKeys(track));
+        await cleanup(trackObjectKeys(existing).filter((key) => !retained.has(key)));
         scheduleProcessing(track);
         return statusOf(track);
       } catch (error) {
         try {
           const current = await trackRepository.findById(existing._id);
-          if (current?.attempt?.revision !== revision) await cleanup([sourceKey]);
+          if (current?.processing?.revision !== revision) await cleanup([sourceKey]);
         } catch (lookupError) {
           warn({ event: 'track_retry_cleanup_check_failed', trackId: String(existing._id), revision,
             ...safeErrorDetails(lookupError) });

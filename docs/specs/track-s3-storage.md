@@ -1,7 +1,7 @@
 # Track storage and delivery through S3
 
 Status: accepted; application implementation present, infrastructure acceptance pending.
-Updated: 2026-09-24.
+Updated: 2026-10-01.
 
 This document defines the application behavior. The user's latest decisions
 supersede the earlier drafts: accept at most 100,000 route points, retain the
@@ -13,7 +13,7 @@ Do not edit `docs/changes/`.
 
 ## Objective and scope
 
-Move original GPX files and detailed track analysis from MongoDB/GridFS into S3.
+Store original GPX files and detailed track analysis in S3.
 Keep searchable metadata, basic numerical metrics, processing state, and compact
 card previews in MongoDB. Lists and basic track information must work without S3
 reads. The detailed page obtains basic information and detailed analysis in two
@@ -37,24 +37,6 @@ are separate operational work. Do not delete users or sessions.
 No orphan-object sweeper, revision-history UI, private-track feature, or external
 job queue is included. No additional analysis-size or total-route-distance limit
 is introduced. Existing public visibility and owner-only mutations remain.
-
-## Implementation findings before this change
-
-- `track-persistence.js` creates a GridFS adapter. Complete and intermediate analysis,
-  including pending replacement analysis, are stored in MongoDB.
-- `track-analysis.js` initially calculates basic metrics from all accepted points,
-  then reduces the geometry to 10,000 points before subsequent enrichment and storage.
-  The existing hard limit is 500,000 route points and the file limit is 25 MiB.
-- `valhalla.js` additionally samples the entire track down to 2,000 points before
-  splitting by distance (default 200 km). The elevation request is currently unbatched;
-  Overpass currently receives all unique way IDs in one request.
-- Current previews sample uniformly and scale their two axes independently.
-- Track detail embeds analysis in `GET /api/v1/tracks/:id`. The homepage embeds full
-  analysis for its first track; the optional homepage cache retains that payload.
-- Valhalla failure leaves a FAILED track with a basic map. Successful Valhalla with
-  unavailable Overpass produces READY with a warning and a retry action.
-- Processing uses in-process jobs and revision-guarded updates. Durable recovery of
-  an interrupted job is currently missing.
 
 ## Data retention and provider requests
 
@@ -168,44 +150,48 @@ internal storage locations, provider error bodies or secrets in analysis.
 
 ## MongoDB model
 
-Keep schemaVersion, ownerId, publicId, title, normalizedName, routeType, externalLinks,
-timestamps, basic metrics, preview, sourcePointCount, pointsOfInterestCount,
-source/provenance statuses, and current object references. The active route data also
-stores point-free POI names, types, and distances. Do not persist route points,
-POI coordinates, segment arrays, or full/partial analysis in the track document.
+Track documents use schemaVersion 5 and have three responsibilities:
 
-Logical state groups:
+- Editable metadata: title, routeType, externalLinks and speedKmh. A null speed
+  selects the analyzed source speed and initial expected duration. Once a user
+  chooses a speed, expected duration is computed from distance and that speed.
+- `result`: one available immutable route-data snapshot or null. Its internal kind
+  is PUBLISHED or DIAGNOSTIC. It contains revision, sourceKey, analysisKey,
+  originalFilename, metrics, distributions, climbs, descents, pointsOfInterest,
+  coordinate preview, sourcePointCount, sources and completeness. Shared data types
+  match the API and S3 document. No route-point array is stored in MongoDB.
+- `processing`: the current attempt status, step and error. During processing or
+  after failure it also holds revision, sourceKey, originalFilename,
+  start time; worker identity and lease exist only during processing. After publication it contains only
+  READY, null step and null error. Failures discard worker and lease fields.
 
-- `active`: the last successfully published revision, sourceKey, analysisKey,
-  originalFilename, basic metrics, canonical route data, preview, and provenance. Absent before first success.
-- `attempt`: unique revision token, sourceKey, originalFilename, kind
-  (`INITIAL`, `REPLACE`, `RETRY`), status, step, safe error code, start/update times,
-  and worker lease information. Optional analysisKey only after a complete JSON write.
-- `diagnostic`: the last completely written partial FAILED snapshot needed to display
-  a first-upload failure or preserve that display while retrying. Holds references
-  and canonical route data/provenance only. It never replaces an existing active result.
+Identity and ownership use `_id`, publicId and ownerId; createdAt and updatedAt
+are MongoDB dates. normalizedName supports search. titleEdited records that the
+owner's title must win over a parsed GPX title. Atomic publication evaluates that
+flag and the current title in the same update. These operational fields are excluded from the API.
 
-A READY active version remains READY while a replacement/retry is PROCESSING or
-FAILED. Publish attempt state separately so the owner can see pending work or errors.
-With no active version, status is PROCESSING or FAILED; a diagnostic map must not
-make that status READY. A diagnostic snapshot retained during retry remains visibly
-partial and associated with its failed attempt, not with unfinished current work.
+The result describes available data; processing describes current work. Replacing
+or retrying leaves the result intact until a new object has been stored and atomically
+published. Diagnostic data can remain visible during retry but is never treated as
+a successfully published revision. A failed replacement preserves the published
+result and retains its own source for retry. All worker writes filter by track ID,
+owner, processing revision, status and worker ID; they never upsert.
 
-All worker writes and final commits filter by track id, owner, attempt token,
-expected state, and lease ownership. Never upsert from an analysis completion.
-A deleted record cannot be recreated and an old job cannot complete a newer attempt.
+Sources are stored once as `sources`. Retry eligibility and completeness are
+interpreted from provenance and processing outcome, without a separate stored
+provider classification. Original filenames belong to the file revision or attempt.
+Editable speed is stored once at the root and projected into API metrics; it does
+not mutate source metrics or rewrite S3 analysis. Reprocessing a published result
+retains its displayed speed and title. Initial metadata edits survive parsing and
+publication. Metadata edits during published-result processing return 409.
 
-Existing public-id, owner/name/order, status, and saved-track indexes retain their
-purposes; remove obsolete GridFS references/indexes from the new model. Update list
-projections and saved-track aggregations to read compact fields directly.
+Indexes cover publicId uniqueness, owner/order, owner/name/order and processing
+status/update time. Card queries and favorites aggregation select only their small
+field subset, excluding terrain, POI and distribution collections. Object keys and
+all worker/ownership fields are removed by the API response projection.
 
-Title, route type, external links, effective speed, and estimated duration remain
-editable according to existing validation. PATCH updates MongoDB only, without
-reading or rewriting S3. Reject metadata edits while a processing attempt is active
-with 409 when an active revision already exists. During initial processing, allow
-metadata edits and preserve them through parsed-title updates and publication.
-Replacement keeps the current behavior of deriving the new title/speed from the new GPX while
-preserving track identity, owner, route type, and external links.
+There is no reader or migration path for earlier storage representations. Tracks
+must be reuploaded before using this schema.
 
 ## Processing, publication, and failures
 
