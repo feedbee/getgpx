@@ -34,6 +34,8 @@ function distanceKm(first, second) {
 }
 
 function splitValhallaPayload(payload, originalIndexes, maxDistanceKm) {
+  // Provider distance calculations differ; avoid requests at the exact limit.
+  const targetDistanceKm = maxDistanceKm * 0.99;
   if (payload.shape.length < 2) return [{ payload, originalIndexes }];
   const chunks = [];
   for (let start = 0; start < payload.shape.length - 1;) {
@@ -41,7 +43,7 @@ function splitValhallaPayload(payload, originalIndexes, maxDistanceKm) {
     let lengthKm = distanceKm(payload.shape[start], payload.shape[end]);
     while (end + 1 < payload.shape.length) {
       const nextKm = distanceKm(payload.shape[end], payload.shape[end + 1]);
-      if (lengthKm + nextKm > maxDistanceKm) break;
+      if (lengthKm + nextKm > targetDistanceKm) break;
       lengthKm += nextKm;
       end += 1;
     }
@@ -156,7 +158,16 @@ export async function matchTrackWithValhalla(points, {
           body: JSON.stringify(chunk.payload),
           signal,
         });
-        if (!response.ok) throw new Error(`Valhalla HTTP ${response.status}`);
+        if (!response.ok) {
+          const error = new Error(`Valhalla HTTP ${response.status}`);
+          try {
+            const details = await response.json();
+            if (Number.isSafeInteger(details?.error_code)) error.code = details.error_code;
+          } catch {
+            // Non-JSON errors still retain their HTTP status. Never retain provider text.
+          }
+          throw error;
+        }
         results[index] = normalizeValhallaMatch(await response.json(), chunk.originalIndexes);
       } catch (error) {
         failed = true;

@@ -18,7 +18,8 @@ export default defineConfig(({ command, mode }) => {
     name: 'authentication-api',
     async configureServer(server) {
       if (environment.LOG_LEVEL) logger.level = environment.LOG_LEVEL;
-      for (const name of ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_PROFILE']) {
+      for (const name of ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_PROFILE',
+        'VALHALLA_URL', 'VALHALLA_MAX_SEGMENT_KM', 'ELEVATION_URL', 'OVERPASS_URL']) {
         if (environment[name]) process.env[name] = environment[name];
       }
       server.middlewares.use(createRequestLogger());

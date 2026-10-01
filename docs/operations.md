@@ -32,7 +32,8 @@ Failed refreshes produce a structured warning and retain the last successful res
 if the cache has never loaded, a homepage request reads the database and fills it on
 success. Each process has its own cache and timer.
 
-Road matching splits tracks at `VALHALLA_MAX_SEGMENT_KM` (default 200 km). Up to two
+Road matching splits tracks below `VALHALLA_MAX_SEGMENT_KM` (default 200 km),
+reserving 1% distance headroom for differences in provider calculations. Up to two
 segments run concurrently. Requests to the public `valhalla*.openstreetmap.de`
 service start at least one second apart across this process, including elevation
 requests, to respect its published per-user rate limit. A configured private

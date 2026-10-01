@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createValhallaPayload, fetchTrackElevations, matchTrackWithValhalla, normalizeValhallaMatch } from '../../../src/backend/valhalla.js';
+import { analysisFailure } from '../../../src/backend/analysis-warning.js';
 
 describe('createValhallaPayload', () => {
   it('downsamples long tracks while preserving first and last original indexes', () => {
@@ -15,6 +16,27 @@ describe('createValhallaPayload', () => {
 });
 
 describe('matchTrackWithValhalla', () => {
+  it('leaves distance headroom below the provider limit', async () => {
+    const points = [0, 99.5, 199].map((km) => ({ lat: 50 + km / 111.19492664455873, lon: 19 }));
+    const fetchImplementation = vi.fn(async (_url, request) => {
+      const { shape } = JSON.parse(request.body);
+      return { ok: true, json: async () => ({ edges: [{}], matched_points: shape.map(() => ({ edge_index: 0 })) }) };
+    });
+    const matches = await matchTrackWithValhalla(points, { endpoint: 'https://valhalla.example/trace_attributes', fetchImplementation, maxDistanceKm: 200 });
+    expect(fetchImplementation).toHaveBeenCalledTimes(2);
+    expect(matches.map(({ pointIndex }) => pointIndex)).toEqual([0, 1, 2]);
+  });
+
+  it('preserves only the safe provider error code for diagnostics', async () => {
+    const fetchImplementation = vi.fn(async () => ({ ok: false, status: 400,
+      json: async () => ({ error_code: 154, error: 'private route data' }) }));
+    const error = await matchTrackWithValhalla([{ lat: 50, lon: 19 }, { lat: 50.01, lon: 19 }], {
+      endpoint: 'https://valhalla.example/trace_attributes', fetchImplementation,
+    }).catch((error) => error);
+    expect(analysisFailure(error)).toMatchObject({ reason: 'VALHALLA_HTTP_400', errorCode: 154 });
+    expect(error.message).toBe('Valhalla HTTP 400');
+  });
+
   it('splits a long trace into overlapping requests and keeps original point indexes', async () => {
     const points = Array.from({ length: 7 }, (_, index) => ({ lat: 50 + index * 0.3, lon: 19 }));
     const fetchImplementation = vi.fn().mockImplementation(async (_url, request) => {
