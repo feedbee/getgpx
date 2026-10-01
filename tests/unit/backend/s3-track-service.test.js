@@ -109,15 +109,15 @@ describe('S3 track service', () => {
     expect(repository.updateDetails).toHaveBeenCalledWith(expect.objectContaining({ speedKmh: 25 }));
   });
 
-  it('retries a metadata edit when the first publication wins the race', async () => {
+  it('accepts edits while a published track is being replaced', async () => {
     const { service, repository, track } = fixture();
     const ready = { ...track, processing: { status: 'READY', step: null, error: null }, result: { kind: 'PUBLISHED', metrics: { distanceKm: 10 } } };
-    repository.findOwnedByPublicId.mockResolvedValueOnce(track).mockResolvedValueOnce(ready);
-    repository.updateDetails = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({ ...ready, title: 'Edited' });
+    repository.findOwnedByPublicId.mockResolvedValueOnce({ ...ready, processing: { status: 'PROCESSING' } });
+    repository.updateDetails = vi.fn().mockResolvedValueOnce({ ...ready, title: 'Edited' });
     const result = await service.updateDetails({ publicId: track.publicId, ownerId: track.ownerId,
       title: 'Edited', speedKmh: 20, routeType: 'cycling', externalLinks: {} });
     expect(result.title).toBe('Edited');
-    expect(repository.updateDetails).toHaveBeenCalledTimes(2);
+    expect(repository.updateDetails).toHaveBeenCalledTimes(1);
     expect(repository.updateDetails).toHaveBeenCalledWith(expect.objectContaining({ speedKmh: 20 }));
   });
 

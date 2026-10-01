@@ -294,8 +294,8 @@ describeWithMongo('MongoDB S3 track contract', () => {
       await service.replaceFile({ publicId, ownerId, filename: 'replacement.gpx',
         source: Readable.from(source('Replacement name', 50.02)) });
       expect((await service.getPublicTrack(publicId)).revision).toBe(initial.revision);
-      await expect(service.updateDetails({ publicId, ownerId, title: 'Conflict' }))
-        .rejects.toMatchObject({ code: 'TRACK_EDIT_CONFLICT' });
+      await service.updateDetails({ publicId, ownerId, title: 'Updated during replacement',
+        routeType: 'hiking', speedKmh: 25, externalLinks: { strava: 'https://www.strava.com/routes/123' } });
       await jobs.shift()();
       const failed = await service.getPublicTrack(publicId);
       expect(failed.processing).toMatchObject({ status: 'FAILED', canRetry: true });
@@ -305,7 +305,8 @@ describeWithMongo('MongoDB S3 track contract', () => {
       await service.retryAnalysis({ publicId, ownerId });
       await jobs.shift()();
       const retried = await service.getPublicTrack(publicId);
-      expect(retried).toMatchObject({ title: 'My title', metrics: { speedKmh: 25 }, processing: { status: 'READY' } });
+      expect(retried).toMatchObject({ title: 'Updated during replacement', routeType: 'hiking',
+        externalLinks: { strava: 'https://www.strava.com/routes/123' }, metrics: { speedKmh: 25 }, processing: { status: 'READY' } });
       expect(retried.metrics.distanceKm).toBeGreaterThan(initial.metrics.distanceKm);
       expect(retried.revision).not.toBe(initial.revision);
       expect(objects.size).toBe(2);

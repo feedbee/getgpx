@@ -3,7 +3,7 @@ import { createUploadFlow } from '../../../src/client/track-upload-flow.js';
 
 function fakeDocument() {
   const elements = new Map();
-  const element = () => ({ hidden: true, dataset: {}, elements: [], classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn() },
+  const element = () => ({ hidden: true, dataset: {}, elements: [], replaceChildren: vi.fn(), classList: { add: vi.fn(), remove: vi.fn(), toggle: vi.fn() },
     querySelector: () => element() });
   return {
     querySelector(selector) {
@@ -40,7 +40,7 @@ describe('track upload flow', () => {
     }
   });
 
-  it('hides stale editors throughout replacement and only loads metadata after READY', async () => {
+  it.each(['create', 'replace'])('allows saving metadata after parsing during %s', async (operation) => {
     vi.useFakeTimers();
     try {
       const documentRef = fakeDocument();
@@ -48,28 +48,48 @@ describe('track upload flow', () => {
       documentRef.querySelector('#upload-metadata-error').hidden = false;
       documentRef.querySelector('#open-uploaded-track').hidden = false;
       const api = {
+        upload: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { id: 'track-1', step: 'QUEUED' } }) }),
         replace: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { step: 'QUEUED' } }) }),
         status: vi.fn()
           .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { status: 'PROCESSING', step: 'ENRICHING' } }) })
           .mockResolvedValueOnce({ ok: true, json: async () => ({ data: { status: 'READY' } }) }),
-        publicTrack: vi.fn().mockResolvedValue({ ok: false }),
-        update: vi.fn(),
+        publicTrack: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: {
+          title: 'Parsed title', routeType: 'cycling', metrics: { speedKmh: 20 }, externalLinks: {} } }) }),
+        update: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: {
+          title: 'Parsed title', routeType: 'hiking', externalLinks: {} } }) }),
       };
       const flow = createUploadFlow({ trackApi: api, isAuthenticated: () => true,
         getPublicTrackId: () => 'track-1', documentRef });
-      const replacement = flow.replaceTrackFile({ name: 'new.gpx' });
+      const replacement = operation === 'create' ? flow.uploadFile({ name: 'new.gpx' })
+        : flow.replaceTrackFile({ name: 'new.gpx' });
       expect(documentRef.querySelector('#upload-metadata').hidden).toBe(true);
       expect(documentRef.querySelector('#upload-metadata-error').hidden).toBe(true);
       expect(documentRef.querySelector('#open-uploaded-track').hidden).toBe(true);
-      expect(documentRef.querySelector('#processing-title').textContent).toBe('Replacing GPX file');
+      expect(documentRef.querySelector('#processing-title').textContent).toBe(operation === 'create' ? 'Creating track' : 'Replacing GPX file');
       await vi.advanceTimersByTimeAsync(900);
-      expect(api.publicTrack).not.toHaveBeenCalled();
-      expect(await flow.saveUploadMetadata({ routeType: 'hiking' })).toBe(false);
-      expect(api.update).not.toHaveBeenCalled();
+      expect(documentRef.querySelector('#upload-metadata').hidden).toBe(false);
+      expect(documentRef.querySelector('#upload-track-title').value).toBe('Parsed title');
+      documentRef.querySelector('#upload-title-form').hidden = false;
+      documentRef.querySelector('#upload-track-title').value = 'Unsaved title';
+      expect(await flow.saveUploadMetadata({ routeType: 'hiking' })).toBe(true);
+      expect(documentRef.querySelector('#upload-track-title').value).toBe('Unsaved title');
+      expect(api.update).toHaveBeenCalledWith({ id: 'track-1', details: { routeType: 'hiking' } });
+      let completeSave;
+      api.update.mockImplementationOnce(() => new Promise(resolve => { completeSave = () => resolve({
+        ok: true, json: async () => ({ data: { title: 'Saved title', routeType: 'hiking', externalLinks: {} } }),
+      }); }));
+      const firstSave = flow.saveUploadMetadata({ title: 'Saved title' });
+      const secondSave = flow.saveUploadMetadata({ links: {} });
+      await Promise.resolve();
+      expect(api.update).toHaveBeenCalledTimes(2);
+      completeSave();
+      await Promise.all([firstSave, secondSave]);
+      expect(api.update).toHaveBeenNthCalledWith(2, { id: 'track-1', details: { title: 'Saved title' } });
+      expect(api.update).toHaveBeenNthCalledWith(3, { id: 'track-1', details: { externalLinks: {} } });
       await vi.advanceTimersByTimeAsync(900);
       await replacement;
       expect(api.publicTrack).toHaveBeenCalledOnce();
-      expect(documentRef.querySelector('#processing-title').textContent).toBe('GPX file replaced');
+      expect(documentRef.querySelector('#processing-title').textContent).toBe(operation === 'create' ? 'Track created' : 'GPX file replaced');
     } finally { vi.useRealTimers(); }
   });
 

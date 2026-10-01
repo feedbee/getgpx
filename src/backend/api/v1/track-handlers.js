@@ -180,14 +180,7 @@ export function createTrackHandlers(trackService, authService, { delivery = 'str
         }
         changes.externalLinks = links;
       }
-      let track;
-      try { track = await trackService.updateDetails({ publicId, ownerId, ...changes }); }
-      catch (updateError) {
-        if (updateError?.code === 'TRACK_EDIT_CONFLICT') {
-          return error(response, 409, 'TRACK_EDIT_CONFLICT', 'Дождитесь окончания обработки трека.');
-        }
-        throw updateError;
-      }
+      const track = await trackService.updateDetails({ publicId, ownerId, ...changes });
       return track ? send(response, 200, { data: track }) : error(response, 404, 'TRACK_NOT_FOUND', 'Трек не найден.');
     },
 

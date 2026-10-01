@@ -183,7 +183,7 @@ provider classification. Original filenames belong to the file revision or attem
 Editable speed is stored once at the root and projected into API metrics; it does
 not mutate source metrics or rewrite S3 analysis. Reprocessing a published result
 retains its displayed speed and title. Initial metadata edits survive parsing and
-publication. Metadata edits during published-result processing return 409.
+publication. Metadata edits are accepted during processing, independently of available results.
 
 Indexes cover publicId uniqueness, owner/order, owner/name/order and processing
 status/update time. Card queries and favorites aggregation select only their small

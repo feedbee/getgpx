@@ -47,7 +47,7 @@ also returns a status URL in `Location`.
 
 `PATCH /tracks/{id}` accepts any nonempty subset of `title`, `routeType`, `speedKmh`
 and `externalLinks`. Omitted top-level fields are preserved. A supplied externalLinks object replaces
-all links. An empty links object clears
+all links. Edits persist immediately during processing and survive publication. An empty links object clears
 links. Unknown fields and invalid values return 422. Speed changes recalculate
 estimated duration without changing the source analysis.
 

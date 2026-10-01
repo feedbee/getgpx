@@ -9,6 +9,7 @@ export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, 
   let activeTrackId = null;
   let metadata = null;
   let operation = 'create';
+  let metadataSaves = Promise.resolve();
 
   function prepareProcessing(action) {
     operation = action;
@@ -62,8 +63,11 @@ export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, 
   function renderUploadMetadata() {
     if (!metadata) return;
     documentRef.querySelector('#upload-metadata').hidden = false;
+    bindText(documentRef.querySelector('#upload-metadata-hint'), () => uploadMetadataHint(!activeTrackId));
     bindText(documentRef.querySelector('#upload-track-title-value'), () => metadata.title);
-    documentRef.querySelector('#upload-track-title').value = metadata.title;
+    if (documentRef.querySelector('#upload-title-form').hidden) {
+      documentRef.querySelector('#upload-track-title').value = metadata.title;
+    }
     setRouteTypeDropdown(documentRef.querySelector('#upload-route-type'), metadata.routeType);
     const links = availableExternalTrackLinks(metadata.externalLinks);
     const linksValue = documentRef.querySelector('#upload-links-value');
@@ -73,7 +77,7 @@ export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, 
       linksValue.hidden = false;
     }
     const linksForm = documentRef.querySelector('#upload-links-form');
-    [...linksForm.elements].forEach((field) => {
+    if (linksForm.hidden) [...linksForm.elements].forEach((field) => {
       if (field.tagName === 'INPUT') field.value = metadata.externalLinks[field.name] || '';
     });
   }
@@ -123,7 +127,7 @@ export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, 
       const { data } = await response.json();
       if (activeTrackId !== trackId) return;
       updateProcessing(data.step);
-      if (data.status === 'READY') await loadUploadMetadata(trackId);
+      if (data.step === 'ENRICHING' || data.status === 'READY') await loadUploadMetadata(trackId);
       if (data.status === 'READY') {
         activeTrackId = null;
         updateProcessing('COMPLETE');
@@ -170,14 +174,27 @@ export function createUploadFlow({ trackApi, isAuthenticated, getPublicTrackId, 
     }
   }
 
-  async function saveUploadMetadata({ title, routeType, links }, button = null) {
-    if (!metadata || activeTrackId) return false;
-    const payload = uploadMetadataPayload({
+  function saveUploadMetadata(changes, button = null) {
+    const trackId = metadata?.id;
+    const save = metadataSaves.then(() => metadata?.id === trackId
+      ? persistUploadMetadata(changes, button) : false);
+    metadataSaves = save.catch(() => false);
+    return save;
+  }
+
+  async function persistUploadMetadata({ title, routeType, links }, button = null) {
+    if (!metadata) return false;
+    const normalized = uploadMetadataPayload({
       title: title ?? metadata.title,
       speedKmh: metadata.speedKmh,
       routeType: routeType ?? metadata.routeType,
       links: links ?? metadata.externalLinks,
     });
+    const payload = {
+      ...(title === undefined ? {} : { title: normalized.title }),
+      ...(routeType === undefined ? {} : { routeType: normalized.routeType }),
+      ...(links === undefined ? {} : { externalLinks: normalized.externalLinks }),
+    };
     const error = documentRef.querySelector('#upload-metadata-error');
     error.hidden = true;
     try {

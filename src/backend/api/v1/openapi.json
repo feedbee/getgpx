@@ -303,7 +303,7 @@
       "patch": {
         "operationId": "update",
         "summary": "Edit track metadata",
-        "description": "Owner only. Updates only supplied fields. Omitted fields retain their values. An empty externalLinks object clears all links. Returns the current track.",
+        "description": "Owner only. Updates only supplied fields. Omitted fields retain their values. An empty externalLinks object clears all links. Returns the current track. Metadata edits are saved immediately during processing and retained when analysis is published.",
         "tags": [
           "Track management"
         ],
@@ -334,9 +334,6 @@
           },
           "404": {
             "$ref": "#/components/responses/Error404"
-          },
-          "409": {
-            "$ref": "#/components/responses/Error409"
           },
           "413": {
             "$ref": "#/components/responses/Error413"
@@ -2051,7 +2048,7 @@
         }
       },
       "Error409": {
-        "description": "Operation conflicts with current state or quota.\n\nCodes: TRACK_ANALYSIS_NOT_READY (no stored result), TRACK_EDIT_CONFLICT (processing prevents editing), REPLACEMENT_IN_PROGRESS (another attempt is running), ANALYSIS_NOT_RETRYABLE (retry unavailable), TRACK_LIMIT_REACHED (account quota).",
+        "description": "Operation conflicts with current state or quota.\n\nCodes: TRACK_ANALYSIS_NOT_READY (no stored result), REPLACEMENT_IN_PROGRESS (another attempt is running), ANALYSIS_NOT_RETRYABLE (retry unavailable), TRACK_LIMIT_REACHED (account quota).",
         "content": {
           "application/json": {
             "schema": {

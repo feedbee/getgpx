@@ -105,6 +105,7 @@ The [S3 track specification](specs/track-s3-storage.md) contains the full contra
 failure cases, and acceptance matrix.
 
 The processing dialog distinguishes track creation, GPX replacement and reprocessing,
-including their completion titles. Metadata editors appear only after the owner status
-resource reports READY. Each operation resets previous editors, errors and completion
-actions; metadata cannot be submitted while the dialog is processing a track.
+including their completion titles. Metadata editors appear once the owner status resource reports ENRICHING,
+after parsing has extracted the source title, or READY. Edits persist immediately
+and survive publication, processing failure and retry. Each operation resets previous editors, errors and completion
+actions; each save sends only explicitly edited fields to avoid overwriting other metadata.

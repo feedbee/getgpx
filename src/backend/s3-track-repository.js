@@ -133,10 +133,7 @@ export function createS3TrackRepository(tracks, { generatePublicId = createPubli
       if (speedKmh !== undefined) fields.speedKmh = speedKmh;
       if (routeType !== undefined) fields.routeType = normalizeRouteType(routeType);
       if (externalLinks !== undefined) fields.externalLinks = externalLinks;
-      return tracks.findOneAndUpdate({ _id: trackId, ownerId, $or: [
-        { 'result.kind': 'PUBLISHED', 'processing.status': { $ne: 'PROCESSING' } },
-        { 'result.kind': { $ne: 'PUBLISHED' }, 'processing.status': 'PROCESSING' },
-      ] }, { $set: fields }, { returnDocument: 'after' });
+      return tracks.findOneAndUpdate({ _id: trackId, ownerId }, { $set: fields }, { returnDocument: 'after' });
     },
     deleteOwned(trackId, ownerId) { return tracks.findOneAndDelete({ _id: trackId, ownerId }); },
   };
