@@ -4,6 +4,30 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-01
+
+### Added
+
+- Published the stable `/api/v1` contract with OpenAPI, Scalar and Swagger documentation at `/api/v1/openapi.json`, `/api/docs` and `/api/swagger`.
+- Track metadata now exposes available download formats through `downloadURL`.
+
+### Changed
+
+- Track metadata and detailed geometry are separate resources. Metadata is served from MongoDB without route points; `/api/v1/tracks/:id/analysis` serves the detailed analysis from S3. The website loads them separately.
+- Track processing uses one compact MongoDB result and processing model. Editing a track's title, route type, speed or links works as soon as parsing reaches enrichment, including while an upload is still processing.
+- Valid sessions renew their cookie and database expiry on use. Road-enrichment cache entries now expire sooner.
+
+### Fixed
+
+- Processing dialogs distinguish new uploads, GPX replacements and retries, and reset stale editing and completion state between operations.
+- Track publication preserves metadata edits made while analysis is running.
+
+### Upgrade notes
+
+- API clients should use the published OpenAPI v1 contract. `GET /api/v1/tracks/:id?include=geometry` is no longer supported; request `/api/v1/tracks/:id/analysis` separately. Download links are now grouped by format in `downloadURL`.
+- The previous MongoDB track document format is unsupported. Reupload existing tracks to create the new S3-backed representation; no automatic migration is provided.
+- If nginx delivers track files through CloudFront, deploy the updated proxy rules in [operations](docs/operations.md) alongside this version.
+
 ## [0.3.0] - 2026-09-30
 
 ### Added
