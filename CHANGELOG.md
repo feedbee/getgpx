@@ -4,13 +4,18 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-02
+
 ### Added
 
 - Server-rendered Open Graph/Twitter metadata and public 1200×630 sharing maps, with lazy generation for missing list/social previews and variant-aware maintenance.
-
 - Elevation coloring for the map and profile, with smooth transitions blending absolute altitude (30%) and route-relative altitude (up to 70%). The profile fill continues to show slope; compact legend markers show minimum and maximum altitude.
 - Optional Mapbox static map previews for track lists, generated during GPX processing and stored permanently in S3, with SVG fallback.
 - Provider/style/render provenance and a Docker-compatible `previews:regenerate` command for dry runs, selective updates, forced regeneration and resumable batches.
+
+### Fixed
+
+- Social sharing titles preserve literal text, and rejected diagnostic previews are cleaned up.
 
 ### Upgrade notes
 
