@@ -11,7 +11,7 @@ const template = '<html lang="ru"><head><title>Old</title></head><body>SPA</body
 describe('server-rendered sharing metadata', () => {
   it('includes canonical URLs and all current route metrics while escaping user titles', async () => {
     const metadata = await createSocialMetadata({ trackService: fixture(), origin: 'https://getgpx.link' })('/tracks/route');
-    expect(metadata.description).toBe('Cycling · 45.5 km · ↗ 300 m · ↘ 290 m · 2:00 · 22.8 km/h');
+    expect(metadata.description).toBe('Cycling · ↔︎ 45.5 km · ↗︎ 300 m · ↘︎ 290 m · ◷ 2 h 00 min / 22.8 km/h');
     expect(metadata).toMatchObject({ width: 1200, height: 630, image: 'https://getgpx.link/share-images/tracks/route.png' });
     const html = injectSocialMetadata(template, metadata);
     expect(html).toContain('A &quot;route&quot; &lt;script&gt; &amp; ride');

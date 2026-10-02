@@ -42,11 +42,16 @@ export function createSocialMetadata({ trackService, origin }) {
         const number = (value, digits = 1) => new Intl.NumberFormat(language, { maximumFractionDigits: digits }).format(value);
         const measure = (value, unit, digits) => Number.isFinite(value) ? `${number(value, digits)} ${t(unit)}` : null;
         const minutes = Number.isFinite(metrics.estimatedDurationMs) ? Math.round(metrics.estimatedDurationMs / 60_000) : null;
-        description = [t(`activity.${normalizeRouteType(track.routeType)}`), measure(metrics.distanceKm, 'units.km'),
-          Number.isFinite(metrics.ascentM) ? `↗ ${measure(metrics.ascentM, 'units.m', 0)}` : null,
-          Number.isFinite(metrics.descentM) ? `↘ ${measure(metrics.descentM, 'units.m', 0)}` : null,
-          minutes === null ? null : `${number(Math.floor(minutes / 60), 0)}:${String(minutes % 60).padStart(2, '0')}`,
-          measure(metrics.speedKmh, 'units.kmh')].filter(Boolean).join(' · ');
+        const duration = minutes === null ? null : t('sharing.duration', {
+          hours: number(Math.floor(minutes / 60), 0), minutes: String(minutes % 60).padStart(2, '0'),
+        });
+        const speed = measure(metrics.speedKmh, 'units.kmh');
+        const timing = [duration, speed].filter(Boolean).join(' / ');
+        description = [t(`activity.${normalizeRouteType(track.routeType)}`),
+          Number.isFinite(metrics.distanceKm) ? `↔︎ ${measure(metrics.distanceKm, 'units.km')}` : null,
+          Number.isFinite(metrics.ascentM) ? `↗︎ ${measure(metrics.ascentM, 'units.m', 0)}` : null,
+          Number.isFinite(metrics.descentM) ? `↘︎ ${measure(metrics.descentM, 'units.m', 0)}` : null,
+          timing ? `◷ ${timing}` : null].filter(Boolean).join(' · ');
         if (track.revision && trackService.previewConfiguration().enabled) {
           image = new URL(`/share-images/tracks/${encodeURIComponent(track.id)}.png`, origin).href;
           width = 1200; height = 630;

@@ -362,6 +362,7 @@
   "errors.fileUnavailable": "Файл треку тимчасово недоступний. Спробуйте пізніше.",
   "errors.analysisNotReady": "Аналіз треку ще не готовий.",
   "errors.editConflict": "Дочекайтеся завершення обробки треку перед редагуванням.",
+  "sharing.duration": "{hours} год {minutes} хв",
   "sharing.myTracks": "Ваші GPX-треки, карти й характеристики маршрутів в одному місці.",
   "sharing.favorites": "Улюблені публічні GPX-треки в одному місці."
 }
