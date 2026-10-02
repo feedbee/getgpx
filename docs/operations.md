@@ -95,13 +95,16 @@ Dependabot proposes weekly npm, GitHub Actions, and Docker updates. Review lockf
 
 ## Releases
 
-The authoritative version is `package.json` (with `package-lock.json` synchronized by `npm version`). Before tagging:
+Agent checklist for a requested application release:
 
-1. Move relevant `CHANGELOG.md` entries from Unreleased to the target version/date.
-2. Run `npm version MAJOR.MINOR.PATCH --no-git-tag-version`.
-3. Run `npm ci && npm run check && npm run test:integration` against MongoDB.
-4. Build and smoke-test the Docker image.
-5. Commit the version and changelog, then create and push `vMAJOR.MINOR.PATCH` only after review.
+1. Analyze changes since the previous version from Git history and the current `CHANGELOG.md`; choose the requested next version.
+2. Write the matching version/date section in `CHANGELOG.md` from those changes.
+3. Run `npm version MAJOR.MINOR.PATCH --no-git-tag-version` to update `package.json` and `package-lock.json` together.
+4. Run `npm run release:check` (`npm ci` and `npm run check`, including unit tests). Run `npm run test:integration` only if database wiring changed.
+
+Commit the release files and try to push once if appropriate. If push fails, report the local commit and let the user push. Stop there: tagging, GitHub Releases, Docker image checks, and release workflow monitoring are outside this checklist unless explicitly requested.
+
+The following Docker Hub publication details are for manual operations; they are not release checklist steps.
 
 Docker Hub publication requires repository variable `DOCKERHUB_IMAGE` (for example `namespace/getgpx`) and secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`. The workflow publishes full-version, major/minor, and `latest` tags for `linux/amd64` and `linux/arm64`. `latest` points to the most recently published release build; rerunning an older release can move it backward. The major/minor tag moves when a new patch release is published. Deploy by full-version tag or digest to pin a release.
 

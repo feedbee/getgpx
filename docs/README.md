@@ -33,4 +33,4 @@ Current client localization:
 - Catalogs live in `src/client/locales/`. English is the source. Add each new key to every catalog and run `npm run locales:check` to validate key sets, ICU syntax, parameters and plural categories. `npm run check` includes this validation. Review AI-assisted translations with a human before merging; retain terminology and placeholders.
 - Language and measurement choices are stored independently in versioned browser storage. A successful change reloads the current URL. Upload processing and unsaved edits block the selector. Storage-denied changes stay on the current page with an explanation.
 
-Historical specifications live in `changes/` and should not be rewritten when implementation later evolves. `CHANGELOG.md` is the only durable product changelog; GitHub release text should be copied or generated from its matching version section.
+Historical specifications live in `changes/` and should not be rewritten when implementation later evolves. `CHANGELOG.md` is the only durable product changelog. For application version updates, follow the [release checklist](operations.md#releases).
