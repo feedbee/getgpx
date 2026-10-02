@@ -72,9 +72,9 @@ export function injectSocialMetadata(html, metadata) {
   }
   tags.push(`<link rel="canonical" href="${escape(metadata.url)}" />`);
   if (metadata.status === 404) tags.push('<meta name="robots" content="noindex" />');
-  return html.replace(/<html\s+lang="[^"]*"/, `<html lang="${metadata.language}"`)
-    .replace(/<title>[^<]*<\/title>/, `<title>${escape(metadata.title)}</title>`)
-    .replace('</head>', `${tags.join('\n')}\n</head>`);
+  return html.replace(/<html\s+lang="[^"]*"/, () => `<html lang="${metadata.language}"`)
+    .replace(/<title>[^<]*<\/title>/, () => `<title>${escape(metadata.title)}</title>`)
+    .replace('</head>', () => `${tags.join('\n')}\n</head>`);
 }
 
 export function createSocialPageRouter({ metadata, loadHtml }) {

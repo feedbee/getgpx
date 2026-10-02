@@ -18,6 +18,25 @@ describe('server-rendered sharing metadata', () => {
     expect(html).not.toContain('<script>');
     expect(html).toContain('name="twitter:card" content="summary_large_image"');
   });
+  it.each([
+    ['$&', '$&amp;'],
+    ["$'", '$&#39;'],
+    ['$`', '$`'],
+    ['<script>"$& $\' $`</script>', '&lt;script&gt;&quot;$&amp; $&#39; $`&lt;/script&gt;'],
+  ])('preserves literal replacement tokens and escapes the title %s', async (title, escaped) => {
+    const service = fixture();
+    service.getPublicTrack.mockResolvedValueOnce({ id: 'route', title });
+    const metadata = await createSocialMetadata({ trackService: service, origin: 'https://getgpx.link' })('/tracks/route');
+    const html = injectSocialMetadata(template, metadata);
+    expect(html).toContain(`<title>${escaped}</title>`);
+    for (const attribute of ['property="og:title"', 'property="og:image:alt"', 'name="twitter:title"', 'name="twitter:image:alt"']) {
+      expect(html).toContain(`<meta ${attribute} content="${escaped}" />`);
+    }
+    expect(html.match(/<head>/g)).toHaveLength(1);
+    expect(html.match(/<\/head>/g)).toHaveLength(1);
+    expect(html.match(/<body>SPA<\/body>/g)).toHaveLength(1);
+    expect(html).not.toContain('<script>');
+  });
   it('renders generic collection metadata without querying private lists', async () => {
     const service = fixture();
     for (const pathname of ['/', '/my-tracks', '/favorite-tracks']) {

@@ -87,7 +87,10 @@ export function createS3TrackProcessor({ trackRepository, objectStore, enrichmen
             revision: identity.revision, ...safeErrorDetails(writeError) });
         }
       }
-      await trackRepository.fail(identity, { errorCode, failedStep: step, diagnostic }, now());
+      const failed = await trackRepository.fail(identity, { errorCode, failedStep: step, diagnostic }, now());
+      // Only a confirmed rejection makes this unique PNG safe to remove. A lost
+      // acknowledgement may have published it; shared source/analysis keys remain.
+      if (!failed && diagnostic?.previewImage) await cleanup([diagnostic.previewImage.key]);
     } finally { clearInterval(heartbeat); }
   }
 
