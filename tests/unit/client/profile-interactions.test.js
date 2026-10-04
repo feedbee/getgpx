@@ -57,6 +57,18 @@ describe('profile interactions', () => {
     expect(callbacks.onOpenPoint).toHaveBeenCalledTimes(2);
   });
 
+  it('opens profile endpoints at their actual route index without selecting a range', () => {
+    const { handlers, callbacks, profile } = setup();
+    const marker = { dataset: { profileEndpoint: 'finish', routePointIndex: '10' } };
+    const target = { closest: selector => selector === '[data-profile-endpoint]' ? marker : null };
+    handlers.pointerdown({ target, button: 0, clientX: 100, pointerId: 1 });
+    expect(profile.setPointerCapture).not.toHaveBeenCalled();
+    handlers.click({ target });
+    expect(callbacks.onOpenPoint).toHaveBeenCalledWith(10, { trigger: marker, context: { kind: 'finish' } });
+    handlers.keydown({ target, key: 'Enter', preventDefault: vi.fn() });
+    expect(callbacks.onOpenPoint).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the active point fixed while its menu is open', () => {
     const { handlers, callbacks, target, setMenuOpen } = setup();
     setMenuOpen(true);

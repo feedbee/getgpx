@@ -214,3 +214,9 @@ coordinates and show statistics at the associated route point. The panel and
 its arrow attach to the marker icon, including the numbered circle above the
 profile, rather than the corresponding dot on the elevation curve. The former
 separate map POI tooltip is replaced by this panel.
+
+The profile also shows A/B markers for the actual route start and finish when
+those endpoints are within the displayed range; clicking them opens the same
+endpoint popover. Profile statistics are ordered as distance, ascent, descent,
+minimum and maximum. Distance reflects the displayed range, and elevation
+extrema use actual heights rather than the padding around the drawn chart.

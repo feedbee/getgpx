@@ -513,7 +513,7 @@ h2 { font-size:clamp(28px,3vw,42px); font-weight:400; }
 .profile-poi { position:absolute; width:24px; height:24px; display:grid; place-items:center; border:2px solid #fff; border-radius:50%; background:#173d31; color:#fff; box-shadow:0 1px 4px #0004; cursor:pointer; font:700 10px/1 'Inter',sans-serif; pointer-events:auto; transform:translateX(-50%); transition:background .14s ease,transform .14s ease; }
 .profile-poi.is-active { background:#e36b32; transform:translateX(-50%) scale(1.12); }
 .profile-card .route-legend { margin-top:8px; gap:8px; font-size:8px; }
-.profile-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
+.profile-summary { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
 .profile-summary span { font:600 15px 'Exo 2',sans-serif; text-align:center; }
 .profile-summary b { font-weight:600; font-family:inherit; }
 .profile-summary small { display:block; margin-top:3px; color:var(--muted); font:400 9px 'Inter',sans-serif; }
@@ -1129,3 +1129,6 @@ button.profile-poi { padding:0; }
 .point-actions span { min-width:0; overflow-wrap:anywhere; }
 .point-action-icon { width:16px; height:16px; flex:0 0 16px; }
 .point-external-icon { width:12px; height:12px; flex:0 0 12px; margin-left:auto; }
+
+.profile-endpoint.endpoint-start { background:#2f9665; }
+.profile-endpoint.endpoint-finish { background:#e65e43; }

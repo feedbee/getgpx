@@ -6,6 +6,8 @@ export function bindProfileInteractions({ getTrack, getViewRange, getPoiSelectio
   let selectionStart = null;
   profile.addEventListener('pointermove', (event) => {
     if (getPointMenuOpen() || !getTrack()) return;
+    const endpoint = event.target.closest('[data-profile-endpoint]');
+    if (endpoint) { onActivePoint(Number(endpoint.dataset.routePointIndex), { showContext: true }); return; }
     const poiMarker = event.target.closest('[data-profile-poi-index]');
     if (poiMarker) {
       onHoverPoi(Number(poiMarker.dataset.profilePoiIndex));
@@ -34,10 +36,12 @@ export function bindProfileInteractions({ getTrack, getViewRange, getPoiSelectio
   profile.addEventListener('click', (event) => {
     const marker = event.target.closest('[data-profile-poi-index]');
     if (marker) openPoi(marker);
+    const endpoint = event.target.closest('[data-profile-endpoint]');
+    if (endpoint) openEndpoint(endpoint);
     if (event.target.closest('#profile-dot')) openActivePoint();
   });
   profile.addEventListener('pointerdown', (event) => {
-    if (!getTrack() || getPointMenuOpen() || event.target.closest('#profile-dot') || event.target.closest('[data-profile-poi-index]')) return;
+    if (!getTrack() || getPointMenuOpen() || event.target.closest('#profile-dot') || event.target.closest('[data-profile-poi-index]') || event.target.closest('[data-profile-endpoint]')) return;
     if (getPoiSelection().pinnedIndex !== null) return;
     if (event.button !== 0) return;
     const rect = profile.getBoundingClientRect();
@@ -60,6 +64,9 @@ export function bindProfileInteractions({ getTrack, getViewRange, getPoiSelectio
     const to = pointIndexAtRatio(getTrack().points, getViewRange()[0], getViewRange()[1], Math.max(startRatio, endRatio));
     onViewRange([from, to]);
   });
+  function openEndpoint(marker) {
+    onOpenPoint(Number(marker.dataset.routePointIndex), { trigger: marker, context: { kind: marker.dataset.profileEndpoint } });
+  }
   function openPoi(marker) {
     const poiIndex = Number(marker.dataset.profilePoiIndex);
     const pointIndex = getTrack()?.pointsOfInterest?.[poiIndex]?.routePointIndex;
@@ -74,6 +81,9 @@ export function bindProfileInteractions({ getTrack, getViewRange, getPoiSelectio
   });
   profile.addEventListener('keydown', (event) => {
     if (!getTrack()) return;
+    const endpoint = event.target?.closest?.('[data-profile-endpoint]');
+    if (endpoint && ['Enter', ' '].includes(event.key)) { event.preventDefault(); openEndpoint(endpoint); return; }
+    if (endpoint) return;
     const poiMarker = event.target?.closest?.('[data-profile-poi-index]');
     if (poiMarker && ['Enter', ' '].includes(event.key)) { event.preventDefault(); openPoi(poiMarker); return; }
     if (poiMarker) return;

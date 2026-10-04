@@ -14,7 +14,7 @@ export function createElevationProfile({ getTrack, getViewRange, getSummaryMetri
     const rawMin = Math.min(...elevations);
     const rawMax = Math.max(...elevations);
     const padding = Math.max(10, (rawMax - rawMin) * 0.08);
-    return { startIndex, endIndex, startKm: points[0].distanceKm, endKm: points.at(-1).distanceKm, min: rawMin - padding, max: rawMax + padding };
+    return { startIndex, endIndex, rawMin, rawMax, startKm: points[0].distanceKm, endKm: points.at(-1).distanceKm, min: rawMin - padding, max: rawMax + padding };
   }
 
   function chartCoordinates(point) {
@@ -27,6 +27,19 @@ export function createElevationProfile({ getTrack, getViewRange, getSummaryMetri
   function renderProfilePointsOfInterest(track, startKm, endKm) {
     const group = documentRef.querySelector('#profile-pois');
     group.replaceChildren();
+    for (const [kind, index, label] of [['start', 0, 'A'], ['finish', track.points.length - 1, 'B']]) {
+      const point = track.points[index];
+      if (point.distanceKm < startKm || point.distanceKm > endKm) continue;
+      const marker = documentRef.createElement('button');
+      marker.type = 'button';
+      marker.className = `profile-poi profile-endpoint endpoint-${kind}`;
+      marker.dataset.profileEndpoint = kind;
+      marker.dataset.routePointIndex = String(index);
+      marker.setAttribute('aria-label', t(kind === 'start' ? 'map.startTitle' : 'map.finishTitle'));
+      marker.style.left = `${(point.distanceKm - startKm) / Math.max(endKm - startKm, 0.001) * 100}%`;
+      bindText(marker, () => label);
+      group.append(marker);
+    }
     (track.pointsOfInterest || []).forEach((point, index) => {
       const routePoint = track.points[point.routePointIndex];
       if (!routePoint || routePoint.distanceKm < startKm || routePoint.distanceKm > endKm) return;
@@ -47,7 +60,8 @@ export function createElevationProfile({ getTrack, getViewRange, getSummaryMetri
     const altitudeRange = elevationRange(track.points);
     documentRef.querySelector('#elevation-legend').innerHTML = [altitudeRange.min, altitudeRange.max].map((height) =>
       `<span><i style="background:${elevationColor(height, altitudeRange)}"></i>${escapeHtml(formatMeasurement('elevation', height))}</span>`).join('');
-    const { startIndex, endIndex, startKm, endKm, min, max } = viewMetrics;
+    const { startIndex, endIndex, startKm, endKm, min, max, rawMin, rawMax } = viewMetrics;
+    bindText(documentRef.querySelector('#profile-distance'), () => formatMeasurement('distance', endKm - startKm));
     const isFullRange = startIndex === 0 && endIndex === track.points.length - 1;
     const summaryMetrics = isFullRange ? getSummaryMetrics() : null;
     const { ascentM, descentM } = summaryMetrics || elevationGainLoss(track.points, startIndex, endIndex);
@@ -97,8 +111,8 @@ export function createElevationProfile({ getTrack, getViewRange, getSummaryMetri
     }).join('') : '';
     documentRef.querySelector('#grid').innerHTML = [40, 95, 150, 205, 260].map((y) => `<line x1="0" y1="${y}" x2="1200" y2="${y}" />`).join('');
     documentRef.querySelector('#axis').innerHTML = Array.from({ length: 6 }, (_, index) => `<span>${formatMeasurement('distance', startKm + (endKm - startKm) * index / 5)}</span>`).join('');
-    bindText(documentRef.querySelector('#min-label'), () => formatMeasurement('elevation', summaryMetrics?.minElevationM ?? min));
-    bindText(documentRef.querySelector('#max-label'), () => formatMeasurement('elevation', summaryMetrics?.maxElevationM ?? max));
+    bindText(documentRef.querySelector('#min-label'), () => formatMeasurement('elevation', summaryMetrics?.minElevationM ?? rawMin));
+    bindText(documentRef.querySelector('#max-label'), () => formatMeasurement('elevation', summaryMetrics?.maxElevationM ?? rawMax));
     documentRef.querySelector('#climb-bands').innerHTML = track.climbs.map((climb) => {
       const from = Math.max(climb.startKm, startKm);
       const to = Math.min(climb.endKm, endKm);
