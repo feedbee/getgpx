@@ -8,13 +8,15 @@ function setup() {
   const selection = { classList: { add: vi.fn(), remove: vi.fn() }, setAttribute: vi.fn() };
   const track = { points: Array.from({ length: 11 }, (_, index) => ({ distanceKm: index })) };
   const callbacks = { onHoverPoi: vi.fn(), onLeavePoi: vi.fn(), onTogglePoi: vi.fn(),
-    onActivePoint: vi.fn(), onPointContext: vi.fn(), onViewRange: vi.fn() };
+    onOpenPoint: vi.fn(), onActivePoint: vi.fn(), onPointContext: vi.fn(), onViewRange: vi.fn() };
+  let menuOpen = false;
   let poiSelection = { hoveredIndex: null, pinnedIndex: null };
   bindProfileInteractions({ getTrack: () => track, getViewRange: () => [0, 10],
-    getPoiSelection: () => poiSelection, getActivePointIndex: () => 4, ...callbacks,
+    getPointMenuOpen: () => menuOpen, getPoiSelection: () => poiSelection, getActivePointIndex: () => 4, ...callbacks,
     documentRef: { querySelector: (selector) => selector === '#profile-wrap' ? profile : selection } });
   const target = { closest: () => null };
   return { handlers, profile, selection, callbacks, target,
+    setMenuOpen(value) { menuOpen = value; },
     setPoiSelection(value) { poiSelection = value; } };
 }
 
@@ -32,6 +34,28 @@ describe('profile interactions', () => {
     handlers.keydown({ key: 'ArrowRight', preventDefault });
     expect(preventDefault).toHaveBeenCalled();
     expect(callbacks.onActivePoint).toHaveBeenCalledWith(5);
+  });
+
+  it('opens the navigation point without starting a range drag', () => {
+    const { handlers, profile, callbacks } = setup();
+    const target = { closest: selector => selector === '#profile-dot' ? {} : null };
+    handlers.pointerdown({ target, button: 0, clientX: 40, pointerId: 1 });
+    expect(profile.setPointerCapture).not.toHaveBeenCalled();
+    handlers.click({ target });
+    expect(callbacks.onOpenPoint).toHaveBeenCalledWith(4, expect.any(Object));
+    handlers.keydown({ key: 'Enter', preventDefault: vi.fn() });
+    expect(callbacks.onOpenPoint).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the active point fixed while its menu is open', () => {
+    const { handlers, callbacks, target, setMenuOpen } = setup();
+    setMenuOpen(true);
+    handlers.pointermove({ target, clientX: 90 });
+    handlers.keydown({ key: 'ArrowRight', preventDefault: vi.fn() });
+    expect(callbacks.onActivePoint).not.toHaveBeenCalled();
+    setMenuOpen(false);
+    handlers.pointermove({ target, clientX: 90 });
+    expect(callbacks.onActivePoint).toHaveBeenCalledWith(9, { showContext: true });
   });
 
   it('keeps a pinned point of interest selected during pointer movement', () => {

@@ -1,3 +1,4 @@
+import { createRoutePointPopover } from './route-point-popover.js';
 import { setupPreferencesControl } from './preferences-ui.js';
 import { renderAppShell } from './app-shell.js';
 import { createTrackApi, readPublicTrackMetadata } from './track-api.js';
@@ -71,14 +72,21 @@ const trackEditor = createTrackEditor({ trackApi, uploadFlow, getPublicTrackId: 
     await loadPublicTrack(publicTrackId);
   } });
 const profileViewport = createProfileViewport({ getTrack: () => currentTrack,
-  onResetMetrics: () => elevationProfile.resetMetrics(), onDrawProfile: (track) => elevationProfile.drawProfile(track),
+  onResetMetrics: () => { pointPopover.close(); elevationProfile.resetMetrics(); }, onDrawProfile: (track) => elevationProfile.drawProfile(track),
   onClearRangeFocus: () => routeMap.clearRangeFocus(), onFitFullRange: () => routeMap.fitFullRange(),
   onFitRange: (track, range) => routeMap.fitRange(track, range), onActivePoint: (index) => activePoint.set(index) });
 const activePoint = createActiveRoutePoint({ getTrack: () => currentTrack,
   chartCoordinates: (point) => elevationProfile.chartCoordinates(point),
-  onMapPoint: (point) => routeMap.setActivePoint(point) });
+  onMapPoint: (point) => routeMap.setActivePoint(point, activePoint.index) });
+const pointPopover = createRoutePointPopover({ getTrack: () => currentTrack, onSelect: (index) => activePoint.set(index, { showContext: true }) });
+function hoverActivePoint(index, options) {
+  if (!pointPopover.isOpen) activePoint.set(index, options);
+}
+function hoverPointContext(point) {
+  if (!pointPopover.isOpen) activePoint.setPointContext(point);
+}
 const poiController = createPoiController({ getTrack: () => currentTrack, getActivePointIndex: () => activePoint.index,
-  onActivePoint: activePoint.set, onMapSelection: (index) => routeMap.renderPoiSelection(index) });
+  onActivePoint: hoverActivePoint, onMapSelection: (index) => routeMap.renderPoiSelection(index) });
 const routeDetailView = createRouteDetailView({ getProfileColorMode: () => profileColorMode,
   onReady: () => routeMap.invalidateSize() });
 const routeSummaryView = createRouteSummaryView({ updatePageLanguage, renderPointsOfInterest: poiController.renderPointsOfInterest,
@@ -87,8 +95,9 @@ const routeSummaryView = createRouteSummaryView({ updatePageLanguage, renderPoin
 const routeFilters = createRouteFilters({ getTrack: () => currentTrack, onChange: refreshRouteFocus });
 const routeMap = createRouteMap({ getPoiSelection: () => poiController.selection, getMapColorMode: () => mapColorMode,
   getRouteFilter: routeFilters.selectedRouteFilter, getTerrainRange: routeFilters.selectedTerrainRange,
-  onActivePoint: activePoint.set, onPointContext: activePoint.setPointContext, onPoiHover: poiController.hover,
-  onPoiLeave: poiController.leave, onPoiToggle: poiController.toggle });
+  onActivePoint: hoverActivePoint, onPointContext: hoverPointContext,
+  onOpenPoint: pointPopover.open, getPointMenuOpen: () => pointPopover.isOpen, onPoiHover: (index) => { if (!pointPopover.isOpen) poiController.hover(index); },
+  onClosePoint: pointPopover.close, onPoiLeave: poiController.leave, onPoiToggle: poiController.toggle });
 const elevationProfile = createElevationProfile({ getTrack: () => currentTrack, getViewRange: () => profileViewport.range,
   getSummaryMetrics: () => publicTrackData?.metrics, getColorMode: () => profileColorMode,
   getFocusPlacement: () => profileFocusPlacement, getRouteFilter: routeFilters.selectedRouteFilter,
@@ -249,7 +258,7 @@ async function loadHomepageTracks() {
 function refreshRouteFocus() {
   if (!currentTrack) return;
   routeMap.draw(currentTrack, { fit: false });
-  if (currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
+  if (currentTrack.hasElevation) { pointPopover.close(); elevationProfile.drawProfile(currentTrack); }
   activePoint.set(activePoint.index);
   routeFilters.renderControls();
 }
@@ -271,7 +280,7 @@ function setColorMode(scope, mode) {
   }
   if (!currentTrack) return;
   if (scope === 'map') routeMap.draw(currentTrack, { fit: false });
-  if (scope === 'profile' && currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
+  if (scope === 'profile' && currentTrack.hasElevation) { pointPopover.close(); elevationProfile.drawProfile(currentTrack); }
   activePoint.set(activePoint.index);
 }
 
@@ -282,7 +291,7 @@ function setProfileFocusPlacement(placement) {
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', String(active));
   });
-  if (currentTrack?.hasElevation) elevationProfile.drawProfile(currentTrack);
+  if (currentTrack?.hasElevation) { pointPopover.close(); elevationProfile.drawProfile(currentTrack); }
 }
 
 function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
@@ -294,11 +303,12 @@ function renderTrack(rawTrack, { analysisSources, routeType = 'other' } = {}) {
   routeMap.clearRangeFocus();
   routeFilters.reset();
   poiController.reset();
+  pointPopover.close();
   currentTrack = prepareRenderableTrack(rawTrack);
   profileViewport.reset(currentTrack);
   renderLoadedTrackHeader(currentTrack, routeType, updatePageLanguage);
   routeMap.draw(currentTrack);
-  if (currentTrack.hasElevation) elevationProfile.drawProfile(currentTrack);
+  if (currentTrack.hasElevation) { pointPopover.close(); elevationProfile.drawProfile(currentTrack); }
   routeSummaryView.renderSourceInfo(analysisSources || { gpx: 'SUCCESS', valhalla: 'PENDING', openStreetMap: 'PENDING' });
   activePoint.set(0);
 }
@@ -307,6 +317,7 @@ async function loadPublicTrack(trackId, retries = 0) {
   publicTrackId = trackId;
   publicTrackData = null;
   publicTrackOwnershipVerified = false;
+  pointPopover.close();
   currentTrack = null;
   const result = await readPublicTrackMetadata(trackApi, trackId);
   if (result.kind !== 'ready') {
@@ -346,8 +357,9 @@ async function loadPublicTrack(trackId, retries = 0) {
 
 bindProfileInteractions({ getTrack: () => currentTrack, getViewRange: () => profileViewport.range,
   getPoiSelection: () => poiController.selection, getActivePointIndex: () => activePoint.index,
-  onHoverPoi: poiController.hover, onLeavePoi: poiController.leave, onTogglePoi: poiController.toggle,
-  onActivePoint: activePoint.set, onPointContext: activePoint.setPointContext, onViewRange: profileViewport.setRange });
+  onHoverPoi: (index) => { if (!pointPopover.isOpen) poiController.hover(index); }, onLeavePoi: poiController.leave, onTogglePoi: (index) => { pointPopover.close(); poiController.toggle(index); },
+  onActivePoint: hoverActivePoint, onPointContext: hoverPointContext,
+  onOpenPoint: pointPopover.open, getPointMenuOpen: () => pointPopover.isOpen, onViewRange: profileViewport.setRange });
 document.querySelectorAll('[data-color-mode]').forEach((button) => button.addEventListener('click', () => setColorMode(button.dataset.colorScope, button.dataset.colorMode)));
 document.querySelectorAll('[data-profile-focus-placement]').forEach((button) => button.addEventListener('click', () => setProfileFocusPlacement(button.dataset.profileFocusPlacement)));
 const profileSettings = document.querySelector('.profile-overlay-settings');

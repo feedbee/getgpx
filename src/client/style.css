@@ -1098,3 +1098,22 @@ body button:focus-visible,
 .track-preview-attribution { display:flex; justify-content:flex-end; gap:12px; margin-top:12px; font-size:10px; color:var(--muted); }
 .track-preview-attribution[hidden] { display:none; }
 .track-preview-attribution a { color:inherit; }
+
+.route-point-popover { position:fixed; z-index:2000; width:300px; box-sizing:border-box; overflow:visible; padding:0; border:1px solid var(--line); border-radius:var(--control-radius); background:var(--white); color:var(--ink); box-shadow:0 4px 16px rgba(24,27,22,.16); font-size:12px; }
+.route-point-popover[hidden] { display:none; }
+.point-readout b,.point-readout span,.point-readout small { display:block; }
+.point-readout b { font-family:'Exo 2',sans-serif; font-size:13px; }
+.point-readout span,.point-readout small { margin-top:4px; color:var(--muted); }
+.point-coordinates { display:block; margin:12px 0; font-variant-numeric:tabular-nums; }
+.point-actions { display:grid; gap:8px; }
+.point-actions a,.point-actions button { display:block; padding:10px 12px; border:1px solid var(--line); border-radius:var(--control-radius); background:transparent; color:var(--ink); font:inherit; text-align:left; text-decoration:none; cursor:pointer; }
+.point-actions a:hover,.point-actions button:hover { background:var(--control-hover); }
+.point-actions a:focus-visible,.point-actions button:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+.point-copy-status { display:block; min-height:16px; margin-top:8px; color:var(--muted); }
+#profile-dot,.endpoint { cursor:pointer; }
+button.endpoint { padding:0; }
+
+.point-popover-content { box-sizing:border-box; max-height:calc(var(--point-max-height) - 2px); overflow:auto; padding:14px; border-radius:inherit; }
+.route-point-popover::after { content:""; position:absolute; left:var(--point-arrow-left); width:12px; height:12px; background:var(--white); transform:translateX(-50%) rotate(45deg); pointer-events:none; }
+.route-point-popover[data-arrow-side="bottom"]::after { bottom:-7px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); }
+.route-point-popover[data-arrow-side="top"]::after { top:-7px; border-left:1px solid var(--line); border-top:1px solid var(--line); }

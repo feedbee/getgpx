@@ -1,10 +1,11 @@
 import { pointIndexAtRatio, pointerRatioInPlot } from './domain/profile-math.js';
 
 export function bindProfileInteractions({ getTrack, getViewRange, getPoiSelection, getActivePointIndex,
-  onHoverPoi, onLeavePoi, onTogglePoi, onActivePoint, onPointContext, onViewRange, documentRef = document }) {
+  onHoverPoi, onLeavePoi, onTogglePoi, onOpenPoint = () => {}, getPointMenuOpen = () => false, onActivePoint, onPointContext, onViewRange, documentRef = document }) {
   const profile = documentRef.querySelector('#profile-wrap');
   let selectionStart = null;
   profile.addEventListener('pointermove', (event) => {
+    if (getPointMenuOpen() || !getTrack()) return;
     const poiMarker = event.target.closest('[data-profile-poi-index]');
     if (poiMarker) {
       onHoverPoi(Number(poiMarker.dataset.profilePoiIndex));
@@ -28,14 +29,15 @@ export function bindProfileInteractions({ getTrack, getViewRange, getPoiSelectio
   });
   profile.addEventListener('pointerleave', () => {
     onLeavePoi();
-    if (!selectionStart && getPoiSelection().pinnedIndex === null) onPointContext(null);
+    if (!getPointMenuOpen() && !selectionStart && getPoiSelection().pinnedIndex === null) onPointContext(null);
   });
   profile.addEventListener('click', (event) => {
     const marker = event.target.closest('[data-profile-poi-index]');
     if (marker) onTogglePoi(Number(marker.dataset.profilePoiIndex));
+    if (event.target.closest('#profile-dot')) openActivePoint();
   });
   profile.addEventListener('pointerdown', (event) => {
-    if (event.target.closest('[data-profile-poi-index]')) return;
+    if (!getTrack() || getPointMenuOpen() || event.target.closest('#profile-dot') || event.target.closest('[data-profile-poi-index]')) return;
     if (getPoiSelection().pinnedIndex !== null) return;
     if (event.button !== 0) return;
     const rect = profile.getBoundingClientRect();
@@ -58,7 +60,17 @@ export function bindProfileInteractions({ getTrack, getViewRange, getPoiSelectio
     const to = pointIndexAtRatio(getTrack().points, getViewRange()[0], getViewRange()[1], Math.max(startRatio, endRatio));
     onViewRange([from, to]);
   });
+  function openActivePoint() {
+    onOpenPoint(getActivePointIndex(), { trigger: documentRef.querySelector('#profile-dot'), focusTarget: profile });
+  }
+  profile.addEventListener('pointercancel', () => {
+    selectionStart = null;
+    documentRef.querySelector('#profile-selection').classList.remove('visible');
+  });
   profile.addEventListener('keydown', (event) => {
+    if (!getTrack()) return;
+    if (['Enter', ' '].includes(event.key)) { event.preventDefault(); openActivePoint(); return; }
+    if (getPointMenuOpen()) return;
     if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
     if (getPoiSelection().pinnedIndex !== null) return;
     event.preventDefault();

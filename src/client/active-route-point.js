@@ -2,6 +2,12 @@ import { t, formatMeasurement, percent, escapeHtml } from './i18n.js';
 import { roadLabel } from './analysis-presentation.js';
 import { classifyWayType } from './domain/surface.js';
 
+export function routePointReadout(point, track) {
+  const grade = percent(point.grade);
+  const surfaceLabel = point.surface.inferred ? t('profile.inferred', { surface: t(point.surface.label) }) : t(point.surface.label);
+  return `<b>${formatMeasurement('distance', point.distanceKm)} · ${formatMeasurement('elevation', point.ele)} · ${grade}</b><span>${escapeHtml(t('profile.surfaceDetail', { surface: surfaceLabel, road: roadLabel(point.surface.highway), quality: t(point.surface.quality.label) }))}</span><small>${escapeHtml(t('profile.percentRoute', { percent: percent(track.distanceKm ? point.distanceKm / track.distanceKm * 100 : 0, 0) }))}</small>`;
+}
+
 export function createActiveRoutePoint({ getTrack, chartCoordinates, onMapPoint, documentRef = document }) {
   let activePointIndex = 0;
 
@@ -29,9 +35,7 @@ export function createActiveRoutePoint({ getTrack, chartCoordinates, onMapPoint,
     documentRef.querySelector('#profile-cursor').setAttribute('x2', chart.x);
     documentRef.querySelector('#profile-dot').setAttribute('cx', chart.x);
     documentRef.querySelector('#profile-dot').setAttribute('cy', chart.y);
-    const grade = percent(point.grade);
-    const surfaceLabel = point.surface.inferred ? t('profile.inferred', { surface: t(point.surface.label) }) : t(point.surface.label);
-    documentRef.querySelector('#hover-readout').innerHTML = `<b>${formatMeasurement('distance', point.distanceKm)} · ${formatMeasurement('elevation', point.ele)} · ${grade}</b><span>${escapeHtml(t('profile.surfaceDetail', { surface: surfaceLabel, road: roadLabel(point.surface.highway), quality: t(point.surface.quality.label) }))}</span><small>${escapeHtml(t('profile.percentRoute', { percent: percent(getTrack().distanceKm ? point.distanceKm / getTrack().distanceKm * 100 : 0, 0) }))}</small>`;
+    documentRef.querySelector('#hover-readout').innerHTML = routePointReadout(point, getTrack());
     const slider = documentRef.querySelector('#profile-wrap');
     slider.setAttribute('aria-valuenow', getTrack().distanceKm ? Math.round((point.distanceKm / getTrack().distanceKm) * 100) : 0);
     slider.setAttribute('aria-valuetext', t('profile.positionValue', { distance: formatMeasurement('distance', point.distanceKm), elevation: formatMeasurement('elevation', point.ele) }));

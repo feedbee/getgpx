@@ -196,3 +196,14 @@ controlled by each messenger or social network.
 the origin of `GOOGLE_REDIRECT_URI`, then `https://getgpx.link`; configure a localhost
 origin explicitly for local sharing checks. Arbitrary request Host headers never
 control canonical URLs. Production and Vite use the same metadata adapter.
+
+### Route point details
+
+Click the active route dot on the map or elevation profile, or the start (A) or
+finish (B) marker, to select that point and open its details. The panel repeats
+the map readout, adds decimal latitude/longitude, and offers copying coordinates
+and opening Google Maps in a new tab. Hover navigation pauses while the panel is
+open. Escape, another click on the trigger, or a click outside dismisses it.
+The panel prefers placement above the point and switches below when space is
+limited. On the profile, Enter or Space opens the active point; dragging still
+selects a distance range.

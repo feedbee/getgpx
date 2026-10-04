@@ -364,5 +364,10 @@
   "errors.editConflict": "Дачакайцеся завяршэння апрацоўкі трэка перад рэдагаваннем.",
   "sharing.duration": "{hours} г {minutes} хв",
   "sharing.myTracks": "Вашы GPX-трэкі, карты і характарыстыкі маршрутаў у адным месцы.",
-  "sharing.favorites": "Абраныя публічныя GPX-трэкі ў адным месцы."
+  "sharing.favorites": "Абраныя публічныя GPX-трэкі ў адным месцы.",
+  "point.details": "Даныя пункта маршруту",
+  "point.googleMaps": "Адкрыць у Google Maps",
+  "point.copy": "Скапіяваць каардынаты",
+  "point.copied": "Каардынаты скапіяваны",
+  "point.copyFailed": "Не ўдалося скапіяваць. Вылучыце і скапіюйце каардынаты ўручную."
 }

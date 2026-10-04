@@ -364,5 +364,10 @@
   "errors.editConflict": "Zaczekaj na zakończenie przetwarzania trasy przed edycją.",
   "sharing.duration": "{hours} godz. {minutes} min",
   "sharing.myTracks": "Twoje trasy GPX, mapy i szczegóły tras w jednym miejscu.",
-  "sharing.favorites": "Twoje ulubione publiczne trasy GPX w jednym miejscu."
+  "sharing.favorites": "Twoje ulubione publiczne trasy GPX w jednym miejscu.",
+  "point.details": "Szczegóły punktu trasy",
+  "point.googleMaps": "Otwórz w Google Maps",
+  "point.copy": "Kopiuj współrzędne",
+  "point.copied": "Współrzędne skopiowane",
+  "point.copyFailed": "Nie udało się skopiować. Zaznacz i skopiuj współrzędne ręcznie."
 }

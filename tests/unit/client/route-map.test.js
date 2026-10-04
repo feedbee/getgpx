@@ -8,7 +8,7 @@ function fakeLeaflet() {
     createPane: vi.fn(), getPane: () => ({ style: {} }),
     eachLayer: (callback) => [...layers].forEach(callback),
     removeLayer: (layer) => { layers.splice(layers.indexOf(layer), 1); },
-    fitBounds: vi.fn(), invalidateSize: vi.fn(),
+    fitBounds: vi.fn(), invalidateSize: vi.fn(), latLngToContainerPoint: () => ({ x: 50, y: 60 }),
   };
   const layer = (coordinates, options = {}) => ({
     coordinates, options, events: {},
@@ -35,7 +35,7 @@ describe('route map', () => {
     const { layers, map, leaflet } = fakeLeaflet();
     const elements = new Map();
     const documentRef = { querySelector(selector) {
-      if (!elements.has(selector)) elements.set(selector, { innerHTML: '', setAttribute: vi.fn() });
+      if (!elements.has(selector)) elements.set(selector, { innerHTML: '', setAttribute: vi.fn(), getBoundingClientRect: () => ({ left: 10, top: 20, right: 500, bottom: 500 }) });
       return elements.get(selector);
     } };
     const track = { points: [
@@ -45,9 +45,10 @@ describe('route map', () => {
     ], pointsOfInterest: [] };
     let pinnedIndex = null;
     const onActivePoint = vi.fn();
+    const onOpenPoint = vi.fn();
     const routeMap = createRouteMap({ getPoiSelection: () => ({ pinnedIndex, hoveredIndex: null }),
       getMapColorMode: () => mode, getRouteFilter: () => null, getTerrainRange: () => null,
-      onActivePoint, onPointContext: vi.fn(), onPoiHover: vi.fn(), onPoiLeave: vi.fn(), onPoiToggle: vi.fn(),
+      onActivePoint, onOpenPoint, onPointContext: vi.fn(), onPoiHover: vi.fn(), onPoiLeave: vi.fn(), onPoiToggle: vi.fn(),
       documentRef, leaflet });
 
     routeMap.init();
@@ -67,6 +68,13 @@ describe('route map', () => {
     expect(onActivePoint).toHaveBeenCalledTimes(1);
     routeMap.setActivePoint(track.points[1]);
     expect(layers.find((item) => item.options.fillColor === '#131712').setLatLng).toHaveBeenCalledWith([3, 4]);
+    const endpoints = layers.filter(item => item.options.icon?.html?.includes('endpoint'));
+    endpoints[0].events.click();
+    expect(onOpenPoint).toHaveBeenLastCalledWith(0, expect.objectContaining({ anchor: { x: 60, y: 80 } }));
+    endpoints[1].events.click();
+    expect(onOpenPoint).toHaveBeenLastCalledWith(2, expect.any(Object));
+    layers.find(item => item.options.fillColor === '#131712').events.click();
+    expect(onOpenPoint).toHaveBeenLastCalledWith(1, expect.any(Object));
     routeMap.fitRange(track, [0, 2]);
     expect(map.fitBounds).toHaveBeenLastCalledWith(expect.any(Array), { padding: [72, 72] });
     routeMap.clearRangeFocus();

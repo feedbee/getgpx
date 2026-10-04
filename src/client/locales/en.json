@@ -364,5 +364,10 @@
   "errors.editConflict": "Wait for track processing to finish before editing.",
   "sharing.duration": "{hours} h {minutes} min",
   "sharing.myTracks": "Your GPX routes, maps and route details in one place.",
-  "sharing.favorites": "Your favorite public GPX routes in one place."
+  "sharing.favorites": "Your favorite public GPX routes in one place.",
+  "point.details": "Route point details",
+  "point.googleMaps": "Open in Google Maps",
+  "point.copy": "Copy coordinates",
+  "point.copied": "Coordinates copied",
+  "point.copyFailed": "Could not copy. Select and copy the coordinates manually."
 }
