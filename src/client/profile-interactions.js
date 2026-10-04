@@ -1,7 +1,7 @@
 import { pointIndexAtRatio, pointerRatioInPlot } from './domain/profile-math.js';
 
 export function bindProfileInteractions({ getTrack, getViewRange, getPoiSelection, getActivePointIndex,
-  onHoverPoi, onLeavePoi, onTogglePoi, onOpenPoint = () => {}, getPointMenuOpen = () => false, onActivePoint, onPointContext, onViewRange, documentRef = document }) {
+  onHoverPoi, onLeavePoi, onOpenPoint = () => {}, getPointMenuOpen = () => false, onActivePoint, onPointContext, onViewRange, documentRef = document }) {
   const profile = documentRef.querySelector('#profile-wrap');
   let selectionStart = null;
   profile.addEventListener('pointermove', (event) => {
@@ -33,7 +33,7 @@ export function bindProfileInteractions({ getTrack, getViewRange, getPoiSelectio
   });
   profile.addEventListener('click', (event) => {
     const marker = event.target.closest('[data-profile-poi-index]');
-    if (marker) onTogglePoi(Number(marker.dataset.profilePoiIndex));
+    if (marker) openPoi(marker);
     if (event.target.closest('#profile-dot')) openActivePoint();
   });
   profile.addEventListener('pointerdown', (event) => {
@@ -60,6 +60,11 @@ export function bindProfileInteractions({ getTrack, getViewRange, getPoiSelectio
     const to = pointIndexAtRatio(getTrack().points, getViewRange()[0], getViewRange()[1], Math.max(startRatio, endRatio));
     onViewRange([from, to]);
   });
+  function openPoi(marker) {
+    const poiIndex = Number(marker.dataset.profilePoiIndex);
+    const pointIndex = getTrack()?.pointsOfInterest?.[poiIndex]?.routePointIndex;
+    if (Number.isInteger(pointIndex)) onOpenPoint(pointIndex, { trigger: marker, context: { poiIndex } });
+  }
   function openActivePoint() {
     onOpenPoint(getActivePointIndex(), { trigger: documentRef.querySelector('#profile-dot'), focusTarget: profile });
   }
@@ -69,6 +74,9 @@ export function bindProfileInteractions({ getTrack, getViewRange, getPoiSelectio
   });
   profile.addEventListener('keydown', (event) => {
     if (!getTrack()) return;
+    const poiMarker = event.target?.closest?.('[data-profile-poi-index]');
+    if (poiMarker && ['Enter', ' '].includes(event.key)) { event.preventDefault(); openPoi(poiMarker); return; }
+    if (poiMarker) return;
     if (['Enter', ' '].includes(event.key)) { event.preventDefault(); openActivePoint(); return; }
     if (getPointMenuOpen()) return;
     if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;

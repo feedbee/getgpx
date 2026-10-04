@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { coordinatePair, pointPopoverPosition, pointPopoverArrow, createRoutePointPopover } from '../../../src/client/route-point-popover.js';
+import { coordinatePair, pointPopoverPosition, pointPopoverArrow, createRoutePointPopover, routePointHeading } from '../../../src/client/route-point-popover.js';
 
 describe('point popover', () => {
   it('copies latitude then longitude with decimal dots and six places', () => {
@@ -15,6 +15,18 @@ describe('point popover', () => {
       .toEqual({ left: 100, side: 'bottom' });
     expect(pointPopoverArrow({ x: 310, y: 30 }, { width: 280, height: 200 }, { left: 32, top: 42 }))
       .toEqual({ left: 264, side: 'top' });
+  });
+  it('anchors below the full icon when there is no room above', () => {
+    expect(pointPopoverPosition({ x: 100, y: 20, bottom: 48 }, { width: 200, height: 180 },
+      { left: 8, top: 8, right: 500, bottom: 500 })).toEqual({ left: 8, top: 60 });
+  });
+  it('shows endpoint and escaped POI headings but leaves ordinary points untitled', () => {
+    expect(routePointHeading({}, {})).toBe('');
+    expect(routePointHeading({ kind: 'start' }, {})).toContain('START');
+    expect(routePointHeading({ kind: 'finish' }, {})).toContain('endpoint-finish');
+    const html = routePointHeading({ poiIndex: 0 }, { pointsOfInterest: [{ name: '<img src=x>' }] });
+    expect(html).toContain('&lt;img src=x&gt;');
+    expect(html).toContain('poi-marker');
   });
   it('keeps the panel inside narrow bounds at a corner', () => {
     expect(pointPopoverPosition({ x: 310, y: 290 }, { width: 280, height: 200 },
@@ -42,19 +54,20 @@ function setup(clipboard = { writeText: vi.fn().mockResolvedValue() }) {
   const track = { distanceKm: 1, points: [
     { lat: 52, lon: 21, distanceKm: 0, ele: 100, grade: 0, surface },
     { lat: 53, lon: 22, distanceKm: 1, ele: 120, grade: 2, surface },
-  ] };
+  ], pointsOfInterest: [{ name: 'Water stop', lat: 52.1, lon: 21.1, routePointIndex: 0 }] };
   const onSelect = vi.fn();
-  const popover = createRoutePointPopover({ getTrack: () => track, onSelect, documentRef, windowRef, clipboard });
+  const onClose = vi.fn();
+  const popover = createRoutePointPopover({ getTrack: () => track, onSelect, onClose, documentRef, windowRef, clipboard });
   const trigger = { getBoundingClientRect: () => ({ left: 290, top: 290, width: 20, height: 20 }), setAttribute: vi.fn(), focus: vi.fn(), contains: target => target === trigger };
-  const open = index => popover.open(index, { anchor: { x: 300, y: 300 }, trigger });
-  return { popover, panel, trigger, handlers, open, onSelect, clipboard, documentRef, windowRef };
+  const open = (index, options = {}) => popover.open(index, { anchor: { x: 300, y: 300 }, trigger, ...options });
+  return { popover, panel, trigger, handlers, open, onSelect, onClose, clipboard, documentRef, windowRef };
 }
 
 describe('point popover interactions', () => {
   it('selects a point, renders its coordinates and maps link, and toggles the same trigger', () => {
     const { popover, panel, open, onSelect } = setup();
     open(1);
-    expect(onSelect).toHaveBeenCalledWith(1);
+    expect(onSelect).toHaveBeenCalledWith(1, {});
     expect(panel.querySelector('.point-coordinates').textContent).toBe('53.000000, 22.000000');
     expect(panel.querySelector('a').href).toBe('https://www.google.com/maps/search/?api=1&query=53.000000%2C%2022.000000');
     expect(panel.innerHTML).toContain('100%');
@@ -62,6 +75,17 @@ describe('point popover interactions', () => {
     open(1);
     expect(popover.isOpen).toBe(false);
     expect(panel.hidden).toBe(true);
+  });
+
+  it('uses the POI name and original coordinates while selecting its route point', () => {
+    const { panel, open, onSelect, onClose, popover } = setup();
+    open(0, { context: { poiIndex: 0 } });
+    expect(onSelect).toHaveBeenCalledWith(0, { poiIndex: 0 });
+    expect(panel.innerHTML.indexOf('Water stop')).toBeLessThan(panel.innerHTML.indexOf('point-readout'));
+    expect(panel.querySelector('.point-coordinates').textContent).toBe('52.100000, 21.100000');
+    expect(panel.querySelector('a').href).toContain('52.100000%2C%2021.100000');
+    popover.close();
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('ignores inside clicks, dismisses outside, and restores focus on Escape', () => {

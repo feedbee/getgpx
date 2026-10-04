@@ -200,10 +200,17 @@ control canonical URLs. Production and Vite use the same metadata adapter.
 ### Route point details
 
 Click the active route dot on the map or elevation profile, or the start (A) or
-finish (B) marker, to select that point and open its details. The panel repeats
+finish (B) marker, or a numbered POI marker on either view, to select that point and open its details. The panel repeats
 the map readout, adds decimal latitude/longitude, and offers copying coordinates
 and opening Google Maps in a new tab. Hover navigation pauses while the panel is
 open. Escape, another click on the trigger, or a click outside dismisses it.
 The panel prefers placement above the point and switches below when space is
 limited. On the profile, Enter or Space opens the active point; dragging still
 selects a distance range.
+
+POI menus start with the POI icon and name; endpoint menus start with the A/B
+icon and start/finish label. POI menus copy and link to the original POI
+coordinates and show statistics at the associated route point. The panel and
+its arrow attach to the marker icon, including the numbered circle above the
+profile, rather than the corresponding dot on the elevation curve. The former
+separate map POI tooltip is replaced by this panel.

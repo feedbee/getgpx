@@ -4,7 +4,7 @@
 
 Clicking the active black route marker on the map or the navigation point on the elevation profile opens one shared point popover. It duplicates the current map readout: distance, elevation, gradient, surface, road type, quality and percentage of the complete route. It additionally displays latitude and longitude, offers copying coordinates and opens the selected point in Google Maps in a new tab.
 
-The selected point stays fixed while the popover is open. Prefer placement above the point, fall back below when necessary, and constrain the panel to the visible viewport and available map/profile area. Outside clicks and Escape dismiss it. Clicking the active trigger again dismisses it. Opening another point replaces the previous panel. Preserve profile drag-to-select and existing points-of-interest interactions. Close the panel when its route or profile view is replaced. Keyboard users can open the active point and reach both actions; dismissal restores trigger focus when appropriate.
+The selected point stays fixed while the popover is open. Prefer placement above the point, fall back below when necessary, and constrain the panel to the visible viewport (horizontal placement also respects the map area). Outside clicks and Escape dismiss it. Clicking the active trigger again dismisses it. Opening another point replaces the previous panel. Preserve profile drag-to-select and existing points-of-interest interactions. Close the panel when its route or profile view is replaced. Keyboard users can open the active point and reach both actions; dismissal restores trigger focus when appropriate.
 
 Coordinates use WGS84 decimal degrees in latitude, longitude order with six decimal places. Copy a plain machine-readable pair with decimal dots. Show localized success or failure feedback for clipboard access. Use the existing measurement and translation helpers for all route statistics. Provide all new messages in en, ru, uk, be and pl.
 
@@ -29,3 +29,17 @@ Always preserve map/profile navigation, localize text and units, and run the qua
 ## Review status
 
 Approved by the user. Start (A) and finish (B) markers also select and highlight their endpoint and open the same popover.
+
+## POI and marker heading extension
+
+The user approved extending this same popover to POI markers on the map and
+profile. Its first row contains the POI icon/number and name, or the A/B icon
+with the localized start/finish label. Ordinary route points have no heading.
+POI copy and Google Maps actions use the POI coordinates; route statistics use
+its associated route point. Replace the separate map POI tooltip. Position the
+panel above the icon's top edge, falling back below its bottom edge, including
+for the numbered markers at the top of the profile. Closing clears the menu's
+POI highlight, and profile range dragging remains available.
+
+Use the full visible viewport for vertical placement, so a menu may extend above
+the map when this preserves a clear connection to its POI icon on narrow screens.

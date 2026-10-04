@@ -78,7 +78,11 @@ const profileViewport = createProfileViewport({ getTrack: () => currentTrack,
 const activePoint = createActiveRoutePoint({ getTrack: () => currentTrack,
   chartCoordinates: (point) => elevationProfile.chartCoordinates(point),
   onMapPoint: (point) => routeMap.setActivePoint(point, activePoint.index) });
-const pointPopover = createRoutePointPopover({ getTrack: () => currentTrack, onSelect: (index) => activePoint.set(index, { showContext: true }) });
+const pointPopover = createRoutePointPopover({ getTrack: () => currentTrack, onSelect: (index, context) => {
+    poiController.clearSelection();
+    if (Number.isInteger(context.poiIndex)) poiController.toggle(context.poiIndex);
+    activePoint.set(index, { showContext: true });
+  }, onClose: () => poiController.clearSelection() });
 function hoverActivePoint(index, options) {
   if (!pointPopover.isOpen) activePoint.set(index, options);
 }
@@ -97,7 +101,7 @@ const routeMap = createRouteMap({ getPoiSelection: () => poiController.selection
   getRouteFilter: routeFilters.selectedRouteFilter, getTerrainRange: routeFilters.selectedTerrainRange,
   onActivePoint: hoverActivePoint, onPointContext: hoverPointContext,
   onOpenPoint: pointPopover.open, getPointMenuOpen: () => pointPopover.isOpen, onPoiHover: (index) => { if (!pointPopover.isOpen) poiController.hover(index); },
-  onClosePoint: pointPopover.close, onPoiLeave: poiController.leave, onPoiToggle: poiController.toggle });
+  onClosePoint: pointPopover.close, onPoiLeave: poiController.leave });
 const elevationProfile = createElevationProfile({ getTrack: () => currentTrack, getViewRange: () => profileViewport.range,
   getSummaryMetrics: () => publicTrackData?.metrics, getColorMode: () => profileColorMode,
   getFocusPlacement: () => profileFocusPlacement, getRouteFilter: routeFilters.selectedRouteFilter,
@@ -357,7 +361,7 @@ async function loadPublicTrack(trackId, retries = 0) {
 
 bindProfileInteractions({ getTrack: () => currentTrack, getViewRange: () => profileViewport.range,
   getPoiSelection: () => poiController.selection, getActivePointIndex: () => activePoint.index,
-  onHoverPoi: (index) => { if (!pointPopover.isOpen) poiController.hover(index); }, onLeavePoi: poiController.leave, onTogglePoi: (index) => { pointPopover.close(); poiController.toggle(index); },
+  onHoverPoi: (index) => { if (!pointPopover.isOpen) poiController.hover(index); }, onLeavePoi: poiController.leave,
   onActivePoint: hoverActivePoint, onPointContext: hoverPointContext,
   onOpenPoint: pointPopover.open, getPointMenuOpen: () => pointPopover.isOpen, onViewRange: profileViewport.setRange });
 document.querySelectorAll('[data-color-mode]').forEach((button) => button.addEventListener('click', () => setColorMode(button.dataset.colorScope, button.dataset.colorMode)));

@@ -31,11 +31,12 @@ export function createElevationProfile({ getTrack, getViewRange, getSummaryMetri
       const routePoint = track.points[point.routePointIndex];
       if (!routePoint || routePoint.distanceKm < startKm || routePoint.distanceKm > endKm) return;
       const ratio = (routePoint.distanceKm - startKm) / Math.max(endKm - startKm, 0.001);
-      const marker = documentRef.createElement('span');
+      const marker = documentRef.createElement('button');
+      marker.type = 'button';
       marker.className = 'profile-poi';
+      marker.setAttribute('aria-label', poiName(point, index));
       marker.dataset.profilePoiIndex = String(index);
       marker.style.left = `${ratio * 100}%`;
-      marker.title = poiName(point, index);
       bindText(marker, () => String(index + 1));
       group.append(marker);
     });

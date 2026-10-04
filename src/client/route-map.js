@@ -1,13 +1,13 @@
 import L from 'leaflet';
 import { createElevationMapRenderer } from './elevation-map-renderer.js';
-import { t, bindText, bindAttribute, htmlMessage, escapeHtml } from './i18n.js';
+import { t, bindAttribute, htmlMessage, escapeHtml } from './i18n.js';
 import { poiName } from './analysis-presentation.js';
 import { nearestRoutePointIndex } from './domain/profile-math.js';
 import { colorRunsForMode, elevationRange, highlightRunsForFilter } from './domain/route-color.js';
 import { isClosedRoute } from './domain/route-shape.js';
 
 export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilter, getTerrainRange,
-  onActivePoint, onPointContext, onOpenPoint = () => {}, onClosePoint = () => {}, getPointMenuOpen = () => false, onPoiHover, onPoiLeave, onPoiToggle, documentRef = document, leaflet = L }) {
+  onActivePoint, onPointContext, onOpenPoint = () => {}, onClosePoint = () => {}, getPointMenuOpen = () => false, onPoiHover, onPoiLeave, documentRef = document, leaflet = L }) {
   let map;
   let routeLine;
   let activeMarker;
@@ -88,22 +88,20 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
       icon: makeEndpointIcon('A', 'start'), keyboard: false, trackLayer: true, pane: 'startMarkerPane', interactive: true, zIndexOffset: 1000,
       title: closedRoute ? t('map.startFinishTitle') : t('map.startTitle'),
     }).addTo(map);
-    startMarker.on('click', () => openPoint(0, startMarker));
+    startMarker.on('click', () => openPoint(0, startMarker, { kind: 'start' }));
     if (!closedRoute) {
       const finishMarker = leaflet.marker(coordinates.at(-1), {
         icon: makeEndpointIcon('B', 'finish'), keyboard: false, trackLayer: true, interactive: true, zIndexOffset: 900, title: t('map.finishTitle'),
       }).addTo(map);
-      finishMarker.on('click', () => openPoint(track.points.length - 1, finishMarker));
+      finishMarker.on('click', () => openPoint(track.points.length - 1, finishMarker, { kind: 'finish' }));
     }
     poiMarkers = (track.pointsOfInterest || []).map((point, index) => {
-      const tooltip = documentRef.createElement('span');
-      bindText(tooltip, () => poiName(point, index));
       const marker = leaflet.marker([point.lat, point.lon], {
-        icon: makePoiIcon(index), trackLayer: true, zIndexOffset: 700, title: poiName(point, index),
-      }).addTo(map).bindTooltip(tooltip, { direction: 'top', offset: [0, -26] });
+        icon: makePoiIcon(index), trackLayer: true, zIndexOffset: 700,
+      }).addTo(map);
       marker.on('mouseover', () => onPoiHover(index));
       marker.on('mouseout', () => onPoiLeave());
-      marker.on('click', () => { onClosePoint(); onPoiToggle(index); });
+      marker.on('click', () => openPoint(point.routePointIndex, marker, { poiIndex: index }));
       return marker;
     });
     renderPoiSelection(getPoiSelection().pinnedIndex ?? getPoiSelection().hoveredIndex);
@@ -124,6 +122,7 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
     focusLayers[0]?.bringToBack?.();
     focusLayers.slice(1).forEach((layer) => layer.bringToFront?.());
     if (fit) map.fitBounds(routeLine.getBounds(), { padding: [48, 48] });
+    poiMarkers.forEach((marker, index) => marker.getElement()?.setAttribute('aria-label', poiName(track.pointsOfInterest[index], index)));
     const activeElement = activeMarker.getElement();
     activeElement?.setAttribute('tabindex', '0');
     activeElement?.setAttribute('role', 'button');
@@ -133,11 +132,12 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
     });
   }
 
-  function openPoint(index, marker) {
+  function openPoint(index, marker, context = {}) {
+    if (!Number.isInteger(index) || !currentTrack.points[index]) return;
     const point = map.latLngToContainerPoint([currentTrack.points[index].lat, currentTrack.points[index].lon]);
     const bounds = documentRef.querySelector('#map').getBoundingClientRect();
-    onOpenPoint(index, { anchor: { x: bounds.left + point.x, y: bounds.top + point.y },
-      trigger: marker.getElement()?.querySelector('button') ?? marker.getElement(), bounds });
+    onOpenPoint(index, { context, anchor: context.kind || Number.isInteger(context.poiIndex) ? undefined : { x: bounds.left + point.x, y: bounds.top + point.y },
+      trigger: marker.getElement()?.querySelector('button, .poi-marker') ?? marker.getElement(), focusTarget: marker.getElement()?.querySelector('button') ?? marker.getElement(), bounds });
   }
 
   function clearRangeFocus() {
@@ -162,8 +162,6 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
     poiMarkers.forEach((marker, markerIndex) => {
       marker.getElement()?.querySelector('.poi-marker')?.classList.toggle('is-active', markerIndex === index);
       marker.setZIndexOffset(markerIndex === index ? 1200 : 700);
-      if (markerIndex === index) marker.openTooltip();
-      else marker.closeTooltip();
     });
   }
 

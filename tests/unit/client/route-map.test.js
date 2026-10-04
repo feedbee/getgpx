@@ -42,7 +42,7 @@ describe('route map', () => {
       { lat: 1, lon: 2, distanceKm: 0 },
       { lat: 3, lon: 4, distanceKm: 1 },
       { lat: 5, lon: 6, distanceKm: 2 },
-    ], pointsOfInterest: [] };
+    ], pointsOfInterest: [{ lat: 3.01, lon: 4.01, name: 'Water stop', routePointIndex: 1 }] };
     let pinnedIndex = null;
     const onActivePoint = vi.fn();
     const onOpenPoint = vi.fn();
@@ -70,11 +70,15 @@ describe('route map', () => {
     expect(layers.find((item) => item.options.fillColor === '#131712').setLatLng).toHaveBeenCalledWith([3, 4]);
     const endpoints = layers.filter(item => item.options.icon?.html?.includes('endpoint'));
     endpoints[0].events.click();
-    expect(onOpenPoint).toHaveBeenLastCalledWith(0, expect.objectContaining({ anchor: { x: 60, y: 80 } }));
+    expect(onOpenPoint).toHaveBeenLastCalledWith(0, expect.objectContaining({ context: { kind: 'start' } }));
     endpoints[1].events.click();
     expect(onOpenPoint).toHaveBeenLastCalledWith(2, expect.any(Object));
     layers.find(item => item.options.fillColor === '#131712').events.click();
     expect(onOpenPoint).toHaveBeenLastCalledWith(1, expect.any(Object));
+    const poiMarker = layers.find(item => item.options.icon?.html?.includes('poi-marker'));
+    expect(poiMarker.options.title).toBeUndefined();
+    poiMarker.events.click();
+    expect(onOpenPoint).toHaveBeenLastCalledWith(1, expect.objectContaining({ context: { poiIndex: 0 }, anchor: undefined }));
     routeMap.fitRange(track, [0, 2]);
     expect(map.fitBounds).toHaveBeenLastCalledWith(expect.any(Array), { padding: [72, 72] });
     routeMap.clearRangeFocus();

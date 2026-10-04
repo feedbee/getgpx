@@ -366,8 +366,8 @@
   "sharing.myTracks": "Ваші GPX-треки, карти й характеристики маршрутів в одному місці.",
   "sharing.favorites": "Улюблені публічні GPX-треки в одному місці.",
   "point.details": "Дані точки маршруту",
-  "point.googleMaps": "Відкрити в Google Maps",
-  "point.copy": "Скопіювати координати",
+  "point.googleMaps": "Google Maps",
+  "point.copy": "Координати",
   "point.copied": "Координати скопійовано",
   "point.copyFailed": "Не вдалося скопіювати. Виділіть і скопіюйте координати вручну."
 }

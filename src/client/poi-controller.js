@@ -112,5 +112,6 @@ export function createPoiController({ getTrack, getActivePointIndex, onActivePoi
   });
 
   return { get selection() { return selection; }, renderPointsOfInterest, hover, leave, toggle,
+    clearSelection() { selection = { ...emptyPoiSelection }; renderPoiSelection(); },
     reset() { selection = { ...emptyPoiSelection }; } };
 }

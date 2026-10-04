@@ -366,8 +366,8 @@
   "sharing.myTracks": "Your GPX routes, maps and route details in one place.",
   "sharing.favorites": "Your favorite public GPX routes in one place.",
   "point.details": "Route point details",
-  "point.googleMaps": "Open in Google Maps",
-  "point.copy": "Copy coordinates",
+  "point.googleMaps": "Google Maps",
+  "point.copy": "Coordinates",
   "point.copied": "Coordinates copied",
   "point.copyFailed": "Could not copy. Select and copy the coordinates manually."
 }

@@ -6,7 +6,7 @@ function setup() {
   const profile = { addEventListener: (name, callback) => { handlers[name] = callback; },
     getBoundingClientRect: () => ({ left: 0, width: 100 }), setPointerCapture: vi.fn() };
   const selection = { classList: { add: vi.fn(), remove: vi.fn() }, setAttribute: vi.fn() };
-  const track = { points: Array.from({ length: 11 }, (_, index) => ({ distanceKm: index })) };
+  const track = { points: Array.from({ length: 11 }, (_, index) => ({ distanceKm: index })), pointsOfInterest: [{ routePointIndex: 7 }] };
   const callbacks = { onHoverPoi: vi.fn(), onLeavePoi: vi.fn(), onTogglePoi: vi.fn(),
     onOpenPoint: vi.fn(), onActivePoint: vi.fn(), onPointContext: vi.fn(), onViewRange: vi.fn() };
   let menuOpen = false;
@@ -44,6 +44,16 @@ describe('profile interactions', () => {
     handlers.click({ target });
     expect(callbacks.onOpenPoint).toHaveBeenCalledWith(4, expect.any(Object));
     handlers.keydown({ key: 'Enter', preventDefault: vi.fn() });
+    expect(callbacks.onOpenPoint).toHaveBeenCalledTimes(2);
+  });
+
+  it('anchors POI clicks and keyboard activation to the numbered marker', () => {
+    const { handlers, callbacks } = setup();
+    const marker = { dataset: { profilePoiIndex: '0' } };
+    const target = { closest: selector => selector === '[data-profile-poi-index]' ? marker : null };
+    handlers.click({ target });
+    expect(callbacks.onOpenPoint).toHaveBeenCalledWith(7, { trigger: marker, context: { poiIndex: 0 } });
+    handlers.keydown({ target, key: 'Enter', preventDefault: vi.fn() });
     expect(callbacks.onOpenPoint).toHaveBeenCalledTimes(2);
   });
 
