@@ -4,6 +4,22 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-04
+
+### Added
+
+- Route points on the map and elevation profile now show details in a popover, with shared actions for points of interest and route endpoints.
+- The elevation profile marks route start and finish when visible, and reports distance for the selected range alongside ascent, descent and actual elevation extremes.
+
+### Fixed
+
+- Ride-quality highlighting uses the same style across map and profile interactions.
+- Social preview metrics use text symbols for more reliable rendering.
+
+### Changed
+
+- The agent release checklist is shorter and includes a single command for dependency installation and automated checks.
+
 ## [0.5.0] - 2026-10-02
 
 ### Added
