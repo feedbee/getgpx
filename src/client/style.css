@@ -809,7 +809,6 @@ button.button-primary:hover,button.button-primary:focus-visible { border-color:v
 
 [data-surface-filter].is-current:not(.is-active),[data-waytype-filter].is-current:not(.is-active),[data-quality-filter].is-current:not(.is-active) { box-shadow:inset 3px 0 #e36b32; background:#fff4ea; }
 .distribution-bar button.is-current:not(.is-active),.surface-bar button.is-current:not(.is-active) { box-shadow:inset 0 0 0 2px #e36b32; transform:scaleY(1.25); }
-.distribution-list button.is-active,.analysis-card .surface-stat.is-active,.quality-compact .quality-stats > button.is-active { box-shadow:inset 3px 0 #173d31; background:#e4eee8; }
 .distribution-bar button.is-active,.surface-bar button.is-active { transform:scaleY(1.55); box-shadow:0 0 0 2px #173d31; z-index:2; }
 .distribution-bar button.is-dimmed,.surface-bar button.is-dimmed { opacity:.42; filter:saturate(.55); }
 .profile-selection { fill:#f0b83f; stroke:#10251d; stroke-width:2; }
