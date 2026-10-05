@@ -166,7 +166,8 @@ persistence).
 When checked, distances and percentages in the statistics lists and stacked bars
 use the selected range, excluding the segment before its first point. Missing
 classifications count as unknown; a zero-distance range has zero percentages.
-Category labels retain their fixed order, and bars respect the
+Bars and statistics rows follow the category order or descending percentage order
+chosen in the
 [client configuration](client-configuration.md).
 
 Zoom Back restores distributions for the previous range. Reset restores the

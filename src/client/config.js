@@ -1,9 +1,12 @@
 /**
- * Segment order for surface, way type, and road quality distribution bars.
+ * Segment and statistics row order for surface, way type, and road quality.
  * false (default): keep the registered category order.
- * true: sort by descending percentage, keeping category order for equal widths.
+ * true: sort bars and statistics rows by descending percentage, keeping category
+ * order for equal percentages. Zero-percent rows appear last.
  * Sorting is reapplied after profile range changes and selection-only toggles.
- * Vertical statistics lists and map legends always keep category order.
- * This is a build-time setting; rebuild the client after changing it.
+ * Map legends always keep category order.
+ * Vite reads SORT_DISTRIBUTION_BARS_BY_SIZE from .env or the shell and exposes
+ * only its boolean value. Only the literal "true" enables sorting.
+ * Restart Vite after changing .env; rebuild the client for deployment.
  */
-export const SORT_DISTRIBUTION_BARS_BY_SIZE = false;
+export const SORT_DISTRIBUTION_BARS_BY_SIZE = import.meta.env.SORT_DISTRIBUTION_BARS_BY_SIZE === true;

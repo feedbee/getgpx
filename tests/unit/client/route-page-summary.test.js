@@ -21,7 +21,7 @@ function fakeDocument() {
 }
 
 describe('route page summary', () => {
-  it('resorts every bar after range changes and selection toggles when sorting is configured', () => {
+  it('resorts every bar and statistics list after range changes and selection toggles when sorting is configured', () => {
     clientConfig.SORT_DISTRIBUTION_BARS_BY_SIZE = true;
     const documentRef = fakeDocument();
     const view = createRouteSummaryView({ documentRef });
@@ -41,14 +41,15 @@ describe('route page summary', () => {
       distribution, [{ id: second, distanceKm: 3, percent: 100 * 3 / 11 },
         { id: first, distanceKm: 8, percent: 100 * 8 / 11 }],
     ])) };
-    const listOrders = new Map();
+    const zeroRows = new Map();
     function expectOrder(selectionDominates) {
       for (const [, selector, filter, first, second] of specs) {
         const ids = (suffix) => [...documentRef.querySelector(`#${selector}-${suffix}`).innerHTML
           .matchAll(new RegExp(`data-${filter}-filter="([^"]+)"`, 'g'))].map((match) => match[1]);
-        expect(ids('bar')).toEqual(selectionDominates ? [second, first] : [first, second]);
-        if (!listOrders.has(selector)) listOrders.set(selector, ids('stats'));
-        expect(ids('stats')).toEqual(listOrders.get(selector));
+        const ordered = selectionDominates ? [second, first] : [first, second];
+        expect(ids('bar')).toEqual(ordered);
+        if (!zeroRows.has(selector)) zeroRows.set(selector, ids('stats').filter((id) => id !== first && id !== second));
+        expect(ids('stats')).toEqual([...ordered, ...zeroRows.get(selector)]);
       }
     }
     view.renderRangeDistributions(track, [0, 4], fullSummary);

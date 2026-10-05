@@ -68,5 +68,7 @@ export default defineConfig(({ command, mode }) => {
   const plugins = command === 'serve' && mode !== 'test'
     ? [authenticationPlugin]
     : [];
-  return { plugins };
+  return { plugins, define: {
+    'import.meta.env.SORT_DISTRIBUTION_BARS_BY_SIZE': JSON.stringify(environment.SORT_DISTRIBUTION_BARS_BY_SIZE === 'true'),
+  } };
 });
