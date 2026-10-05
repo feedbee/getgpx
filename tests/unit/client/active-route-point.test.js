@@ -35,4 +35,22 @@ describe('active route point', () => {
     expect(point.index).toBe(0);
     expect(documentRef.filter.classList.toggle).toHaveBeenLastCalledWith('is-current', false);
   });
+  it('hides the chart cursor outside the viewport and restores it at either boundary', () => {
+    const surface = { id: 'asphalt', label: 'surface.asphalt', highway: 'secondary', quality: { id: 'good', label: 'quality.good' } };
+    const track = { distanceKm: 2, points: [{ distanceKm: 1, ele: 100, grade: 0, surface }] };
+    const documentRef = fakeDocument();
+    let x = -10;
+    const onMapPoint = vi.fn();
+    const point = createActiveRoutePoint({ getTrack: () => track, chartCoordinates: () => ({ x, y: 100 }), onMapPoint, documentRef });
+    for (const position of [-10, 0, 600, 1200, 1210, 600]) {
+      x = position;
+      point.set(0, { showContext: true });
+      for (const selector of ['#profile-cursor', '#profile-dot']) {
+        expect(documentRef.querySelector(selector).setAttribute).toHaveBeenLastCalledWith('visibility', position < 0 || position > 1200 ? 'hidden' : 'visible');
+      }
+      expect(documentRef.filter.classList.toggle).toHaveBeenLastCalledWith('is-current', true);
+    }
+    expect(onMapPoint).toHaveBeenCalledTimes(6);
+  });
+
 });

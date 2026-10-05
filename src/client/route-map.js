@@ -28,6 +28,8 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
   function init() {
     map = leaflet.map('map', { zoomControl: false, attributionControl: true });
     map.on?.('movestart', onClosePoint);
+    map.createPane('rangeFocusPane');
+    map.getPane('rangeFocusPane').style.zIndex = '398';
     map.createPane('elevationPane');
     map.getPane('elevationPane').style.zIndex = '399';
     map.createPane('startMarkerPane');
@@ -79,10 +81,16 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
       }).addTo(map);
     });
     routeLine = leaflet.polyline(coordinates, { color: '#000000', weight: 14, opacity: 0, trackLayer: true }).addTo(map);
-    routeLine.on('mousemove', (event) => {
+    function hoverRoute(event) {
       if (!getPointMenuOpen() && getPoiSelection().pinnedIndex === null) onActivePoint(nearestPoint(event.latlng), { showContext: true });
-    });
-    routeLine.on('mouseout', () => { if (!getPointMenuOpen() && getPoiSelection().pinnedIndex === null) onPointContext(null); });
+    }
+    function leaveRoute(event) {
+      const target = event.originalEvent?.relatedTarget;
+      if (target && [routeLine, activeMarker].some(layer => layer?.getElement()?.contains(target))) return;
+      if (!getPointMenuOpen() && getPoiSelection().pinnedIndex === null) onPointContext(null);
+    }
+    routeLine.on('mousemove', hoverRoute);
+    routeLine.on('mouseout', leaveRoute);
     const closedRoute = isClosedRoute(track.points);
     const startMarker = leaflet.marker(coordinates[0], {
       icon: makeEndpointIcon('A', 'start'), keyboard: false, trackLayer: true, pane: 'startMarkerPane', interactive: true, zIndexOffset: 1000,
@@ -109,6 +117,9 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
       ? `<span class="start-dot"></span><b>${htmlMessage('map.startFinish')}</b>`
       : `<span class="start-dot"></span><b>${htmlMessage('map.start')}</b><i class="finish-dot"></i><b>${htmlMessage('map.finish')}</b>`;
     activeMarker = leaflet.circleMarker(coordinates[0], { radius: 8, color: '#fff', weight: 3, fillColor: '#131712', fillOpacity: 1, trackLayer: true, interactive: true, bubblingMouseEvents: false }).addTo(map);
+    activeMarker.on('mouseover', hoverRoute);
+    activeMarker.on('mousemove', hoverRoute);
+    activeMarker.on('mouseout', leaveRoute);
     activeMarker.on('click', () => openPoint(activePointIndex, activeMarker));
     const terrainRange = getTerrainRange();
     if (terrainRange) {
@@ -151,7 +162,7 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
     clearRangeFocus();
     const outline = leaflet.polyline(coordinates, {
       color: '#151a17', weight: 14, opacity: 0.9, dashArray: '10 8', lineCap: 'butt',
-      rangeFocus: true, interactive: false,
+      pane: 'rangeFocusPane', rangeFocus: true, interactive: false,
     }).addTo(map).bringToBack();
     const boundaryStyle = { radius: 7, color: '#10251d', weight: 3, fillColor: '#f0b83f', fillOpacity: 1, rangeFocus: true, interactive: false };
     focusLayers = [outline, leaflet.circleMarker(coordinates[0], boundaryStyle).addTo(map), leaflet.circleMarker(coordinates.at(-1), boundaryStyle).addTo(map)];

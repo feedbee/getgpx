@@ -4,8 +4,9 @@ import { createRouteMap } from '../../../src/client/route-map.js';
 
 function fakeLeaflet() {
   const layers = [];
+  const panes = new Map();
   const map = {
-    createPane: vi.fn(), getPane: () => ({ style: {} }),
+    createPane: (name) => panes.set(name, { style: {} }), getPane: (name) => panes.get(name),
     eachLayer: (callback) => [...layers].forEach(callback),
     removeLayer: (layer) => { layers.splice(layers.indexOf(layer), 1); },
     fitBounds: vi.fn(), invalidateSize: vi.fn(), latLngToContainerPoint: () => ({ x: 50, y: 60 }),
@@ -16,7 +17,8 @@ function fakeLeaflet() {
     on(event, callback) { this.events[event] = callback; return this; },
     bindTooltip() { return this; }, getBounds() { return coordinates; },
     bringToBack() { return this; }, bringToFront() { return this; },
-    getElement() { return null; }, setZIndexOffset: vi.fn(),
+    element: { setAttribute: vi.fn(), addEventListener: vi.fn(), querySelector: () => null, contains(target) { return target === this; } },
+    getElement() { return this.element; }, setZIndexOffset: vi.fn(),
     openTooltip: vi.fn(), closeTooltip: vi.fn(), setLatLng: vi.fn(),
   });
   return {
@@ -46,9 +48,10 @@ describe('route map', () => {
     let pinnedIndex = null;
     const onActivePoint = vi.fn();
     const onOpenPoint = vi.fn();
+    const onPointContext = vi.fn();
     const routeMap = createRouteMap({ getPoiSelection: () => ({ pinnedIndex, hoveredIndex: null }),
       getMapColorMode: () => mode, getRouteFilter: () => null, getTerrainRange: () => null,
-      onActivePoint, onOpenPoint, onPointContext: vi.fn(), onPoiHover: vi.fn(), onPoiLeave: vi.fn(), onPoiToggle: vi.fn(),
+      onActivePoint, onOpenPoint, onPointContext, onPoiHover: vi.fn(), onPoiLeave: vi.fn(), onPoiToggle: vi.fn(),
       documentRef, leaflet });
 
     routeMap.init();
@@ -63,9 +66,20 @@ describe('route map', () => {
     const routeLine = layers.find((item) => item.options.opacity === 0);
     routeLine.events.mousemove({ latlng: { lat: 3, lng: 4 } });
     expect(onActivePoint).toHaveBeenCalledWith(1, { showContext: true });
+    const activeMarker = layers.find(item => item.options.fillColor === '#131712');
+    routeLine.events.mouseout({ originalEvent: { relatedTarget: activeMarker.getElement() } });
+    expect(onPointContext).not.toHaveBeenCalled();
+    activeMarker.events.mouseover({ latlng: { lat: 3, lng: 4 } });
+    activeMarker.events.mousemove({ latlng: { lat: 5, lng: 6 } });
+    expect(onActivePoint).toHaveBeenLastCalledWith(2, { showContext: true });
+    activeMarker.events.mouseout({ originalEvent: { relatedTarget: routeLine.getElement() } });
+    expect(onPointContext).not.toHaveBeenCalled();
+    activeMarker.events.mouseout({ originalEvent: { relatedTarget: null } });
+    expect(onPointContext).toHaveBeenLastCalledWith(null);
+    onActivePoint.mockClear();
     pinnedIndex = 0;
     routeLine.events.mousemove({ latlng: { lat: 5, lng: 6 } });
-    expect(onActivePoint).toHaveBeenCalledTimes(1);
+    expect(onActivePoint).not.toHaveBeenCalled();
     routeMap.setActivePoint(track.points[1]);
     expect(layers.find((item) => item.options.fillColor === '#131712').setLatLng).toHaveBeenCalledWith([3, 4]);
     const endpoints = layers.filter(item => item.options.icon?.html?.includes('endpoint'));
@@ -81,6 +95,9 @@ describe('route map', () => {
     expect(onOpenPoint).toHaveBeenLastCalledWith(1, expect.objectContaining({ context: { poiIndex: 0 }, anchor: undefined }));
     routeMap.fitRange(track, [0, 2]);
     expect(map.fitBounds).toHaveBeenLastCalledWith(expect.any(Array), { padding: [72, 72] });
+    const outline = layers.find(item => item.options.rangeFocus && item.options.dashArray);
+    expect(outline.options.pane).toBe('rangeFocusPane');
+    expect(Number(map.getPane(outline.options.pane).style.zIndex)).toBeLessThan(Number(map.getPane('elevationPane').style.zIndex));
     routeMap.clearRangeFocus();
     expect(layers.some((item) => item.options.rangeFocus)).toBe(false);
   });

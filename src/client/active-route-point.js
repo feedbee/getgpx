@@ -35,6 +35,9 @@ export function createActiveRoutePoint({ getTrack, chartCoordinates, onMapPoint,
     documentRef.querySelector('#profile-cursor').setAttribute('x2', chart.x);
     documentRef.querySelector('#profile-dot').setAttribute('cx', chart.x);
     documentRef.querySelector('#profile-dot').setAttribute('cy', chart.y);
+    const visibility = Number.isFinite(chart.x) && chart.x >= 0 && chart.x <= 1200 ? 'visible' : 'hidden';
+    documentRef.querySelector('#profile-cursor').setAttribute('visibility', visibility);
+    documentRef.querySelector('#profile-dot').setAttribute('visibility', visibility);
     documentRef.querySelector('#hover-readout').innerHTML = routePointReadout(point, getTrack());
     const slider = documentRef.querySelector('#profile-wrap');
     slider.setAttribute('aria-valuenow', getTrack().distanceKm ? Math.round((point.distanceKm / getTrack().distanceKm) * 100) : 0);
