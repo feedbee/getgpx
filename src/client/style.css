@@ -1052,6 +1052,38 @@ button.button-primary:hover,button.button-primary:focus-visible { border-color:v
   .compact-route-metrics span:nth-child(n+4) { display:none; }
 }
 
+/* Route spacing: headings, controls and card content share one inset. */
+.route-content { --card-inset:20px; --section-gap:32px; }
+.route-content .content-section { padding-top:var(--section-gap); }
+.route-content .compact-heading { align-items:center; gap:16px; margin-bottom:12px; padding-inline:calc(var(--card-inset) + 1px); }
+.route-content .compact-heading h2 { margin:0; line-height:1.25; }
+.route-content .analysis-card { padding:var(--card-inset); }
+.route-content .external-track-links { padding-inline:calc(var(--card-inset) + 1px); }
+.route-content .poi-list { gap:8px 24px; }
+.route-content .poi-row { margin-inline:-8px; }
+.route-content .profile-toolbar { flex-wrap:wrap; gap:12px; margin-bottom:16px; }
+.route-content .profile-toolbar-actions { margin-left:auto; }
+.route-content .profile-summary { gap:16px; margin-top:16px; padding-top:16px; }
+.route-content .terrain-tabs { margin-bottom:16px; }
+.route-content .distribution-row,.route-content .terrain-row { width:calc(100% + 12px); margin-inline:-6px; }
+.route-content .section-nav { padding-inline:calc(24px + var(--card-inset) + 1px - 12px); }
+
+@media (max-width:900px) {
+  .route-header { width:calc(100% - 48px); padding-inline:0; }
+}
+@media (max-width:560px) {
+  .route-content { --card-inset:16px; --section-gap:28px; padding-inline:16px; }
+  .route-header { width:calc(100% - 32px); }
+  .route-content .section-nav { width:calc(100% + 32px); margin-inline:-16px; padding-inline:calc(16px + var(--card-inset) + 1px - 12px); }
+  .route-content .compact-heading { align-items:flex-start; flex-direction:row; flex-wrap:wrap; gap:8px 16px; }
+  .route-content .compact-heading > p { max-width:100%; text-align:left; }
+  .route-content .poi-section .compact-heading { align-items:center; }
+  .route-content .poi-section .compact-heading > p { margin-left:auto; text-align:right; }
+  .route-content .profile-toolbar-actions { margin-left:0; }
+  .route-content .profile-summary { grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px 8px; }
+  .route-content .profile-summary span { min-width:0; font-size:14px; }
+}
+
 /* Shared control focus treatment: neutral, high-contrast, and consistent. */
 body button:focus-visible,
 .upload-button:focus-visible,
