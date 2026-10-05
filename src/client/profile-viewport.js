@@ -1,5 +1,5 @@
 export function createProfileViewport({ getTrack, onResetMetrics, onDrawProfile, onClearRangeFocus,
-  onFitFullRange, onFitRange, onActivePoint, documentRef = document }) {
+  onFitFullRange, onFitRange, onActivePoint, onRangeChange = () => {}, documentRef = document }) {
   let range = [0, 1];
   let zoomHistory = [];
 
@@ -9,6 +9,7 @@ export function createProfileViewport({ getTrack, onResetMetrics, onDrawProfile,
     if (remember) zoomHistory.push([...range]);
     range = normalized;
     onResetMetrics();
+    onRangeChange(getTrack(), [...range]);
     onDrawProfile(getTrack());
     const isFullRange = range[0] === 0 && range[1] === getTrack().points.length - 1;
     if (isFullRange) {
@@ -34,6 +35,7 @@ export function createProfileViewport({ getTrack, onResetMetrics, onDrawProfile,
     onResetMetrics();
     documentRef.querySelector('#zoom-back').disabled = true;
     documentRef.querySelector('#zoom-reset').disabled = true;
+    onRangeChange(track, [...range]);
   }
 
   return { get range() { return range; }, setRange, reset };

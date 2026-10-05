@@ -2,6 +2,7 @@ import { t, bindText, bindAttribute, htmlMessage, formatMeasurement, preferences
 import { distanceValue, elevationValue, number } from './measurements.js';
 import { routeTypeDefinition, routeTypeIcon } from './route-type-ui.js';
 import { renderClimbs, renderSurfaces } from './route-summary-ui.js';
+import { summarizeSurfaces, summarizeWayTypes, summarizeRoadQuality } from './domain/surface.js';
 
 export function formatDuration(ms) {
   if (!ms) return ['—', ''];
@@ -11,7 +12,42 @@ export function formatDuration(ms) {
 }
 
 export function createRouteSummaryView({ documentRef = document, updatePageLanguage,
-  renderPointsOfInterest, setDetailedView, onFiltersRendered }) {
+  renderPointsOfInterest, setDetailedView, onFiltersRendered, onDistributionsRendered = () => {} }) {
+  let useSelection = true;
+  let rangeContext = null;
+  const selectionControl = documentRef.querySelector('#distribution-selection-control');
+  const selectionToggle = documentRef.querySelector('#distribution-selection-toggle');
+  selectionControl.hidden = true;
+  selectionToggle.checked = useSelection;
+  selectionToggle.addEventListener('change', () => {
+    useSelection = selectionToggle.checked;
+    if (rangeContext) renderRangeDistributions(...rangeContext);
+  });
+
+  function clearRangeContext() {
+    rangeContext = null;
+    selectionControl.hidden = true;
+  }
+
+  function renderRangeDistributions(track, range, fullSummary) {
+    rangeContext = [track, [...range], fullSummary];
+    const [startIndex, endIndex] = range;
+    const isFullRange = startIndex === 0 && endIndex === track.points.length - 1;
+    selectionControl.hidden = isFullRange;
+    selectionToggle.checked = useSelection;
+    if ((isFullRange || !useSelection) && fullSummary?.distributions) {
+      renderSurfaces(fullSummary, { documentRef, onFiltersRendered: onDistributionsRendered });
+      return;
+    }
+    // Keep the first selected point as the boundary, excluding the segment before it.
+    const points = useSelection ? track.points.slice(startIndex, endIndex + 1) : track.points;
+    renderSurfaces({ distributions: {
+      surfaces: summarizeSurfaces(points),
+      wayTypes: summarizeWayTypes(points),
+      roadQualities: summarizeRoadQuality(points),
+    } }, { documentRef, onFiltersRendered: onDistributionsRendered });
+  }
+
   function renderSourceInfo(sources = {}) {
     const symbols = { SUCCESS: '✓', FAILED: '×', PENDING: '…' };
     const labels = { SUCCESS: 'sources.available', FAILED: 'sources.unavailable', PENDING: 'sources.processing' };
@@ -24,6 +60,7 @@ export function createRouteSummaryView({ documentRef = document, updatePageLangu
   }
 
   function renderUnavailableTrack(track) {
+    clearRangeContext();
     documentRef.querySelector('#track-name').classList.remove('inline-loading', 'is-loading');
     bindText(documentRef.querySelector('#track-name'), () => track.title || t('common.unnamed'));
     bindText(documentRef.querySelector('#compact-track-name'), () => track.title || t('common.unnamed'));
@@ -51,6 +88,7 @@ export function createRouteSummaryView({ documentRef = document, updatePageLangu
   }
 
   function renderBasicTrackHeader(track) {
+    clearRangeContext();
     documentRef.querySelector('#track-name').classList.remove('inline-loading', 'is-loading');
     bindText(documentRef.querySelector('#track-name'), () => track.title || t('common.unnamed'));
     bindText(documentRef.querySelector('#compact-track-name'), () => track.title || t('common.unnamed'));
@@ -101,5 +139,5 @@ export function createRouteSummaryView({ documentRef = document, updatePageLangu
     }
   }
 
-  return { renderSourceInfo, renderUnavailableTrack, renderBasicTrackHeader };
+  return { renderSourceInfo, renderUnavailableTrack, renderBasicTrackHeader, renderRangeDistributions };
 }

@@ -1,3 +1,4 @@
+import { SORT_DISTRIBUTION_BARS_BY_SIZE } from './config.js';
 import { terrainForView } from './track-data.js';
 import { t, bindText, escapeHtml, formatMeasurement, htmlMessage, percent } from './i18n.js';
 import { roadQualityCategories, surfaceCategories, wayTypeCategories } from './domain/surface.js';
@@ -13,12 +14,19 @@ export function renderClimbs(track, documentRef = document) {
   documentRef.querySelector('#descents-list').innerHTML = rows(terrainForView(track.descents, [], true), 'descent');
 }
 
-export function renderSurfaces(trackSummary, { documentRef = document, onFiltersRendered = () => {} } = {}) {
-  const categoryRows = (items, categories) => categories.map((category) => ({
-    ...category, ...(items || []).find((item) => item.id === category.id),
-    distanceKm: (items || []).find((item) => item.id === category.id)?.distanceKm ?? 0,
-    percent: (items || []).find((item) => item.id === category.id)?.percent ?? 0,
-  }));
+export function renderSurfaces(trackSummary, {
+  documentRef = document,
+  onFiltersRendered = () => {},
+  sortBarsBySize = SORT_DISTRIBUTION_BARS_BY_SIZE,
+} = {}) {
+  const categoryRows = (items, categories) => {
+    const rows = categories.map((category) => ({
+      ...category, ...(items || []).find((item) => item.id === category.id),
+      distanceKm: (items || []).find((item) => item.id === category.id)?.distanceKm ?? 0,
+      percent: (items || []).find((item) => item.id === category.id)?.percent ?? 0,
+    }));
+    return sortBarsBySize ? rows.sort((a, b) => b.percent - a.percent) : rows;
+  };
   const summary = categoryRows(trackSummary.distributions.surfaces, surfaceCategories);
   const wayTypes = categoryRows(trackSummary.distributions.wayTypes, wayTypeCategories);
   const quality = categoryRows(trackSummary.distributions.roadQualities, roadQualityCategories);
@@ -46,4 +54,3 @@ export function renderSurfaces(trackSummary, { documentRef = document, onFilters
     .forEach((control) => { control.dataset.summaryEmpty = String(control.disabled); });
   onFiltersRendered();
 }
-

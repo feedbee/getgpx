@@ -163,6 +163,7 @@
   "map.finish": "ФІНІШ",
   "map.zoomIn": "Збільшити",
   "map.zoomOut": "Зменшити",
+  "surface.useSelection": "За виділенням",
   "surface.distribution": "Розподіл покриття",
   "quality.distribution": "Розподіл якості проїзду",
   "waytype.distribution": "Розподіл типів доріг",

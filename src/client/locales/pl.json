@@ -163,6 +163,7 @@
   "map.finish": "META",
   "map.zoomIn": "Powiększ",
   "map.zoomOut": "Pomniejsz",
+  "surface.useSelection": "Zaznaczenie",
   "surface.distribution": "Rozkład nawierzchni",
   "quality.distribution": "Rozkład jakości przejazdu",
   "waytype.distribution": "Rozkład rodzajów dróg",

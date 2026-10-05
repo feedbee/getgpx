@@ -72,6 +72,9 @@ const trackEditor = createTrackEditor({ trackApi, uploadFlow, getPublicTrackId: 
     await loadPublicTrack(publicTrackId);
   } });
 const profileViewport = createProfileViewport({ getTrack: () => currentTrack,
+  onRangeChange: (track, range) => {
+    routeSummaryView.renderRangeDistributions(track, range, publicTrackData);
+  },
   onResetMetrics: () => { pointPopover.close(); elevationProfile.resetMetrics(); }, onDrawProfile: (track) => elevationProfile.drawProfile(track),
   onClearRangeFocus: () => routeMap.clearRangeFocus(), onFitFullRange: () => routeMap.fitFullRange(),
   onFitRange: (track, range) => routeMap.fitRange(track, range), onActivePoint: (index) => activePoint.set(index) });
@@ -95,6 +98,7 @@ const routeDetailView = createRouteDetailView({ getProfileColorMode: () => profi
   onReady: () => routeMap.invalidateSize() });
 const routeSummaryView = createRouteSummaryView({ updatePageLanguage, renderPointsOfInterest: poiController.renderPointsOfInterest,
   setDetailedView: routeDetailView.setDetailedView,
+  onDistributionsRendered: () => routeFilters.renderControls(),
   onFiltersRendered: refreshRouteFocus });
 const routeFilters = createRouteFilters({ getTrack: () => currentTrack, onChange: refreshRouteFocus });
 const routeMap = createRouteMap({ getPoiSelection: () => poiController.selection, getMapColorMode: () => mapColorMode,

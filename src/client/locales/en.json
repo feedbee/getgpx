@@ -163,6 +163,7 @@
   "map.finish": "FINISH",
   "map.zoomIn": "Zoom in",
   "map.zoomOut": "Zoom out",
+  "surface.useSelection": "Selection only",
   "surface.distribution": "Surface distribution",
   "quality.distribution": "Ride quality distribution",
   "waytype.distribution": "Road type distribution",
