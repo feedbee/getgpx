@@ -151,6 +151,30 @@ after parsing has extracted the source title, or READY. Edits persist immediatel
 and survive publication, processing failure and retry. Each operation resets previous editors, errors and completion
 actions; each save sends only explicitly edited fields to avoid overwriting other metadata.
 
+### Profile selection and road distributions
+
+Dragging a range on the elevation/gradient profile zooms to that range and
+shows a compact **Selection only** checkbox beside the sources help button in
+the Route Information heading. It is checked by default and recalculates the
+surface, way type, and road quality distributions for the selected segments.
+Uncheck it to show the full-route distributions while retaining the profile
+selection. The checkbox disappears when the profile returns to the full route.
+Its checked state survives clearing and selecting another range until the page
+is reloaded, using only in-memory client state (no browser storage or backend
+persistence).
+
+When checked, distances and percentages in the statistics lists and stacked bars
+use the selected range, excluding the segment before its first point. Missing
+classifications count as unknown; a zero-distance range has zero percentages.
+Category labels retain their fixed order, and bars respect the
+[client configuration](client-configuration.md).
+
+Zoom Back restores distributions for the previous range. Reset restores the
+full-route distributions from the point-free metadata already loaded, preserving
+the server's authoritative totals. Selection calculations use analysis points
+already loaded for the profile and map; they make no API requests or persistence
+changes. Existing pinned road filters remain selected when the rows are rebuilt.
+
 ### Elevation coloring
 
 The map and elevation profile each offer an independent Elevation color mode.

@@ -13,3 +13,7 @@ Both modes omit zero-width segments. Vertical statistics lists and map legends
 always retain registered category order; their labels, colors, values, and filter
 behavior are unchanged. Sorting applies to a separate segment array and does not
 reorder track summary data.
+
+With sorting enabled, every profile range change or **Selection only** toggle
+sorts the bars again using the newly displayed percentages. Statistics labels
+remain in category order even when the largest segment changes.
