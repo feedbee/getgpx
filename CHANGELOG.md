@@ -4,6 +4,18 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-05
+
+### Added
+
+- Selecting a range on the elevation profile can recalculate surface, way type, and road quality distributions for that range; the **Selection only** control switches back to full-route values without clearing the range.
+- `SORT_DISTRIBUTION_BARS_BY_SIZE=true` at client build time orders distribution bars and statistics rows by descending percentage.
+
+### Fixed
+
+- Route hover and selection rendering now stays consistent across map and profile interactions.
+- Route section headings, cards, and tabs have more balanced spacing.
+
 ## [0.6.0] - 2026-10-04
 
 ### Added
