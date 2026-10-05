@@ -1066,10 +1066,11 @@ button.button-primary:hover,button.button-primary:focus-visible { border-color:v
 .route-content .profile-summary { gap:16px; margin-top:16px; padding-top:16px; }
 .route-content .terrain-tabs { margin-bottom:16px; }
 .route-content .distribution-row,.route-content .terrain-row { width:calc(100% + 12px); margin-inline:-6px; }
-.route-content .section-nav { padding-inline:calc(24px + var(--card-inset) + 1px - 12px); }
+.route-content .section-nav { margin-top:-16px; padding-inline:calc(24px + var(--card-inset) + 1px - 12px); }
 
 @media (max-width:900px) {
   .route-header { width:calc(100% - 48px); padding-inline:0; }
+  .route-content .section-nav { margin-top:0; }
 }
 @media (max-width:560px) {
   .route-content { --card-inset:16px; --section-gap:28px; padding-inline:16px; }
