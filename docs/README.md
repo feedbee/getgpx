@@ -14,6 +14,7 @@ Living documents describe the current system:
 10. [Google authentication](authentication.md) — current sign-in contract and security boundaries.
 11. [Nginx X-Accel-Redirect handoff](nginx-x-accel-handoff.md) — self-contained infrastructure task and deployment checks.
 12. [Saved tracks](tracks.md) — current UX, persistence, and API.
+13. [Client configuration](client-configuration.md) — build-time presentation constants and supported modes.
 
 Public API:
 

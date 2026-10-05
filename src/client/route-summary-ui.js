@@ -1,3 +1,4 @@
+import { SORT_DISTRIBUTION_BARS_BY_SIZE } from './config.js';
 import { terrainForView } from './track-data.js';
 import { t, bindText, escapeHtml, formatMeasurement, htmlMessage, percent } from './i18n.js';
 import { roadQualityCategories, surfaceCategories, wayTypeCategories } from './domain/surface.js';
@@ -13,7 +14,15 @@ export function renderClimbs(track, documentRef = document) {
   documentRef.querySelector('#descents-list').innerHTML = rows(terrainForView(track.descents, [], true), 'descent');
 }
 
-export function renderSurfaces(trackSummary, { documentRef = document, onFiltersRendered = () => {} } = {}) {
+export function renderSurfaces(trackSummary, {
+  documentRef = document,
+  onFiltersRendered = () => {},
+  sortBarsBySize = SORT_DISTRIBUTION_BARS_BY_SIZE,
+} = {}) {
+  const barSegments = (items) => {
+    const segments = items.filter((item) => item.percent > 0);
+    return sortBarsBySize ? segments.sort((a, b) => b.percent - a.percent) : segments;
+  };
   const categoryRows = (items, categories) => categories.map((category) => ({
     ...category, ...(items || []).find((item) => item.id === category.id),
     distanceKm: (items || []).find((item) => item.id === category.id)?.distanceKm ?? 0,
@@ -22,13 +31,13 @@ export function renderSurfaces(trackSummary, { documentRef = document, onFilters
   const summary = categoryRows(trackSummary.distributions.surfaces, surfaceCategories);
   const wayTypes = categoryRows(trackSummary.distributions.wayTypes, wayTypeCategories);
   const quality = categoryRows(trackSummary.distributions.roadQualities, roadQualityCategories);
-  documentRef.querySelector('#surface-bar').innerHTML = summary.filter((item) => item.percent > 0).map((item) =>
+  documentRef.querySelector('#surface-bar').innerHTML = barSegments(summary).map((item) =>
     `<button type="button" data-surface-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${escapeHtml(t(item.label))}: ${percent(item.percent)}" aria-label="${escapeHtml(t(item.label))}: ${escapeHtml(t('profile.percentRoute', { percent: percent(item.percent) }))}" aria-pressed="false"></button>`).join('');
   documentRef.querySelector('#surface-stats').innerHTML = summary.map((item) => `
     <button class="surface-stat distribution-row" type="button" data-surface-filter="${item.id}" data-selected-label="${escapeHtml(t('surface.selected'))}" data-map-label="${escapeHtml(t('surface.onMap'))}" aria-pressed="false" ${item.distanceKm === 0 ? 'disabled' : ''}>
       <i style="--surface-color:${item.color}"></i><span>${escapeHtml(t(item.label))}</span>
       <strong>${formatMeasurement('distance', item.distanceKm)}</strong><small>${percent(item.percent, 0)}</small></button>`).join('');
-  documentRef.querySelector('#way-type-bar').innerHTML = wayTypes.filter((item) => item.percent > 0).map((item) =>
+  documentRef.querySelector('#way-type-bar').innerHTML = barSegments(wayTypes).map((item) =>
     `<button type="button" data-waytype-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${escapeHtml(t(item.label))}: ${percent(item.percent)}" aria-label="${escapeHtml(t(item.label))}: ${escapeHtml(t('profile.percentRoute', { percent: percent(item.percent) }))}" aria-pressed="false"></button>`).join('');
   documentRef.querySelector('#way-type-stats').innerHTML = wayTypes.map((item) => `
     <button class="distribution-row" type="button" data-waytype-filter="${item.id}" aria-pressed="false" ${item.distanceKm === 0 ? 'disabled' : ''}><i style="--surface-color:${item.color}"></i><span>${escapeHtml(t(item.label))}</span><strong>${formatMeasurement('distance', item.distanceKm)}</strong><small>${percent(item.percent, 0)}</small></button>`).join('');
@@ -38,7 +47,7 @@ export function renderSurfaces(trackSummary, { documentRef = document, onFilters
     `<span><i style="--surface-color:${item.color}"></i>${escapeHtml(t(item.label))}</span>`).join('');
   documentRef.querySelector('#quality-legend').innerHTML = roadQualityCategories.map((item) =>
     `<span><i style="--surface-color:${item.color}"></i>${escapeHtml(t(item.label))}</span>`).join('');
-  documentRef.querySelector('#quality-bar').innerHTML = quality.filter((item) => item.percent > 0).map((item) =>
+  documentRef.querySelector('#quality-bar').innerHTML = barSegments(quality).map((item) =>
     `<button type="button" data-quality-filter="${item.id}" style="--surface-color:${item.color};flex:${item.percent}" title="${escapeHtml(t(item.label))}: ${percent(item.percent)}" aria-label="${escapeHtml(t(item.label))}: ${escapeHtml(t('profile.percentRoute', { percent: percent(item.percent) }))}" aria-pressed="false"></button>`).join('');
   documentRef.querySelector('#quality-stats').innerHTML = quality.map((item) => `
     <button class="distribution-row" type="button" data-quality-filter="${item.id}" aria-pressed="false" ${item.distanceKm === 0 ? 'disabled' : ''}><i style="--surface-color:${item.color}"></i><span>${escapeHtml(t(item.label))}</span><strong>${formatMeasurement('distance', item.distanceKm)}</strong><small>${percent(item.percent, 0)}</small></button>`).join('');
