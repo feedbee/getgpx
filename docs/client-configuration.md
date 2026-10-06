@@ -1,13 +1,18 @@
 # Client configuration
 
 Client presentation settings are named constants in `src/client/config.js`.
-Vite loads `SORT_DISTRIBUTION_BARS_BY_SIZE` from `.env` or the shell (shell values
-take precedence) and exposes its boolean value to the client. The default is
-`false`; only the literal `true` enables sorting. Set
-`SORT_DISTRIBUTION_BARS_BY_SIZE=true` in `.env` and restart Vite to enable it in
-development. For a deployment, supply the value during `npm run build` and deploy
-the rebuilt client. This is not a browser preference or a production server
-runtime toggle. See the [environment reference](environment-variables.md).
+The production Node server (`npm start`, including Docker) and the Vite development
+server embed the startup setting directly in the HTML as a non-executable JSON script.
+The client reads it before rendering; no additional configuration request is
+needed. HTML uses `Cache-Control: private, no-store`. Environment secrets are never included.
+
+The default is `false`; only the literal `true` enables sorting. Set
+`SORT_DISTRIBUTION_BARS_BY_SIZE=true` in the server environment or `.env` and
+restart the server. Existing environment values take precedence over `.env`.
+After deploying a version that supports runtime configuration, changing this
+setting does not require rebuilding the client. Reload the page after restarting
+the server. This is not a saved browser preference. See the
+[environment reference](environment-variables.md).
 
 | Constant | Default | Behavior |
 | --- | --- | --- |

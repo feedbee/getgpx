@@ -1,9 +1,11 @@
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import helmet from 'helmet';
 import { createRequestLogger, logger } from './logger.js';
 import { safeErrorDetails } from './safe-error-details.js';
+import { createClientConfigurationMiddleware } from './site/client-configuration.js';
 
 const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const defaultStaticDirectory = path.join(rootDirectory, 'dist');
@@ -17,7 +19,12 @@ export function frontendPageStatus(pathname) {
     : 404;
 }
 
-export function createApp({ database, authRouter, apiRouter, homepageRouter, trackPreviewRouter, socialPageRouter, staticDirectory = defaultStaticDirectory, log = logger }) {
+function normalizedStaticPath(pathname) {
+  try { return path.posix.normalize(decodeURIComponent(pathname)); }
+  catch { return pathname; }
+}
+
+export function createApp({ database, authRouter, apiRouter, homepageRouter, trackPreviewRouter, socialPageRouter, clientConfigurationMiddleware = createClientConfigurationMiddleware(), staticDirectory = defaultStaticDirectory, log = logger }) {
   if (!database) throw new Error('A database adapter is required.');
 
   const app = express();
@@ -40,15 +47,25 @@ export function createApp({ database, authRouter, apiRouter, homepageRouter, tra
   const health = createHealthHandlers(database);
   app.get('/health/live', health.live);
   app.get('/health/ready', health.ready);
+  app.use(clientConfigurationMiddleware);
   if (apiRouter) app.use('/api', apiRouter);
   if (authRouter) app.use(authRouter);
   if (homepageRouter) app.use(homepageRouter);
   if (trackPreviewRouter) app.use(trackPreviewRouter);
-  app.use(express.static(staticDirectory, { index: false, maxAge: '1h' }));
+  const serveAppShell = async (request, response) => response
+    .status(normalizedStaticPath(request.path) === '/index.html' ? 200 : frontendPageStatus(request.path))
+    .set('Cache-Control', 'private, no-store')
+    .type('html')
+    .send(await readFile(path.join(staticDirectory, 'index.html'), 'utf8'));
+  app.get('/index.html', serveAppShell);
+  const serveStatic = express.static(staticDirectory, { index: false, maxAge: '1h' });
+  app.use((request, response, next) => {
+    // Static streams bypass HTML configuration; keep every HTML path in the page handlers.
+    if (/\.html?$/i.test(normalizedStaticPath(request.path))) return next();
+    return serveStatic(request, response, next);
+  });
   if (socialPageRouter) app.use(socialPageRouter);
-  app.get('*splat', (request, response) => response
-    .status(frontendPageStatus(request.path))
-    .sendFile(path.join(staticDirectory, 'index.html')));
+  app.get('*splat', serveAppShell);
 
   app.use((error, request, response, next) => {
     request.log.error({ event: 'unhandled_request_error', ...safeErrorDetails(error) }, 'Unhandled request error');
