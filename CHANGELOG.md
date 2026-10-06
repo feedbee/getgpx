@@ -4,6 +4,12 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-10-06
+
+### Changed
+
+- Updated application and development dependencies, including AWS SDK, MongoDB, Scalar, Vite and Vitest, and refreshed the lockfile to address dependency audit findings.
+
 ## [0.6.2] - 2026-10-06
 
 ### Fixed
