@@ -4,6 +4,12 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-10-06
+
+### Fixed
+
+- `SORT_DISTRIBUTION_BARS_BY_SIZE` now reaches the client from the running Node or Vite server on every HTML page. Changing it requires a server restart and page reload, but no client rebuild.
+
 ## [0.6.1] - 2026-10-05
 
 ### Added
