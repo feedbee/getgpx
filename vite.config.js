@@ -14,9 +14,14 @@ import { createS3TrackService } from './src/backend/s3-track-service.js';
 import { loadTrackStorageConfig } from './src/backend/track-storage-config.js';
 import { createTrackFileDelivery } from './src/backend/track-file-delivery.js';
 import { createRequestLogger, logger } from './src/backend/logger.js';
+import { createClientConfiguration } from './src/backend/site/client-configuration.js';
 
 export default defineConfig(({ command, mode }) => {
   const environment = loadEnv(mode, process.cwd(), '');
+  const clientConfigurationPlugin = {
+    name: 'client-configuration',
+    transformIndexHtml: createClientConfiguration(environment),
+  };
   const trackConfig = command === 'serve' && mode !== 'test' ? loadTrackStorageConfig(environment) : null;
   const previewProvider = trackConfig ? createTrackPreviewProvider(environment) : null;
   const authenticationPlugin = {
@@ -65,10 +70,8 @@ export default defineConfig(({ command, mode }) => {
     },
   };
 
-  const plugins = command === 'serve' && mode !== 'test'
-    ? [authenticationPlugin]
+  const plugins = command === 'serve'
+    ? [clientConfigurationPlugin, ...(mode !== 'test' ? [authenticationPlugin] : [])]
     : [];
-  return { plugins, define: {
-    'import.meta.env.SORT_DISTRIBUTION_BARS_BY_SIZE': JSON.stringify(environment.SORT_DISTRIBUTION_BARS_BY_SIZE === 'true'),
-  } };
+  return { plugins };
 });

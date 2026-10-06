@@ -49,6 +49,13 @@ Authenticated uploads are parsed and analysed by the backend. It stores owner-bo
 
 The production process fails startup when MongoDB configuration or connectivity is absent. Liveness deliberately avoids dependencies; readiness performs a MongoDB ping so an orchestrator can stop routing traffic to an unhealthy instance.
 
+Website presentation configuration is served by `site/client-configuration.js`
+directly in the HTML in both production and Vite. A non-executable JSON script
+exposes only explicitly supported booleans from the startup environment; the
+client reads it without a separate request. Production HTML uses
+`Cache-Control: private, no-store`, and the executable-script CSP stays unchanged. Changing these settings
+requires a server restart and page reload, without rebuilding the client.
+
 External Valhalla/Overpass endpoints are availability dependencies and community services by default. Production should use explicitly provisioned endpoints with understood usage limits.
 
 ## Public HTTP API

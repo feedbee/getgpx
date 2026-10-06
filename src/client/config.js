@@ -5,8 +5,9 @@
  * order for equal percentages. Zero-percent rows appear last.
  * Sorting is reapplied after profile range changes and selection-only toggles.
  * Map legends always keep category order.
- * Vite reads SORT_DISTRIBUTION_BARS_BY_SIZE from .env or the shell and exposes
- * only its boolean value. Only the literal "true" enables sorting.
- * Restart Vite after changing .env; rebuild the client for deployment.
+ * Node and Vite embed the startup environment setting as JSON in the HTML
+ * before the client loads. Only the literal "true" enables sorting.
+ * Restart the server after changing the setting; no client rebuild is needed.
  */
-export const SORT_DISTRIBUTION_BARS_BY_SIZE = import.meta.env.SORT_DISTRIBUTION_BARS_BY_SIZE === true;
+const configuration = JSON.parse(globalThis.document?.getElementById('getgpx-client-config')?.textContent || '{}');
+export const SORT_DISTRIBUTION_BARS_BY_SIZE = configuration.sortDistributionBarsBySize === true;
