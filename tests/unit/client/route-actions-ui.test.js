@@ -2,7 +2,7 @@ import { beforeEach } from 'vitest';
 import { preferences } from '../../../src/client/i18n.js';
 beforeEach(() => { preferences.set('language', 'ru'); preferences.set('measurementSystem', 'metric'); });
 import { describe, expect, it, vi } from 'vitest';
-import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, favoriteButtonState, publicTrackIdFromPath, renderOwnerTrackActions } from '../../../src/client/route-actions-ui.js';
+import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, copyPageLink, sharePageLink, favoriteButtonState, publicTrackIdFromPath, renderOwnerTrackActions } from '../../../src/client/route-actions-ui.js';
 
 describe('route action overflow menu', () => {
   it('closes an open menu when the click is outside', () => {
@@ -61,5 +61,27 @@ describe('favorite track action', () => {
   it('keeps the label stable and exposes accessible on/off state', () => {
     expect(favoriteButtonState(false)).toEqual({ pressed: 'false', label: 'Добавить в избранное' });
     expect(favoriteButtonState(true)).toEqual({ pressed: 'true', label: 'Удалить из избранного' });
+  });
+});
+
+
+describe('shared page sharing', () => {
+  it('copies comparison order in the full page link', async () => {
+    const clipboard = { writeText: vi.fn() };
+    await copyPageLink({ path: '/compare?tracks=second,first', origin: 'https://example.test', clipboard });
+    expect(clipboard.writeText).toHaveBeenCalledWith('https://example.test/compare?tracks=second,first');
+  });
+  it('restores the button and reports clipboard failure', async () => {
+    const classes = new Set();
+    const button = { disabled: false, setAttribute: vi.fn(), removeAttribute: vi.fn(),
+      classList: { contains: key => classes.has(key), toggle: (key, enabled) => enabled ? classes.add(key) : classes.delete(key) } };
+    const toast = { classList: { add: vi.fn(), remove: vi.fn() } };
+    const windowRef = { location: { origin: 'https://example.test' },
+      navigator: { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } },
+      setTimeout: vi.fn(), clearTimeout: vi.fn() };
+    await sharePageLink({ button, path: '/compare?tracks=first', documentRef: { querySelector: () => toast }, windowRef });
+    expect(button.disabled).toBe(false);
+    expect(classes.has('is-loading')).toBe(false);
+    expect(toast.textContent).toBe('Не удалось скопировать ссылку');
   });
 });

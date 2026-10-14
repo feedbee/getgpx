@@ -1,4 +1,5 @@
-import { t, htmlMessage } from './i18n.js';
+import { withButtonLoading } from './button-loading-ui.js';
+import { t, htmlMessage, bindText } from './i18n.js';
 export function closeOverflowMenuOnOutsideClick(menu, target) {
   if (!menu?.open || menu.contains(target)) return false;
   menu.open = false;
@@ -12,8 +13,37 @@ export function favoriteButtonState(favorite) {
   };
 }
 
-export function copyPublicTrackLink({ trackId, origin, clipboard }) {
-  return clipboard.writeText(new URL(`/tracks/${trackId}`, origin).href);
+export function comparisonActionIcon() {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16m8-16v16M5 7l3-3 3 3m2 10 3 3 3-3"/></svg>';
+}
+
+export function shareActionIcon() {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg>';
+}
+
+export function copyPageLink({ path, origin, clipboard }) {
+  return clipboard.writeText(new URL(path, origin).href);
+}
+
+export function copyPublicTrackLink({ trackId, ...options }) {
+  return copyPageLink({ ...options, path: `/tracks/${trackId}` });
+}
+
+const toastTimers = new WeakMap();
+export async function sharePageLink({ button, path, documentRef = document, windowRef = window }) {
+  if (button.disabled) return;
+  const toast = documentRef.querySelector('#toast');
+  await withButtonLoading(button, async () => {
+    let message;
+    try {
+      await copyPageLink({ path, origin: windowRef.location.origin, clipboard: windowRef.navigator.clipboard });
+      message = 'notification.copied';
+    } catch { message = 'notification.copyFailed'; }
+    bindText(toast, () => t(message));
+  });
+  windowRef.clearTimeout(toastTimers.get(toast));
+  toast.classList.add('visible');
+  toastTimers.set(toast, windowRef.setTimeout(() => toast.classList.remove('visible'), 2500));
 }
 
 export function publicTrackIdFromPath(pathname) {

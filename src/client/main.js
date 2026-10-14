@@ -1,3 +1,4 @@
+import { setupTrackComparison } from './track-comparison-ui.js';
 import { createRoutePointPopover } from './route-point-popover.js';
 import { setupPreferencesControl } from './preferences-ui.js';
 import { renderAppShell } from './app-shell.js';
@@ -23,7 +24,7 @@ import 'leaflet/dist/leaflet.css';
 import './style.css';
 import { renderAuthControl } from './auth-ui.js';
 import { renderHomeRouteCard, renderPublicTracks } from './home-page-ui.js';
-import { closeOverflowMenuOnOutsideClick, copyPublicTrackLink, favoriteButtonState, publicTrackIdFromPath } from './route-actions-ui.js';
+import { closeOverflowMenuOnOutsideClick, sharePageLink, favoriteButtonState, publicTrackIdFromPath } from './route-actions-ui.js';
 import { shouldShowCompactRouteHeader } from './sticky-route-header-ui.js';
 import { formatTrackAttribution, resolveTrackUploader } from './track-meta-ui.js';
 import { setButtonLoading } from './button-loading-ui.js';
@@ -40,17 +41,19 @@ let currentUser = null;
 const isMyTracksPage = window.location.pathname === '/my-tracks';
 const isFavoriteTracksPage = window.location.pathname === '/favorite-tracks';
 const isTrackCollectionPage = isMyTracksPage || isFavoriteTracksPage;
+const isComparisonPage = window.location.pathname === '/compare';
 const isHomePage = window.location.pathname === '/';
 const pathPublicTrackId = publicTrackIdFromPath(window.location.pathname);
-const isNotFoundPage = !isHomePage && !isTrackCollectionPage && !pathPublicTrackId;
+const isNotFoundPage = !isHomePage && !isTrackCollectionPage && !isComparisonPage && !pathPublicTrackId;
 let homepageTracks = [];
 let publicTrackId = null;
 const uploadFlow = createUploadFlow({ trackApi, isAuthenticated: () => Boolean(currentUser), getPublicTrackId: () => publicTrackId });
 let publicTrackData = null;
 let publicTrackOwnershipVerified = false;
 
-app.innerHTML = renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPage, isFavoriteTracksPage });
-const collection = createTrackCollection({ trackApi, isMyTracksPage, isFavoriteTracksPage,
+app.innerHTML = renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPage, isFavoriteTracksPage, isComparisonPage });
+const comparison = setupTrackComparison({ trackApi, isComparisonPage });
+const collection = createTrackCollection({ trackApi, isMyTracksPage, isFavoriteTracksPage, onSelectionChange: comparison.setCheckedTracks,
   loadPreviewConfiguration: async () => {
     const response = await fetch('/track-previews/config');
     if (!response.ok) throw new Error('Preview configuration unavailable');
@@ -214,7 +217,7 @@ authControl.addEventListener('click', async (event) => {
 
 document.addEventListener('click', (event) => {
   if (!authControl.contains(event.target)) closeUserMenu();
-  closeOverflowMenuOnOutsideClick(document.querySelector('.route-overflow'), event.target);
+  document.querySelectorAll('.route-overflow').forEach(menu => closeOverflowMenuOnOutsideClick(menu, event.target));
 });
 
 async function initHomeExampleMap() {
@@ -336,6 +339,7 @@ async function loadPublicTrack(trackId, retries = 0) {
   }
   const { data } = result;
   publicTrackData = data;
+  comparison.setTrack(trackId);
   if (currentUser) loadTrackManagement(trackId);
   routeSummaryView.renderBasicTrackHeader(data);
   renderExternalTrackLinks(document.querySelector('#external-track-links'), data.externalLinks);
@@ -427,19 +431,7 @@ document.addEventListener('keydown', (event) => {
 
 document.querySelector('#share-track')?.addEventListener('click', async (event) => {
   if (!publicTrackId) return;
-  const button = event.currentTarget;
-  const toast = document.querySelector('#toast');
-  setButtonLoading(button, true);
-  try {
-    await copyPublicTrackLink({ trackId: publicTrackId, origin: window.location.origin, clipboard: navigator.clipboard });
-    bindText(toast, () => t('notification.copied'));
-  } catch {
-    bindText(toast, () => t('notification.copyFailed'));
-  } finally {
-    setButtonLoading(button, false);
-  }
-  toast.classList.add('visible');
-  setTimeout(() => toast.classList.remove('visible'), 2500);
+  await sharePageLink({ button: event.currentTarget, path: `/tracks/${publicTrackId}` });
 });
 
 document.querySelector('#save-track')?.addEventListener('click', async () => {
@@ -476,7 +468,7 @@ if (pathPublicTrackId) loadPublicTrack(pathPublicTrackId);
 
 function updatePageLanguage() {
   document.documentElement.lang = preferences.value.language;
-  document.title = currentTrack?.name ? `${currentTrack.name} — GetGPX` : t(isNotFoundPage ? 'notFound.title' : isMyTracksPage ? 'common.myTracks' : isFavoriteTracksPage ? 'common.favorites' : 'app.title');
+  document.title = currentTrack?.name ? `${currentTrack.name} — GetGPX` : t(isComparisonPage ? 'comparison.title' : isNotFoundPage ? 'notFound.title' : isMyTracksPage ? 'common.myTracks' : isFavoriteTracksPage ? 'common.favorites' : 'app.title');
 }
 setupPreferencesControl(document, { blockedReason: () => {
   const processing = document.querySelector('#processing-overlay');

@@ -14,6 +14,7 @@ export function frontendPageStatus(pathname) {
   return pathname === '/'
     || pathname === '/my-tracks'
     || pathname === '/favorite-tracks'
+    || pathname === '/compare'
     || /^\/tracks\/[A-Za-z0-9_]{1,64}$/.test(pathname)
     ? 200
     : 404;

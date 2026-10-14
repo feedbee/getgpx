@@ -4,7 +4,7 @@ import { bulkSelectionState, cancelTrackSearch, createTrackCard } from './my-tra
 import { setButtonLoading, withButtonLoading } from './button-loading-ui.js';
 
 export function createTrackCollection({ trackApi, isMyTracksPage, isFavoriteTracksPage,
-  getCurrentUser, loadPreviewConfiguration = async () => ({ enabled: false, attribution: [] }), onEdit, onDelete, onDeleteMany, documentRef = document, browserWindow = window }) {
+  getCurrentUser, loadPreviewConfiguration = async () => ({ enabled: false, attribution: [] }), onEdit, onDelete, onDeleteMany, onSelectionChange = () => {}, documentRef = document, browserWindow = window }) {
   const isTrackCollectionPage = isMyTracksPage || isFavoriteTracksPage;
   let previewConfiguration;
   let cursor = null;
@@ -16,6 +16,7 @@ export function createTrackCollection({ trackApi, isMyTracksPage, isFavoriteTrac
     const more = documentRef.querySelector('#load-more-tracks');
     if (!getCurrentUser()) {
       list.replaceChildren();
+      updateBulkDeleteButton();
       message.innerHTML = `${htmlMessage(isFavoriteTracksPage ? 'tracks.loginFavorites' : 'tracks.loginOwn')} <a href="/auth/google">${htmlMessage('common.login')}</a>`;
       message.hidden = false;
       more.hidden = true;
@@ -89,6 +90,7 @@ export function createTrackCollection({ trackApi, isMyTracksPage, isFavoriteTrac
     remove.disabled = state.deleteDisabled;
     bindText(remove.querySelector('span'), () => bulkSelectionState({ total: checkboxes.length, selected: selectedCount, actionLabel: t(isFavoriteTracksPage ? 'common.remove' : 'common.delete') }).deleteLabel);
     checkboxes.forEach((checkbox) => checkbox.closest('.track-card').classList.toggle('is-selected', checkbox.checked));
+    onSelectionChange(selectedTrackCards());
   }
 
   documentRef.querySelector('#track-search').addEventListener('submit', async (event) => {

@@ -245,3 +245,57 @@ those endpoints are within the displayed range; clicking them opens the same
 endpoint popover. Profile statistics are ordered as distance, ascent, descent,
 minimum and maximum. Distance reflects the displayed range, and elevation
 extrema use actual heights rather than the padding around the drawn chart.
+
+## Track comparison
+
+Track pages offer a Compare toggle in the action panel and
+a link to `/compare?tracks=id1,id2`. The global header comparison icon is always
+present, adding a label and count badge for any selected tracks. The My tracks and Favorites toolbars put Add to comparison between Select all and
+Remove/Delete. It adds checked tracks to the existing selection without navigating,
+only when at least one new track is checked and the combined selection fits
+`COMPARISON_MAX_TRACKS` (8).
+Up to eight track IDs persist in `getgpx.comparison.v1` browser storage;
+the selection is local to that browser and origin, independently of login.
+
+The comparison page shows summary metrics beside a map, with numbered colors,
+circular starts and finishes. Hovering or focusing a list row highlights
+its track; hovering a track highlights the row and shows point data. Clicking
+a track point or endpoint opens the existing point details with the track title.
+Track links open in new tabs. Identity, gradient, elevation, surface, road type
+and quality modes share the existing classifiers; elevation uses a common range
+across all loaded tracks. Both maps share line rendering, the white 8 px outline, the 5 px route stroke,
+endpoint icons and the start/finish legend. Identity colors remain in endpoints
+and point readouts; highlighting dims other routes without increasing width.
+Unavailable tracks can be removed or retried without hiding other tracks.
+Metadata and analysis use the existing separate read endpoints and revision checks.
+
+Drag a track's numbered handle up or down to change the comparison list and map
+stacking order. The top row is the top layer, including endpoints and point hit
+targets. Hovering or focusing a track temporarily brings its route, endpoints and point hit
+targets to the front. Its endpoint markers gain a color ring and other tracks dim.
+Leaving restores their order from the list. Arrow keys, Home and End also move
+a focused handle. The viewport and loaded analysis stay intact during reordering.
+Selection order remains in `getgpx.comparison.v1`; color identities persist
+separately in `getgpx.comparison-identities.v1`, so reordering and reloading do not
+change a track's color. Numbers update to match list positions, including on map
+endpoints. Clearing site data clears both preferences.
+
+Click a comparison track's name or the non-interactive area of its row to fit that
+track to the map. Enter/Space on the focused row or name button works as well.
+The adjacent external-link icon opens the track page in a new tab. Drag handles,
+remove/retry buttons and the external link keep their separate actions. Fitting
+requires loaded geometry and preserves the chosen layer order.
+
+During pointer dragging a floating card follows the pointer, sibling rows animate
+to their new positions, and the card settles into its destination on release.
+Reduced-motion preferences disable the transition animations. The card uses a
+pointer cursor, except for its drag handle, which uses grab/grabbing.
+
+The comparison page reads its ordered track IDs from `/compare?tracks=id1,id2`,
+independently of browser selection. Its Share button copies that URL. Removing or
+reordering tracks updates it; Hide/Show affects only the current map and keeps
+tracks in the list and URL. The header comparison icon directly opens comparison
+beside preferences, showing its label and count only for a nonempty selection.
+The action-panel Compare button toggles the current track. Selection changes pulse
+the badge; the first selection animates its appearance, unless reduced motion is
+preferred. Comparison has no dropdown menu or explanatory text.

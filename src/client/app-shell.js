@@ -3,12 +3,12 @@ import { renderAuthControl } from './auth-ui.js';
 import { renderHomePage } from './home-page-ui.js';
 import { renderNotFoundPage } from './not-found-ui.js';
 import { renderPreferencesControl } from './preferences-ui.js';
-import { renderOwnerTrackActions } from './route-actions-ui.js';
+import { renderOwnerTrackActions, comparisonActionIcon, shareActionIcon } from './route-actions-ui.js';
 import { renderTrackUploadDialogs } from './track-upload-ui.js';
 import { renderRouteTypeDropdown, routeTypeIcon } from './route-type-ui.js';
 import { renderExternalLinkFields } from './external-track-links-ui.js';
 
-export function renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPage, isFavoriteTracksPage }) {
+export function renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPage, isFavoriteTracksPage, isComparisonPage }) {
   return `
   <header class="topbar">
     <div class="topbar-inner"><a class="brand" href="/" ${messageAttribute('aria-label', 'header.home')}><img class="brand-mark" src="/getgpx-mark-30.png" srcset="/getgpx-mark-60.png 2x, /getgpx-mark-90.png 3x" alt="" width="30" height="30" /><span>GETGPX</span></a>
@@ -23,7 +23,7 @@ export function renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPa
         <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.6 18a8 8 0 1 1 12.8 0M12 13l4-4"/><path d="M4 18h16"/></svg><b id="compact-speed">— ${unitMarkup('speed')}</b></span>
       </div>
     </section>
-    <div class="topbar-actions">${renderPreferencesControl()}<button class="upload-button" data-auth-upload type="button" hidden><span aria-hidden="true">＋</span> ${htmlMessage('common.upload')}</button><div id="auth-control">${renderAuthControl(null)}</div></div></div>
+    <div class="topbar-actions"><a class="comparison-link" id="comparison-link" href="/compare"></a>${renderPreferencesControl()}<button class="upload-button" data-auth-upload type="button" hidden><span aria-hidden="true">＋</span> ${htmlMessage('common.upload')}</button><div id="auth-control">${renderAuthControl(null)}</div></div></div>
     <input id="gpx-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden />
   </header>
   ${isHomePage ? renderHomePage([], { loading: true }) : ''}
@@ -34,13 +34,13 @@ export function renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPa
       <button class="my-tracks-upload" ${isFavoriteTracksPage ? '' : 'data-auth-upload'} type="button" ${isFavoriteTracksPage ? 'hidden disabled' : 'hidden'}><span aria-hidden="true">＋</span> ${htmlMessage('common.upload')}</button>
     </header>
     <form class="track-search" id="track-search" role="search"><label for="track-query">${htmlMessage('tracks.searchLabel')}</label><div class="track-search-controls"><span class="track-search-input"><input id="track-query" name="query" type="search" maxlength="100" ${messageAttribute('placeholder', 'tracks.searchPlaceholder')} autocomplete="off" /><button class="track-search-clear" id="track-search-clear" type="button" ${messageAttribute('aria-label', 'tracks.clearSearch')} ${messageAttribute('title', 'tracks.clearSearch')} hidden>×</button></span><button class="track-search-submit" type="submit">${htmlMessage('tracks.search')}</button></div></form>
-    <div class="track-list-toolbar"><button class="select-all-tracks" id="select-all-tracks" type="button" disabled>${htmlMessage('common.selectAll')}</button><button class="bulk-delete-tracks" id="bulk-delete-tracks" type="button" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg><span>${isFavoriteTracksPage ? t('common.remove') : t('common.delete')}</span></button></div>
+    <div class="track-list-toolbar"><button class="select-all-tracks" id="select-all-tracks" type="button" disabled>${htmlMessage('common.selectAll')}</button><button class="bulk-compare-tracks" id="bulk-compare-tracks" type="button" disabled>${comparisonActionIcon()}<span>${htmlMessage('comparison.bulkSelect')}</span></button><button class="bulk-delete-tracks" id="bulk-delete-tracks" type="button" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg><span>${isFavoriteTracksPage ? t('common.remove') : t('common.delete')}</span></button></div>
     <p class="my-tracks-message" id="my-tracks-message" role="status">${htmlMessage(isFavoriteTracksPage ? 'tracks.loginFavorites' : 'tracks.loginOwn')}</p>
     <section class="track-list" id="track-list" aria-live="polite"></section>
     <div id="track-preview-attribution" class="track-preview-attribution" hidden></div>
     <button class="load-more-tracks" id="load-more-tracks" type="button" hidden>${htmlMessage('tracks.more')}</button>
   </main>
-  <main class="page" id="route" ${isTrackCollectionPage || isHomePage || isNotFoundPage ? 'hidden' : ''}>
+  <main class="page" id="route" ${isTrackCollectionPage || isHomePage || isNotFoundPage || isComparisonPage ? 'hidden' : ''}>
     <header class="route-header">
       <p class="route-state-note" id="route-state-note" hidden></p>
       <div class="route-heading">
@@ -63,8 +63,8 @@ export function renderAppShell({ isHomePage, isNotFoundPage, isTrackCollectionPa
         </div>
         <div class="route-actions" ${messageAttribute('aria-label', 'route.actions')}>
           <button class="primary-action" id="save-track" type="button" ${messageAttribute('aria-label', 'common.addFavorite')} aria-pressed="false" ${messageAttribute('title', 'common.addFavorite')}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg><span>${htmlMessage('route.favorite')}</span></button>
-          <button id="share-track" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg>${htmlMessage('route.share')}</button>
-          <a id="download-track" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></svg>${htmlMessage('route.download')}</a>
+          <button id="share-track" type="button">${shareActionIcon()}${htmlMessage('route.share')}</button>
+          <button id="comparison-toggle" type="button" aria-pressed="false" disabled></button><a id="download-track" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></svg>${htmlMessage('route.download')}</a>
           <span class="owner-track-actions" id="owner-track-actions" hidden><details class="route-overflow"><summary ${messageAttribute('aria-label', 'route.more')}><span aria-hidden="true">•••</span></summary><div>${renderOwnerTrackActions()}</div></details></span>
         </div>
       </div>

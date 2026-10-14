@@ -4,9 +4,10 @@ import { createTrackCollection } from '../../../src/client/track-collection.js';
 function fakeDocument() {
   const elements = new Map();
   return {
+    querySelectorAll: () => [],
     querySelector(selector) {
       if (!elements.has(selector)) elements.set(selector, {
-        addEventListener: vi.fn(), replaceChildren: vi.fn(), hidden: true, value: '',
+        addEventListener: vi.fn(), replaceChildren: vi.fn(), setAttribute: vi.fn(), querySelector: () => ({}), hidden: true, value: '',
       });
       return elements.get(selector);
     },

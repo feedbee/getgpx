@@ -24,6 +24,8 @@ Public API:
 
 Implementation specification:
 
+- [Track comparison](specs/track-comparison.md) — browser selection and multi-track map.
+
 - [Social previews](specs/social-previews.md) — server-rendered metadata, public sharing images and lazy generation.
 - [Track storage and delivery through S3](specs/track-s3-storage.md) — contracts, failure handling, and acceptance criteria.
 

@@ -60,10 +60,30 @@ function setup(clipboard = { writeText: vi.fn().mockResolvedValue() }) {
   const popover = createRoutePointPopover({ getTrack: () => track, onSelect, onClose, documentRef, windowRef, clipboard });
   const trigger = { getBoundingClientRect: () => ({ left: 290, top: 290, width: 20, height: 20 }), setAttribute: vi.fn(), focus: vi.fn(), contains: target => target === trigger };
   const open = (index, options = {}) => popover.open(index, { anchor: { x: 300, y: 300 }, trigger, ...options });
-  return { popover, panel, trigger, handlers, open, onSelect, onClose, clipboard, documentRef, windowRef };
+  return { popover, panel, trigger, handlers, open, onSelect, onClose, clipboard, documentRef, windowRef, track };
 }
 
 describe('point popover interactions', () => {
+  it('adds the comparison color and a distinct accessible dialog id', () => {
+    const { track, panel, trigger, documentRef, windowRef } = setup();
+    const popover = createRoutePointPopover({ getTrack: () => track, onSelect: () => {}, showTrackName: true,
+      getTrackColor: () => '#2463a6', panelId: 'comparison-point-popover', documentRef, windowRef });
+    popover.open(0, { anchor: { x: 300, y: 300 }, trigger });
+    expect(panel.innerHTML).toContain('background:#2463a6');
+    expect(panel.id).toBe('comparison-point-popover');
+    expect(trigger.setAttribute).toHaveBeenCalledWith('aria-controls', 'comparison-point-popover');
+  });
+
+  it('includes an escaped track name when used for comparison', () => {
+    const { track, panel, trigger, documentRef, windowRef } = setup();
+    track.name = '<img src=x>';
+    const popover = createRoutePointPopover({ getTrack: () => track, onSelect: () => {}, showTrackName: true, documentRef, windowRef });
+    popover.open(0, { anchor: { x: 300, y: 300 }, trigger });
+    expect(panel.innerHTML).toContain('point-track-name');
+    expect(panel.innerHTML).toContain('&lt;img src=x&gt;');
+    expect(panel.innerHTML).not.toContain('<img src=x>');
+  });
+
   it('selects a point, renders its coordinates and maps link, and toggles the same trigger', () => {
     const { popover, panel, open, onSelect } = setup();
     open(1);
@@ -112,6 +132,15 @@ describe('point popover interactions', () => {
     expect(panel.querySelector('.point-copy-status').textContent).toContain('Could not copy');
   });
 
+  it('ignores a queued element scroll when the anchor has not moved', () => {
+    const { popover, trigger, handlers, open } = setup();
+    open(0);
+    handlers.scroll({ target: {} });
+    expect(popover.isOpen).toBe(true);
+    trigger.getBoundingClientRect = () => ({ left: 290, top: 280, width: 20, height: 20 });
+    handlers.scroll({ target: {} });
+    expect(popover.isOpen).toBe(false);
+  });
   it('ignores a queued scroll from trigger focus but closes on subsequent scrolling', () => {
     const { popover, open, handlers, windowRef, documentRef } = setup();
     open(0);

@@ -35,11 +35,11 @@ export function routePointHeading(context, track) {
 }
 
 export function createRoutePointPopover({ getTrack, onSelect, onClose = () => {}, documentRef = document, windowRef = window,
-  clipboard = windowRef.navigator.clipboard }) {
+  clipboard = windowRef.navigator.clipboard, showTrackName = false, getTrackColor = () => null, panelId = 'route-point-popover' }) {
   const panel = documentRef.createElement('div');
   panel.className = 'route-point-popover';
   panel.hidden = true;
-  panel.id = 'route-point-popover';
+  panel.id = panelId;
   panel.setAttribute('role', 'dialog');
   panel.setAttribute('aria-label', t('point.details'));
   documentRef.body.append(panel);
@@ -69,7 +69,8 @@ export function createRoutePointPopover({ getTrack, onSelect, onClose = () => {}
     const coordinates = coordinatePair(track.pointsOfInterest?.[context.poiIndex] ?? point);
     selection = { index, trigger, focusTarget, scrollX: windowRef.scrollX, scrollY: windowRef.scrollY };
     const opened = selection;
-    panel.innerHTML = `<div class="point-popover-content">${routePointHeading(context, track)}<div class="point-readout">${routePointReadout(point, track)}</div><span class="point-coordinates"></span><div class="point-actions"><a target="_blank" rel="noopener noreferrer">${mapsIcon}<span>${htmlMessage('point.googleMaps')}</span>${externalIcon}</a><button type="button">${copyIcon}<span>${htmlMessage('point.copy')}</span></button></div><span class="point-copy-status" role="status"></span></div>`;
+    const trackColor = getTrackColor();
+    panel.innerHTML = `<div class="point-popover-content">${showTrackName ? `<strong class="point-track-name">${trackColor ? `<span aria-hidden="true" class="point-track-color" style="background:${escapeHtml(trackColor)}"></span>` : ''}${escapeHtml(track.name || t('common.unnamed'))}</strong>` : ''}${routePointHeading(context, track)}<div class="point-readout">${routePointReadout(point, track)}</div><span class="point-coordinates"></span><div class="point-actions"><a target="_blank" rel="noopener noreferrer">${mapsIcon}<span>${htmlMessage('point.googleMaps')}</span>${externalIcon}</a><button type="button">${copyIcon}<span>${htmlMessage('point.copy')}</span></button></div><span class="point-copy-status" role="status"></span></div>`;
     panel.querySelector('.point-coordinates').textContent = coordinates;
     panel.querySelector('a').href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coordinates)}`;
     panel.querySelector('button').addEventListener('click', async () => {
@@ -92,6 +93,7 @@ export function createRoutePointPopover({ getTrack, onSelect, onClose = () => {}
     panel.style.setProperty('--point-max-height', panel.style.maxHeight);
     panel.hidden = false;
     const rect = trigger?.getBoundingClientRect();
+    selection.triggerPosition = rect ? { left: rect.left, top: rect.top } : null;
     const pointAnchor = anchor ?? (context.kind || Number.isInteger(context.poiIndex) ? { x: rect.left + rect.width / 2, y: rect.top, bottom: rect.bottom } : null) ?? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     const size = panel.getBoundingClientRect();
     const position = pointPopoverPosition(pointAnchor, size, limits);
@@ -116,7 +118,10 @@ export function createRoutePointPopover({ getTrack, onSelect, onClose = () => {}
   windowRef.addEventListener('resize', () => close());
   windowRef.addEventListener('scroll', (event) => {
     if (!selection || panel.contains(event.target)) return;
-    if (event.target !== documentRef || windowRef.scrollX !== selection.scrollX || windowRef.scrollY !== selection.scrollY) close();
+    const rect = selection.trigger?.getBoundingClientRect?.();
+    const anchorMoved = !rect || !selection.triggerPosition
+      || rect.left !== selection.triggerPosition.left || rect.top !== selection.triggerPosition.top;
+    if (anchorMoved || windowRef.scrollX !== selection.scrollX || windowRef.scrollY !== selection.scrollY) close();
   }, true);
   return { open, close, get isOpen() { return selection !== null; } };
 }

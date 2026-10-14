@@ -1,9 +1,10 @@
 import L from 'leaflet';
 import { createElevationMapRenderer } from './elevation-map-renderer.js';
-import { t, bindAttribute, htmlMessage, escapeHtml } from './i18n.js';
+import { t, bindAttribute } from './i18n.js';
 import { poiName } from './analysis-presentation.js';
 import { nearestRoutePointIndex } from './domain/profile-math.js';
-import { colorRunsForMode, elevationRange, highlightRunsForFilter } from './domain/route-color.js';
+import { highlightRunsForFilter } from './domain/route-color.js';
+import { drawRouteLines, routeEndpointIcon, bindRouteEndpointKeyboard, routeEndpointLegend } from './route-map-drawing.js';
 import { isClosedRoute } from './domain/route-shape.js';
 
 export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilter, getTerrainRange,
@@ -16,10 +17,6 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
   let focusLayers = [];
   let currentTrack;
   let elevationRenderer;
-
-  function makeEndpointIcon(label, type) {
-    return leaflet.divIcon({ className: '', html: `<button type="button" class="endpoint endpoint-${type}" aria-label="${escapeHtml(t(type === 'start' ? 'map.startTitle' : 'map.finishTitle'))}">${label}</button>`, iconSize: [24, 24], iconAnchor: [12, 12] });
-  }
 
   function makePoiIcon(index) {
     return leaflet.divIcon({ className: '', html: `<div class="poi-marker"><span>${index + 1}</span></div>`, iconSize: [28, 32], iconAnchor: [14, 30] });
@@ -57,20 +54,7 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
     const coordinates = track.points.map((point) => [point.lat, point.lon]);
     const elevationMode = getMapColorMode() === 'elevation';
     if (elevationMode) elevationRenderer ??= createElevationMapRenderer(leaflet);
-    leaflet.polyline(coordinates, { ...(elevationMode ? { renderer: elevationRenderer, noClip: true, smoothFactor: 0 } : {}), color: '#ffffff', weight: 8, opacity: 0.92, trackLayer: true, interactive: false }).addTo(map);
-    if (elevationMode) {
-      leaflet.polyline(coordinates, {
-        renderer: elevationRenderer, elevationRange: elevationRange(track.points), elevations: track.points.map(point => point.ele),
-        noClip: true, smoothFactor: 0, weight: 5, opacity: 1, trackLayer: true, interactive: false,
-      }).addTo(map);
-    } else colorRunsForMode(track.points, getMapColorMode()).forEach((run) => {
-      leaflet.polyline(coordinates.slice(run.startIndex, run.endIndex + 1), {
-        color: run.color,
-        weight: 5,
-        opacity: 1,
-        trackLayer: true, interactive: false,
-      }).addTo(map);
-    });
+    drawRouteLines(leaflet, map, track, getMapColorMode(), { renderer: elevationRenderer, layerOptions: { trackLayer: true } });
     highlightRunsForFilter(track.points, getRouteFilter()).forEach((run) => {
       const highlightedCoordinates = coordinates.slice(run.startIndex, run.endIndex + 1);
       leaflet.polyline(highlightedCoordinates, {
@@ -93,15 +77,17 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
     routeLine.on('mouseout', leaveRoute);
     const closedRoute = isClosedRoute(track.points);
     const startMarker = leaflet.marker(coordinates[0], {
-      icon: makeEndpointIcon('A', 'start'), keyboard: false, trackLayer: true, pane: 'startMarkerPane', interactive: true, zIndexOffset: 1000,
+      icon: routeEndpointIcon(leaflet, 'A', 'start'), keyboard: false, trackLayer: true, pane: 'startMarkerPane', interactive: true, zIndexOffset: 1000,
       title: closedRoute ? t('map.startFinishTitle') : t('map.startTitle'),
     }).addTo(map);
     startMarker.on('click', () => openPoint(0, startMarker, { kind: 'start' }));
+    bindRouteEndpointKeyboard(startMarker, () => openPoint(0, startMarker, { kind: 'start' }));
     if (!closedRoute) {
       const finishMarker = leaflet.marker(coordinates.at(-1), {
-        icon: makeEndpointIcon('B', 'finish'), keyboard: false, trackLayer: true, interactive: true, zIndexOffset: 900, title: t('map.finishTitle'),
+        icon: routeEndpointIcon(leaflet, 'B', 'finish'), keyboard: false, trackLayer: true, interactive: true, zIndexOffset: 900, title: t('map.finishTitle'),
       }).addTo(map);
       finishMarker.on('click', () => openPoint(track.points.length - 1, finishMarker, { kind: 'finish' }));
+      bindRouteEndpointKeyboard(finishMarker, () => openPoint(track.points.length - 1, finishMarker, { kind: 'finish' }));
     }
     poiMarkers = (track.pointsOfInterest || []).map((point, index) => {
       const marker = leaflet.marker([point.lat, point.lon], {
@@ -113,9 +99,7 @@ export function createRouteMap({ getPoiSelection, getMapColorMode, getRouteFilte
       return marker;
     });
     renderPoiSelection(getPoiSelection().pinnedIndex ?? getPoiSelection().hoveredIndex);
-    documentRef.querySelector('#map-note').innerHTML = closedRoute
-      ? `<span class="start-dot"></span><b>${htmlMessage('map.startFinish')}</b>`
-      : `<span class="start-dot"></span><b>${htmlMessage('map.start')}</b><i class="finish-dot"></i><b>${htmlMessage('map.finish')}</b>`;
+    documentRef.querySelector('#map-note').innerHTML = routeEndpointLegend(closedRoute);
     activeMarker = leaflet.circleMarker(coordinates[0], { radius: 8, color: '#fff', weight: 3, fillColor: '#131712', fillOpacity: 1, trackLayer: true, interactive: true, bubblingMouseEvents: false }).addTo(map);
     activeMarker.on('mouseover', hoverRoute);
     activeMarker.on('mousemove', hoverRoute);

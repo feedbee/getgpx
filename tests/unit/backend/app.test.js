@@ -28,6 +28,7 @@ describe('production static files', () => {
     expect(frontendPageStatus('/')).toBe(200);
     expect(frontendPageStatus('/my-tracks')).toBe(200);
     expect(frontendPageStatus('/favorite-tracks')).toBe(200);
+    expect(frontendPageStatus('/compare')).toBe(200);
     expect(frontendPageStatus('/tracks/AxoslgzL_iLHv88P5AYoe')).toBe(200);
     expect(frontendPageStatus('/missing-page')).toBe(404);
     expect(frontendPageStatus('/tracks/with-hyphen')).toBe(404);
