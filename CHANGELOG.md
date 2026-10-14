@@ -4,6 +4,12 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-14
+
+### Fixed
+
+- Synchronized the locked Zod version with npm 10 dependency resolution so clean installs pass in CI.
+
 ## [0.7.0] - 2026-10-14
 
 ### Added
