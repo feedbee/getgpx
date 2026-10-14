@@ -4,6 +4,13 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-14
+
+### Added
+
+- Compare up to eight tracks on a shared map with summary metrics, route colors, point details, and the existing map coloring modes.
+- Add tracks to comparison from track pages, My tracks, and Favorites. Reorder or hide routes, focus the map on a track, and share the comparison through a URL.
+
 ## [0.6.3] - 2026-10-06
 
 ### Changed
