@@ -12,6 +12,8 @@ It adds checked tracks to the existing selection without navigating. It is enabl
 only when at least one new track is checked and the combined selection fits eight tracks.
 
 Desktop: one third track list, two thirds map. Mobile: stacked list and map.
+Each loaded track shows its owner’s display name and avatar (or the same fallback icon
+as favorites), when public author metadata is available.
 Each track has a numbered color, matching circular endpoints (A start, B finish), a link
 opening its page in a new tab through a separate external-link icon, and localized sport/distance/ascent/descent/time/speed.
 Drag the numbered handle with a mouse, pen or touch to reorder tracks; arrow keys
@@ -85,3 +87,15 @@ loads. Map redraws preserve highlight; closing point details clears it. The shar
 point dialog uses a unique comparison ID and a track-colored dot. Repeated point
 movement within the same track does not reapply every layer style. Share icons,
 clipboard handling, loading state and feedback are shared with the track page.
+
+Comparison links have server-rendered localized Open Graph/Twitter metadata with
+a comparison title, description and the shared GetGPX brand icon. Canonical URLs
+preserve validated track IDs and their order; unrelated query parameters are omitted.
+No geometry reads or comparison image generation are needed for social previews.
+
+The author and row actions share a wrapping footer with spacing between them.
+Hide uses a crossed-out eye; Show uses an open eye, matching the offered action.
+
+Loading analysis uses an accessible spinner in the existing title row with a
+reserved slot, rather than a separate loading message that changes card height.
+Failures retain the status message and retry action.

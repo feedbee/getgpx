@@ -371,6 +371,7 @@
   "point.copy": "Współrzędne",
   "point.copied": "Współrzędne skopiowane",
   "point.copyFailed": "Nie udało się skopiować. Zaznacz i skopiuj współrzędne ręcznie.",
+  "sharing.comparison": "Porównuj trasy GPX na jednej mapie: przebieg tras, odległości, przewyższenia i czas podróży.",
   "comparison.title": "Porównanie tras",
   "comparison.description": "Porównuj trasy na mapie. Najedź na trasę lub jej wiersz, aby ją wyróżnić.",
   "comparison.count": "Porównanie ({count})",

@@ -20,7 +20,8 @@ export function socialPreviewOrigin(environment = {}) {
 }
 
 export function createSocialMetadata({ trackService, origin }) {
-  return async (pathname, language = 'en') => {
+  return async (pathname, language = 'en', search = '') => {
+    let canonicalPath = pathname;
     if (!languages.includes(language)) language = 'en';
     const catalog = catalogs[language];
     const t = (key, parameters) => String(new IntlMessageFormat(catalog[key], language).format(parameters));
@@ -33,6 +34,12 @@ export function createSocialMetadata({ trackService, origin }) {
     if (pathname === '/my-tracks' || pathname === '/favorite-tracks') {
       title = t(pathname === '/my-tracks' ? 'common.myTracks' : 'common.favorites');
       description = t(pathname === '/my-tracks' ? 'sharing.myTracks' : 'sharing.favorites');
+    } else if (pathname === '/compare') {
+      title = t('comparison.title');
+      description = t('sharing.comparison');
+      const ids = [...new Set((new URLSearchParams(search).get('tracks') || '').split(',')
+        .filter(id => /^[a-zA-Z0-9_]{1,64}$/.test(id)))].slice(0, 8);
+      if (ids.length) canonicalPath += `?tracks=${ids.join(',')}`;
     } else if (pathname.startsWith('/tracks/')) {
       const track = await trackService.getPublicTrack(pathname.slice('/tracks/'.length));
       if (!track) { status = 404; title = t('notFound.title'); }
@@ -59,7 +66,7 @@ export function createSocialMetadata({ trackService, origin }) {
       }
     } else if (pathname !== '/') { status = 404; title = t('notFound.title'); }
     return { title, description, image, width, height, status, language, locale: locales[language],
-      url: new URL(pathname, origin).href };
+      url: new URL(canonicalPath, origin).href };
   };
 }
 
@@ -84,10 +91,10 @@ export function injectSocialMetadata(html, metadata) {
 
 export function createSocialPageRouter({ metadata, loadHtml }) {
   const router = Router();
-  router.get(['/', '/my-tracks', '/favorite-tracks', '/tracks/:id'], async (request, response) => {
+  router.get(['/', '/my-tracks', '/favorite-tracks', '/compare', '/tracks/:id'], async (request, response) => {
     const language = request.acceptsLanguages(...languages) || 'en';
     let value;
-    try { value = await metadata(request.path, language); }
+    try { value = await metadata(request.path, language, new URL(request.originalUrl, 'http://localhost').search); }
     catch (error) {
       request.log?.warn({ event: 'social_metadata_unavailable', ...safeErrorDetails(error) }, 'Social metadata unavailable');
       // Preserve the SPA shell when metadata dependencies are temporarily unavailable.

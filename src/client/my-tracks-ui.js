@@ -117,21 +117,7 @@ export function createTrackCard(track, documentRef = document, { ownerActions = 
   externalLinks.className = 'track-card-external-links';
   renderExternalTrackLinks(externalLinks, track.externalLinks, documentRef, { compact: true });
   if (!ownerActions && track.author?.displayName) {
-    const author = documentRef.createElement('span');
-    author.className = 'track-card-author';
-    const avatar = documentRef.createElement(track.author.avatarUrl ? 'img' : 'span');
-    avatar.className = 'track-card-author-avatar';
-    if (track.author.avatarUrl) {
-      avatar.src = track.author.avatarUrl;
-      avatar.alt = '';
-      avatar.referrerPolicy = 'no-referrer';
-    } else {
-      avatar.setAttribute('aria-hidden', 'true');
-      avatar.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0"/></svg>';
-    }
-    const authorName = documentRef.createElement('span');
-    bindText(authorName, () => track.author.displayName);
-    author.append(avatar, authorName);
+    const author = createTrackAuthor(track.author, documentRef);
     const separator = documentRef.createElement('span');
     separator.className = 'track-card-meta-separator';
     bindText(separator, () => '·');
@@ -181,4 +167,23 @@ export function createTrackCard(track, documentRef = document, { ownerActions = 
   actions.append(select, favorite, ...(ownerActions ? [edit, remove] : []), download);
   article.append(previewLink, body, actions);
   return article;
+}
+
+export function createTrackAuthor(authorData, documentRef = document) {
+  const author = documentRef.createElement('span');
+  author.className = 'track-card-author';
+  const avatar = documentRef.createElement(authorData.avatarUrl ? 'img' : 'span');
+  avatar.className = 'track-card-author-avatar';
+  if (authorData.avatarUrl) {
+    avatar.src = authorData.avatarUrl;
+    avatar.alt = '';
+    avatar.referrerPolicy = 'no-referrer';
+  } else {
+    avatar.setAttribute('aria-hidden', 'true');
+    avatar.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0"/></svg>';
+  }
+  const authorName = documentRef.createElement('span');
+  authorName.textContent = authorData.displayName;
+  author.append(avatar, authorName);
+  return author;
 }

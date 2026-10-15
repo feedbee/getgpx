@@ -1192,8 +1192,14 @@ button.profile-poi { padding:0; }
 .comparison-row .track-card-metrics { line-height:1.8; font-size:12px; }
 .comparison-state { color:var(--muted); margin:0; font-size:12px; }
 .comparison-state:empty { display:none; }
-.comparison-row-actions { display:flex; gap:16px; }
+.comparison-row-footer { display:flex; flex-wrap:wrap; align-items:center; column-gap:24px; }
+.comparison-author:empty { display:none; }
+.comparison-author { display:flex; min-width:0; max-width:100%; }
+.comparison-row-actions { display:flex; flex-wrap:wrap; align-items:center; gap:16px; }
+.comparison-row-actions [data-visibility] { display:inline-flex; align-items:center; gap:4px; }
+.comparison-visibility-icon { width:16px; height:16px; flex:none; }
 .comparison-row-actions button { border:0; background:transparent; color:var(--muted); font:inherit; font-size:12px; cursor:pointer; padding:6px 0; text-decoration:underline; }
+.comparison-row-actions button:hover,.comparison-row-actions button:focus-visible { color:var(--ink); }
 .comparison-map-shell { position:relative; min-width:0; height:calc(100dvh - 190px); min-height:480px; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
 #comparison-map { height:100%; width:100%; }
 .comparison-toolbar { position:absolute; top:12px; left:12px; right:54px; z-index:500; display:flex; flex-wrap:wrap; width:fit-content; max-width:calc(100% - 66px); }
@@ -1270,3 +1276,6 @@ html:has(.comparison-page) { scroll-behavior:auto; }
   .comparison-link { padding:4px; font-size:10px; }
   .comparison-link svg { width:14px; height:14px; }
 }
+
+.comparison-loading { align-self:center; }
+.comparison-loading:not(.is-loading) { visibility:hidden; }

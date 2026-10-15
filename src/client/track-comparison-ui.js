@@ -1,7 +1,7 @@
 import { comparisonActionIcon, shareActionIcon, sharePageLink } from './route-actions-ui.js';
 import { bindComparisonOrdering } from './comparison-ordering.js';
 import { t, htmlMessage, messageAttribute, escapeHtml } from './i18n.js';
-import { formatTrackMetrics } from './my-tracks-ui.js';
+import { formatTrackMetrics, createTrackAuthor } from './my-tracks-ui.js';
 import { createComparisonSelection, COMPARISON_MAX_TRACKS, loadComparisonTrack, comparisonUrl, comparisonIdsFromUrl } from './track-comparison.js';
 import { routeEndpointLegend } from './route-map-drawing.js';
 import { createComparisonMap } from './comparison-map.js';
@@ -105,7 +105,7 @@ export function setupTrackComparison({ trackApi, isComparisonPage, documentRef =
       row.style.setProperty('--track-color', entry.color);
       row.tabIndex = 0;
       const title = entry.metadata?.title || entry.id;
-      row.innerHTML = `<button class="comparison-drag-handle" type="button" data-comparison-drag aria-keyshortcuts="ArrowUp ArrowDown Home End"><span class="comparison-number" aria-hidden="true">${entry.number}</span><svg viewBox="0 0 20 12" aria-hidden="true"><path d="M6 2h0m8 0h0M6 6h0m8 0h0M6 10h0m8 0h0"/></svg></button><div class="track-card-body"><div class="comparison-track-heading"><button class="track-card-title comparison-fit-track" type="button" data-fit-track ${entry.state === 'ready' && !entry.hidden ? '' : 'disabled'}>${escapeHtml(title)}</button><a class="comparison-track-link" target="_blank" rel="noopener noreferrer" href="/tracks/${encodeURIComponent(entry.id)}"><svg class="comparison-external-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 3h7v7M21 3 10 14M10 3H3v18h18v-7"/></svg></a></div><p class="track-card-metrics"></p><p class="comparison-state" role="status"></p><div class="comparison-row-actions"><button type="button" data-remove><span aria-hidden="true">×</span> ${htmlMessage('comparison.remove')}</button><button type="button" data-visibility aria-pressed="${Boolean(entry.hidden)}">${htmlMessage(entry.hidden ? 'comparison.show' : 'comparison.hide')}</button><button type="button" data-retry ${entry.state === 'error' ? '' : 'hidden'}>${htmlMessage('comparison.retry')}</button></div></div>`;
+      row.innerHTML = `<button class="comparison-drag-handle" type="button" data-comparison-drag aria-keyshortcuts="ArrowUp ArrowDown Home End"><span class="comparison-number" aria-hidden="true">${entry.number}</span><svg viewBox="0 0 20 12" aria-hidden="true"><path d="M6 2h0m8 0h0M6 6h0m8 0h0M6 10h0m8 0h0"/></svg></button><div class="track-card-body"><div class="comparison-track-heading"><button class="track-card-title comparison-fit-track" type="button" data-fit-track ${entry.state === 'ready' && !entry.hidden ? '' : 'disabled'}>${escapeHtml(title)}</button><a class="comparison-track-link" target="_blank" rel="noopener noreferrer" href="/tracks/${encodeURIComponent(entry.id)}"><svg class="comparison-external-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 3h7v7M21 3 10 14M10 3H3v18h18v-7"/></svg></a><span class="loading-spinner comparison-loading${entry.state === 'loading' ? ' is-loading' : ''}" role="status" aria-hidden="${entry.state !== 'loading'}" ${messageAttribute('aria-label', 'common.loadingRoute')}></span></div><p class="track-card-metrics"></p><p class="comparison-state" role="status"></p><div class="comparison-row-footer"><span class="comparison-author"></span><div class="comparison-row-actions"><button type="button" data-remove><span aria-hidden="true">×</span> ${htmlMessage('comparison.remove')}</button><button type="button" data-visibility aria-pressed="${Boolean(entry.hidden)}"><svg class="comparison-visibility-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>${entry.hidden ? '' : '<path class="comparison-eye-slash" d="m3 3 18 18"/>'}</svg>${htmlMessage(entry.hidden ? 'comparison.show' : 'comparison.hide')}</button><button type="button" data-retry ${entry.state === 'error' ? '' : 'hidden'}>${htmlMessage('comparison.retry')}</button></div></div></div>`;
       row.querySelector('[data-comparison-drag]').setAttribute('aria-label', t('comparison.reorder', { title }));
       row.querySelector('[data-comparison-drag]').title = t('comparison.reorderHint');
       row.querySelector('a').setAttribute('aria-label', t('comparison.openTrack', { title }));
@@ -129,8 +129,11 @@ export function setupTrackComparison({ trackApi, isComparisonPage, documentRef =
           fitTrack();
         }
       });
+      if (entry.metadata?.author?.displayName) {
+        row.querySelector('.comparison-author').append(createTrackAuthor(entry.metadata.author, documentRef));
+      }
       row.querySelector('.track-card-metrics').textContent = entry.metadata ? formatTrackMetrics(entry.metadata) : '';
-      row.querySelector('.comparison-state').textContent = entry.state === 'ready' ? '' : t(entry.state === 'error' ? 'comparison.unavailable' : 'common.loadingRoute');
+      row.querySelector('.comparison-state').textContent = entry.state === 'error' ? t('comparison.unavailable') : '';
       row.addEventListener('mouseenter', () => highlight(entry.id));
       row.addEventListener('mouseleave', () => highlight(null));
       row.addEventListener('focusin', () => highlight(entry.id));

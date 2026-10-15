@@ -3,7 +3,9 @@
 ## Goal and decisions
 
 Serve Open Graph and Twitter card metadata in the initial HTML for the homepage,
-track collections and public track pages. Bots must not need JavaScript or login.
+track collections, comparisons and public track pages. Bots must not need JavaScript or login.
+Comparison metadata uses a localized title and description with the shared brand icon;
+its canonical URL preserves the validated selection and order from `tracks`.
 Collection metadata is generic and reveals no personal list contents. Track metadata
 uses current point-free public metadata: title, route type, distance, ascent, descent,
 estimated duration and selected speed. Escape all user data in HTML attributes.

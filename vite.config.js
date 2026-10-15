@@ -45,6 +45,7 @@ export default defineConfig(({ command, mode }) => {
       const trackPersistence = await createS3TrackPersistence(database, trackConfig);
       const trackService = createS3TrackService({
         ...trackPersistence,
+        userRepository: authentication.userRepository,
         analyzeSource: (source, options) => analyzeGpxSource(source, { ...options, previewMaxPoints: trackConfig.previewMaxPoints }),
         enrichAnalysis: enrichTrackAnalysis,
         previewProvider,

@@ -45,6 +45,20 @@ describe('server-rendered sharing metadata', () => {
     }
     expect(service.getPublicTrack).not.toHaveBeenCalled();
   });
+  it('serves a localized comparison card with its ordered selection and brand image', async () => {
+    const service = fixture();
+    const app = express();
+    app.use(createSocialPageRouter({ metadata: createSocialMetadata({ trackService: service, origin: 'https://getgpx.link' }),
+      loadHtml: async () => template }));
+    const result = await request(app, { url: '/compare?tracks=second,first&secret=hidden', headers: { 'accept-language': 'ru' } });
+    expect(result.status).toBe(200);
+    expect(result.text).toContain('property="og:title" content="Сравнение треков"');
+    expect(result.text).toContain('https://getgpx.link/compare?tracks=second,first');
+    expect(result.text).toContain('https://getgpx.link/getgpx-icon.png');
+    expect(result.text).not.toContain('secret=hidden');
+    expect(result.text).not.toContain('noindex');
+    expect(service.getPublicTrack).not.toHaveBeenCalled();
+  });
   it('returns no track image for missing tracks or disabled providers', async () => {
     const service = fixture();
     service.getPublicTrack.mockResolvedValueOnce(null);

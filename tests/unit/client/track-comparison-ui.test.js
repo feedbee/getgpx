@@ -100,7 +100,7 @@ function setupPage() {
       contains(target) { return target === this || target?.closest() === this; },
       focus() { if (!this.hidden && !this.disabled) documentRef.activeElement = this; },
       replaceChildren() { this.children = []; documentRef.activeElement = null; },
-      append(child) { this.children.push(child); }, after: vi.fn(),
+      append(...children) { this.children.push(...children); }, after: vi.fn(),
       addEventListener(event, handler) { this.events[event] = handler; },
     };
     nodes.set(selector, element);
@@ -124,6 +124,37 @@ function setupPage() {
 }
 
 describe('comparison page lifecycle', () => {
+  it('shows the track owner after metadata loads using the favorite-list attribution', async () => {
+    const { list, pending } = setupPage();
+    pending.get('first')({ metadata: { title: 'First', author: { displayName: '<Owner>', avatarUrl: 'https://example.test/avatar.png' } }, track: { points: [] } });
+    await Promise.resolve();
+    const author = list.children[0].querySelector('.comparison-author').children[0];
+    expect(author.className).toBe('track-card-author');
+    const avatar = author.children[0];
+    expect(avatar.src).toBe('https://example.test/avatar.png');
+    expect(avatar.referrerPolicy).toBe('no-referrer');
+    expect(author.children[1].textContent).toBe('<Owner>');
+  });
+  it('offers a crossed-out eye to hide and an open eye to show a track', () => {
+    const { list } = setupPage();
+    expect(list.children[0].innerHTML).toContain('comparison-row-footer');
+    expect(list.children[0].innerHTML).toContain('comparison-eye-slash');
+    list.children[0].querySelector('[data-visibility]').events.click();
+    expect(list.children[0].innerHTML).not.toContain('comparison-eye-slash');
+    expect(list.children[0].innerHTML).toContain('data-visibility aria-pressed="true"');
+    list.children[0].querySelector('[data-visibility]').events.click();
+    expect(list.children[0].innerHTML).toContain('comparison-eye-slash');
+  });
+  it('keeps loading in the heading without adding a status row', async () => {
+    const { list, pending } = setupPage();
+    expect(list.children[0].innerHTML).toContain('comparison-loading is-loading');
+    expect(list.children[0].querySelector('.comparison-state').textContent).toBe('');
+    pending.get('first')({ metadata: { title: 'First' }, track: { points: [] } });
+    await Promise.resolve();
+    expect(list.children[0].innerHTML).toContain('comparison-loading"');
+    expect(list.children[0].innerHTML).not.toContain('comparison-loading is-loading');
+    expect(list.children[0].querySelector('.comparison-state').textContent).toBe('');
+  });
   it('preserves the focused action when an analysis completion rebuilds rows', async () => {
     const { list, documentRef, pending } = setupPage();
     const action = list.children[0].querySelector('[data-visibility]');

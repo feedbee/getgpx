@@ -371,6 +371,7 @@
   "point.copy": "Coordinates",
   "point.copied": "Coordinates copied",
   "point.copyFailed": "Could not copy. Select and copy the coordinates manually.",
+  "sharing.comparison": "Compare GPX tracks on one map: routes, distances, elevation gain and travel times.",
   "comparison.title": "Track comparison",
   "comparison.description": "Compare routes on the map. Hover a track or its row to highlight it.",
   "comparison.count": "Comparison ({count})",
