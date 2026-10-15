@@ -4,6 +4,16 @@ All notable user-facing and operator-facing changes are recorded here. Versions 
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-15
+
+### Added
+
+- Track comparison shows available author names and avatars and supplies localized social metadata for shared comparison links.
+
+### Fixed
+
+- Comparison rows keep their height while analysis loads, and show/hide actions use matching eye icons with clearer spacing.
+
 ## [0.7.1] - 2026-10-14
 
 ### Fixed
